@@ -1,0 +1,39 @@
+{
+  "mid": "ad3h5AAAAAHebw6SyfZDL_s2Bjlq",
+  "ig_www_claim": "hmac.AR0n-STb1qqUw6mZA9RKoueZoNC9sCXRIpn9Xie6HQ6IaZKj",
+  "timezone_offset": -14400,
+  "authorization_data": {
+    "ds_user_id": "29340629031",
+    "sessionid": "29340629031%3AQ0ti66UgldtVYd%3A24%3AAYgn7Vt36zxWOiX2S0vb9uGkKsB7ZYqbFxn_yZbdFQ"
+  },
+  "ig_u_rur": null,
+  "uuids": {
+    "tray_session_id": "DA397108-8188-450E-A955-AC5B87846333",
+    "uuid": "1505E49A-7F89-47D1-B906-66FE64D77B15",
+    "request_id": "3C24DB6D-A284-4D75-B417-2FF7025D8D5E",
+    "client_session_id": "33E43542-5E66-4E41-9B44-1F9FE80F6C96",
+    "advertising_id": "FCAA6B4A-ACEF-4908-9008-E21D81AB256B",
+    "phone_id": "1505E49A-7F89-47D1-B906-66FE64D77B15"
+  },
+  "locale": "en_US",
+  "last_login": 1776257644.8744521,
+  "device_settings": {
+    "device": "iPhone10,5",
+    "app_version": "425.0.0",
+    "manufacturer": "Apple",
+    "dpi": "425dpi",
+    "version_code": "936842409",
+    "model": "iPhone10,5",
+    "ios_version": "16.7.14",
+    "resolution": "1242x2208"
+  },
+  "cookies": {
+    "ds_user_id": "29340629031",
+    "sessionid": "29340629031%3AQ0ti66UgldtVYd%3A24%3AAYgn7Vt36zxWOiX2S0vb9uGkKsB7ZYqbFxn_yZbdFQ",
+    "mid": "ad3h5AAAAAHebw6SyfZDL_s2Bjlq",
+    "ig_www_claim": "hmac.AR0n-STb1qqUw6mZA9RKoueZoNC9sCXRIpn9Xie6HQ6IaZKj"
+  },
+  "user_agent": "Instagram 425.0.0 iOS (16.7.14; iPhone10,5; 425dpi; 1242x2208; 1242; en_US)",
+  "country": "US",
+  "country_code": 1
+}
