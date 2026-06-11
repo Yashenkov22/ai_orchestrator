@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
 
-from db.base import Account, Admin, Message, Thread
+from db.base import Account, Admin, Message, Thread, InstaUser, Attachment
 
 from utils.base import moscow_tz
 from utils.exc import DB_ERROR_EXCEPTION, ChatNotFound, NotAccessToChat
@@ -167,15 +167,22 @@ async def get_account_by_id(_id: int,
 async def get_message_by_id(_id: int,
                             _session: AsyncSession) -> Message | None:
 
-    query = select(Message)
+    # query = select(Message)
 
-    query = query\
-        .where(
-            Message.id == _id
-        )
+    # query = query\
+    #     .where(
+    #         Message.id == _id
+    #     )
+
+    query = (
+        select(Message)
+        .options(selectinload(Message.attachments),
+                 selectinload(Message.thread))
+        .where(Message.id == _id)
+    )
     
     message = await execute_and_catch_db_error(_session.execute(query),
-                                            _session)
+                                               _session)
     
     return message.scalar_one_or_none()
 
@@ -307,13 +314,252 @@ async def get_thread_by_id(thread_id: str,
             joinedload(Thread.account),
             joinedload(Thread.insta_user)
         )\
-        .where(Thread.thread_id == thread_id)
+        .where(Thread.id == int(thread_id))
     )
 
     result = await execute_and_catch_db_error(session.execute(query),
                                               session)
     
     return result.scalar_one_or_none()
+
+
+async def check_insta_user(user_id: str,
+                           session: AsyncSession):
+    # user_id = insta_user.get('id')
+
+    check_user_query = (
+        select(
+            InstaUser
+        )\
+        .where(
+            InstaUser.insta_id == str(user_id),
+        )
+    )
+
+    res = await execute_and_catch_db_error(session.execute(check_user_query),
+                                           session)
+    
+    user = res.scalar_one_or_none()
+
+    return user
+
+
+async def try_add_insta_user(insta_user: dict,
+                             session: AsyncSession):
+
+    insert_data = {
+        'insta_id': str(insta_user.get('id')),
+        'username': insta_user.get('username'),
+        'full_name': insta_user.get('full_name'),
+        'photo_url': insta_user.get('photo_url'),
+    }
+
+    new_user = InstaUser(**insert_data)
+
+    session.add(new_user)
+
+    # insert_query = (
+    #     insert(
+    #         InstaUser
+    #     )\
+    #     .values(**insert_data)
+    # )
+
+    await execute_and_catch_db_error(session.flush(),
+                                     session)
+    
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)
+    
+    return new_user
+
+
+async def check_thread_in_db(thread_id: str,
+                             session: AsyncSession):
+    # query = (
+    #     select(
+    #         Thread
+    #     )\
+    #     .where(
+    #         Thread.thread_id == thread_id
+    #     )
+    # )
+    query = (
+
+        select(Thread)
+        .options(
+            joinedload(Thread.account),
+            joinedload(Thread.insta_user),
+        )
+        .where(Thread.thread_id == thread_id)
+    )
+
+    res = await execute_and_catch_db_error(session.execute(query),
+                                     session)
+    
+    return res.scalar_one_or_none()
+
+
+async def try_add_new_thread(thread_data: dict,
+                             session: AsyncSession):
+
+    insert_data = {
+        'thread_id': thread_data.get('thread_id'),
+        'timestamp_last_seen_message': thread_data.get('timestamp_last_seen_message'),
+        'last_message_id': '',
+        'context': '',
+        'is_approved': True,
+        'is_unread':  thread_data.get('is_unread'),
+        'color_level': 'grey',
+        'user_information': None,
+        'account_id':  thread_data.get('account_id'),
+        'insta_user_id':  thread_data.get('insta_user_id'),
+    }
+
+    new_thread = Thread(**insert_data)
+
+    session.add(new_thread)
+
+    # insert_query = (
+    #     insert(
+    #         InstaUser
+    #     )\
+    #     .values(**insert_data)
+    # )
+
+    await execute_and_catch_db_error(session.flush(),
+                                     session)
+    
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)
+    
+    return new_thread
+
+
+async def update_approve_thread(thread_id: int,
+                                is_approved: bool,
+                                session: AsyncSession):
+    query = (
+        update(
+            Thread
+        )\
+        .values(is_approved=is_approved)\
+        .where(
+            Thread.id == thread_id
+        )
+    )
+
+    await execute_and_catch_db_error(session.execute(query),
+                                     session)
+    
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)
+
+
+async def try_add_messages(message_data: dict,
+                           thread: Thread,
+                           session: AsyncSession):
+    thread_id = message_data.get('thread_id')
+    messages = message_data.get('messages')
+    mark_as_unread = message_data.get('mark_as_unread')
+    insert_messages = []
+    # attachment_list = []
+
+    if thread_id and messages:
+        for message in reversed(messages):
+            ts = message.get('timestamp')
+            sender = message.get('sender')
+
+            if ts:
+                ts = datetime.fromtimestamp(
+                    int(ts) / 1000,
+                    tz=timezone.utc
+                )
+            msg_data = {
+                'created_at': ts,
+                'updated_at': ts,
+                'text': message.get('text'),
+                'sender': sender,
+                'status': 'approved',
+                'thread_id': thread_id,
+
+            }
+            # new_message = Message(**msg_data)
+
+            # session.add(new_message)
+
+            # await session.flush() 
+
+            # # await execute_and_catch_db_error(session.flush(),
+            # #                                 session)
+            
+            # attachments = message.get('files')
+
+            # if attachments:
+            #     for attachment in attachments:
+            #         media_type, media_url = attachment
+                    
+            #         _data = {
+            #             'media_type': media_type,
+            #             'media_url': media_url}
+
+            #         new_attachment = Attachment(**_data)
+
+            #         # attachment_list.append(new_attachment)
+
+            #         # session.add(new_attachment)
+            #         new_message.attachments.append(new_attachment)
+            new_message = Message(**msg_data,
+                                  attachments=[Attachment(media_type=t, media_url=u) for t, u in message.get("media_files", [])])
+            insert_messages.append(new_message)
+
+        # _is_unread = False if sender != 'user' else True
+
+        thread.timestamp_last_seen_message = ts
+        thread.is_unread = mark_as_unread
+
+        session.add_all(insert_messages)
+
+        await execute_and_catch_db_error(session.commit(),
+                                        session,
+                                        with_rollback=True)
+        
+    
+
+async def check_new_messages_in_thread(message: Message,
+                                       session: AsyncSession):
+    query = select(
+                exists()\
+                .where(
+                    Message.thread_id == message.thread_id,
+                    Message.created_at > message.created_at,
+                )
+    )
+
+    res = await execute_and_catch_db_error(session.execute(query),
+                                           session)
+
+    has_new_messages = res.scalar()
+
+    return has_new_messages
+
+
+    # user = res.scalar_one_or_none()
+
+    # return user
+
+    # if not user:
+    #     # try save user photo
+    #     # ...
+    #     # add new user
+    #     insert_data = {
+    #         'insta_id': user_id,
+    #         'username': insta_user.get('username'),
+    #         'full_name': insta_user.get('full_name')
+    #     }
 
 
 # async def add_new_chat_to_db_return_id(insert_data: dict,

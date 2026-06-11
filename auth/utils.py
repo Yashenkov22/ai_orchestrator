@@ -14,7 +14,8 @@ from utils.base import pwd_context
 from db.base import get_session, Admin
 from db.queries import (save_refresh_token_for_user,
                         get_admin_by_username,
-                        get_admin_by_id)
+                        get_admin_by_id,
+                        execute_and_catch_db_error)
 from utils.exc import NOT_AUTHENTICATED_EXCEPTION
 
 from config import API_PREFIX, JWT_ALGORITHM, JWT_SECRET_KEY
@@ -72,6 +73,10 @@ async def generate_tokens(admin: Admin,
     await add_refresh_token_to_db(admin,
                                   refresh_token,
                                   session)
+    
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)
     
     return {
         'access_token': access_token,

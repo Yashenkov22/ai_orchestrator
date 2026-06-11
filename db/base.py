@@ -1,4 +1,4 @@
-import asyncio
+import enum
 
 from sqlalchemy import (Column,
                         Integer,
@@ -14,7 +14,8 @@ from sqlalchemy import (Column,
                         BigInteger,
                         Table,
                         Boolean,
-                        Index)
+                        Index,
+                        Enum)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.ext.asyncio import (create_async_engine,
@@ -24,7 +25,7 @@ from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy import select, func
 from sqlalchemy.orm import column_property
 
-from utils.enums import MessageStatusEnum, MessageTypeEnum, SessionStatusEnum
+from utils.enums import MessageStatusEnum, MessageTypeEnum, SessionStatusEnum, ThreadColorEnum
 
 from config import db_url
 
@@ -45,60 +46,18 @@ class InstaUser(Base):
     username = Column(String,
                       nullable=False,
                       unique=True)
+    full_name = Column(String,
+                      nullable=True,
+                      default=None)
+    photo_url =Column(String(2048),
+                      nullable=True,
+                      default=None,
+                      unique=True)
     
     threads = relationship(
         "Thread",
         back_populates="insta_user"
     )
-    # password = Column(String)
-    # session = Column(JSONB,
-    #                  nullable=True,
-    #                  default=None)
-    # updated_at = Column(TIMESTAMP(timezone=True))
-    #
-    # email = Column(String,
-    #                unique=True,
-    #                nullable=False)
-    # hash_password = Column(String,
-    #                        unique=True,
-    #                        nullable=False)
-    # #
-    # name = Column(String,
-    #               nullable=True)
-    # age = Column(Integer,
-    #              nullable=True)
-    # city = Column(String,
-    #               nullable=True)
-    # country = Column(String,
-    #                  nullable=True)
-    # about = Column(String,
-    #                nullable=True,
-    #                default=None)
-    # is_premium = Column(Boolean,
-    #                     default=False)
-    # is_vip = Column(Boolean,
-    #                 default=False)
-    # created_at = Column(TIMESTAMP(timezone=True))
-    # updated_at = Column(TIMESTAMP(timezone=True))
-    # message_notifications = Column(Boolean,
-    #                                default=True)
-    # ai_model_id = Column(Integer,
-    #                      ForeignKey('ai_models.id'),
-    #                      nullable=True,
-    #                      default=None)
-    # refresh_token = Column(String,
-    #                        nullable=True)
-    # ai_model = relationship('AIModel',
-    #                         back_populates="users")
-    # photos = relationship('Photo',
-    #                       back_populates="user")
-    # messages = relationship("Message",
-    #                         back_populates="sender")
-    # chat_links = relationship(
-    #     "ChatParticipant",
-    #     back_populates="user",
-    #     cascade="all, delete-orphan"
-    # )
 
 
 class Account(Base):
@@ -110,15 +69,25 @@ class Account(Base):
     insta_id = Column(String,
                       nullable=True,
                       default=None)
+    full_name = Column(String,
+                      nullable=True,
+                      default=None)
+    photo_url =Column(String(2048),
+                      nullable=True,
+                      default=None,
+                      unique=True)
     username = Column(String,
                       nullable=False,
                       unique=True)
     password = Column(String)
-    session = Column(JSONB,
-                     nullable=True,
-                     default=None)
-    is_active = Column(String,
-                       default=SessionStatusEnum.INACTIVE)
+    # session = Column(JSONB,
+    #                  nullable=True,
+    #                  default=None)
+    # is_active = Column(String,
+    #                    default=SessionStatusEnum.INACTIVE)
+    has_error = Column(Boolean,
+                      default=False,
+                      server_default="false")
     created_at = Column(TIMESTAMP(timezone=True),
                         nullable=True,
                         default=None)
@@ -128,12 +97,22 @@ class Account(Base):
     proxy_url = Column(String,
                       nullable=True,
                       default=None)
-    is_parse = Column(Boolean,
-                      default=True)
+    is_active = Column(Boolean,
+                      default=True,
+                      server_default="false")
+    # ai settings
     ai_model_id = Column(Integer,
                          ForeignKey('ai_models.id'),
                          nullable=True,
                          default=None)
+    folder_id = Column(String,
+                      nullable=True,
+                      default=None)
+    profile_id = Column(String,
+                        nullable=True,
+                        default=None)
+    information = Column(Text)
+    #
     
     ai_model = relationship('AIModel',
                             back_populates="accounts")
@@ -158,38 +137,6 @@ class Admin(Base):
     refresh_token = Column(String,
                            nullable=True)
 
-# class Photo(Base):
-#     __tablename__ = "photos"
-
-#     id = Column(Integer,
-#                 primary_key=True,
-#                 index=True)
-
-#     url = Column(String(2048),
-#                  nullable=False,
-#                  unique=True)
-
-#     is_main = Column(Boolean,
-#                      nullable=False,
-#                      default=False)
-
-#     user_id = Column(
-#         BigInteger,
-#         ForeignKey("users.id",
-#         ondelete="CASCADE"),
-#         nullable=False
-#     )
-
-#     user = relationship("User", back_populates="photos")
-
-#     __table_args__ = (
-#         Index(
-#             "ux_user_main_photo",
-#             "user_id",
-#             unique=True,
-#             postgresql_where=is_main.is_(True)
-#         ),
-#     )
 
 
 class AIModel(Base):
@@ -202,38 +149,6 @@ class AIModel(Base):
 
     accounts = relationship('Account',
                           back_populates="ai_model")
-    
-
-
-
-
-
-# class ChatParticipant(Base):
-#     __tablename__ = "chat_participants"
-
-#     chat_id = Column(
-#         Integer,
-#         ForeignKey("chats.id", ondelete="CASCADE"),
-#         primary_key=True
-#     )
-
-#     user_id = Column(
-#         BigInteger,
-#         ForeignKey("users.id", ondelete="CASCADE"),
-#         primary_key=True
-#     )
-
-#     joined_at = Column(TIMESTAMP(timezone=True))
-
-#     chat = relationship(
-#         "Chat",
-#         back_populates="_participants"
-#     )
-
-#     user = relationship(
-#         "User",
-#         back_populates="chat_links"
-#     )
 
 
 class Message(Base):
@@ -283,10 +198,11 @@ class Message(Base):
         foreign_keys=[thread_id]
     )
 
-    attachment = relationship(
+    attachments = relationship(
         "Attachment",
         back_populates="message",
-        uselist=False  # 💥 обязательно для 1-1
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
 
@@ -306,14 +222,13 @@ class Attachment(Base):
         ForeignKey("messages.id",
                    ondelete="CASCADE"),
         nullable=False,
-        unique=True
     )
 
     message = relationship(
         "Message",
-        back_populates="attachment",
-        uselist=False
+        back_populates="attachments"
     )
+
 
 
 class Thread(Base):
@@ -336,6 +251,7 @@ class Thread(Base):
         default=None,
     )
     is_approved = Column(Boolean, default=False)
+    # is_spam = Column(Boolean, default=False)
     insta_user_id = Column(
         BigInteger,
         ForeignKey("users.id",
@@ -343,26 +259,18 @@ class Thread(Base):
         nullable=True,
         default=None,
     )
+    is_unread = Column(Boolean,
+                       default=True)
+    user_information = Column(JSONB,
+                              nullable=True,
+                              default=None)
+    color_level = Column(String,
+                         nullable=False,
+                         default=ThreadColorEnum.GREY)
     
     account = relationship("Account", back_populates="threads")
     insta_user = relationship("InstaUser", back_populates="threads")
-    # last_message = relationship(
-    #     "Message",
-    #     foreign_keys=[last_message_id],
-    #     uselist=False
-    # )
 
-    # _participants = relationship(
-    #     "ChatParticipant",
-    #     back_populates="chat",
-    #     cascade="all, delete-orphan"
-    # )
-
-    # users = relationship(
-    #     "User",
-    #     secondary="chat_participants",
-    #     viewonly=True
-    # )
     messages = relationship(
         "Message",
         back_populates="thread",

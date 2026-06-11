@@ -1,7 +1,9 @@
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+from arq import ArqRedis
 
 from jose import jwt, JWTError
 
@@ -23,3 +25,7 @@ current_user_dependency = Annotated[int, Depends(get_current_user_optional)]
 session_dependency = Annotated[AsyncSession, Depends(get_session)]
 
 
+def get_arq_pool(request: Request):
+    return request.app.state.arq_pool
+
+arq_dependency = Annotated[ArqRedis, Depends(get_arq_pool)]

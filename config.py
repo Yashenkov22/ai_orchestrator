@@ -13,7 +13,7 @@ DB_USER = os.environ.get('POSTGRES_USER')
 DB_PASS = os.environ.get('POSTGRES_PASSWORD')
 DB_HOST = os.environ.get('POSTGRES_HOST')
 DB_PORT = os.environ.get('DB_PORT')
-DB_NAME = os.environ.get('DB_NAME')
+DB_NAME = os.environ.get('POSTGRES_DB')
 
 
 db_url = URL.create(
@@ -47,3 +47,12 @@ SECRET_API = os.environ.get('SECRET_API')
 
 
 ADMIN_URL = 'http://localhost:3000/'
+
+
+JOB_STORE_URL= f'postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}'
+
+X_TOKEN = os.environ.get('X_TOKEN')
+
+VISION_BROWSER_HOST = os.environ.get('VISION_BROWSER_HOST')
+
+VISION_BROWSER_PORT = os.environ.get('VISION_BROWSER_PORT')

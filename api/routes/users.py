@@ -10,8 +10,8 @@ from fastapi import (APIRouter, File,
                      HTTPException, UploadFile,
                      status)
 
-from sqlalchemy import func, select, delete
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy import func, select, delete, case, exists, and_, update
+from sqlalchemy.orm import joinedload, selectinload, aliased
 
 from db.queries import (get_all_users, get_thread_by_id,
                         update_and_return_user,
@@ -20,9 +20,11 @@ from db.queries import (get_all_users, get_thread_by_id,
                         get_account_by_username,
                         get_admin_by_username)
 
-from db.base import Message, Thread, Account, Admin, Attachment
+from db.base import Message, Thread, Account, Admin, Attachment, InstaUser
 
-from utils.schemas import (DetailUserSchema, PatchAccountSchema,
+from utils.schemas import (DetailThreadSchema, DetailUserSchema, EditThreadColorLevelSchema,
+                           PatchAccountSchema,
+                           NewAccountSchema, PatchInformationAccountSchema, PatchPhotoAccountSchema, ThreadSchema, UpdateProfileDataSchema,
                            UpdateUserSchema,
                            NotificationsSchema,
                            CreateAccountSchema,
@@ -31,10 +33,11 @@ from utils.schemas import (DetailUserSchema, PatchAccountSchema,
 from utils.dependencies import (user_dependency,
                                 admin_dependency,
                                 session_dependency,
-                                current_user_dependency)
+                                current_user_dependency,
+                                arq_dependency)
 from utils.endpoints import add_notifications_to_user
 from utils.encrypt import encrypt_password
-from utils.base import generate_valid_media_url
+from utils.base import generate_valid_insta_url, generate_valid_media_url, get_folder_profiles, get_vision_folder_list
 
 from instagrapi import Client
 from instagrapi.exceptions import (TwoFactorRequired)
@@ -95,44 +98,7 @@ async def test_json(session: session_dependency):
     await execute_and_catch_db_error(session.commit(),
                                      session,
                                      with_rollback=True)
-    
 
-
-# @user_router.get("/accounts")
-# async def get_accounts(session: session_dependency):
-#     result = await session.execute(select(User))
-#     users = result.scalars().all()
-#     return [
-#         {
-#             "id": str(u.id),
-#             "name": u.username,
-#             "username": u.username,
-#             "email": u.insta_id or "",
-#             "status": "active",
-#             "created": u.updated_at.strftime("%Y-%m-%d") if u.updated_at else "",
-#         }
-#         for u in users
-#     ]
-
-
-# @user_router.get("/threads")
-# async def get_threads(session: session_dependency):
-#     result = await session.execute(select(Thread))
-#     threads = result.scalars().all()
-#     grouped = defaultdict(list)
-#     for t in threads:
-#         # треды без user_id идут в отдельную группу
-#         account_key = str(t.user_id) if t.user_id else "unassigned"
-#         grouped[account_key].append({
-#             "id": str(t.id),
-#             "title": str(t.id),
-#             "model": "assistant",
-#             "last_activity": (
-#                 t.timestamp_last_seen_message.strftime("%Y-%m-%d %H:%M")
-#                 if t.timestamp_last_seen_message else ""
-#             ),
-#         })
-#     return dict(grouped)
 
 @user_router.post("/new_account")
 async def create_account(data: CreateAccountSchema,
@@ -167,127 +133,290 @@ async def create_account(data: CreateAccountSchema,
     }
 
 
+# new
 @user_router.get("/accounts")
 async def get_accounts(admin: admin_dependency,
                        session: session_dependency):
-    result = await session.execute(select(Account))
-    # query = (
-    #     select(
-    #         Account
-    #     )\
-    #     .options(
-    #         selectinload(Account.threads)
-    #     )
-    # )
-    # query = (
-    #     select(Account)
-    #     .options(
-    #         selectinload(Account.threads)
-    #             .joinedload(Thread.insta_user),
-    #     )
-    # )
-    # result = await execute_and_catch_db_error(session.execute(query),
-    #                                           session)
-    users = result.scalars().all()
+    thread_alias = aliased(Thread)
+
+    query = (
+        select(
+            Account,
+            func.count(Thread.id),
+            exists()
+            .where(
+                and_(
+                    thread_alias.account_id == Account.id,
+                    thread_alias.is_unread == True,
+                )
+            ),
+        )
+        .outerjoin(Thread, Thread.account_id == Account.id)\
+        .group_by(Account.id)
+    )
+
+    result = await execute_and_catch_db_error(session.execute(query),
+                                              session)
+
+    users = result.fetchall()
     accounts = []
 
-    # for user in users:
-    #     user_data =  {
-    #         "id": str(user.id),
-    #         "username": user.username,
-    #         "insta_id": user.insta_id,
-    #         'is_active': user.is_active,
-    #         'created_at': user.created_at,
-    #         'updated_at': user.updated_at,
-    #     }
-        # threads = []
-        # for thread in user.threads:
-        #     # print(user.threads)
-        #     # grouped = defaultdict(list)
-        #     # for t in threads:
-        #     # account_key = str(thread) if thread.account_id else "unassigned"
-        #     threads.append({
-        #         "id": str(thread.id),
-        #         "thread_id": thread.thread_id,
-        #         "guest_id": thread.insta_user_id,
-        #         "guest_username": f'{user.username} - {thread.insta_user.username}',
-        #         "last_activity": (
-        #             thread.timestamp_last_seen_message.strftime("%Y-%m-%d %H:%M")
-        #             if thread.timestamp_last_seen_message else ""
-        #         ),
-        #     })
-        #     print(threads)
-        # user_data['threads'] = threads
-
-        # print(user_data)
-
-        # accounts.append(user_data)
+    # print(users)
 
     accounts = [
         {
-            "id": str(u.id),
+            "id": u.id,
             "username": u.username,
             "insta_id": u.insta_id,
-            'is_active': u.is_active,
+            'has_error': -(u.has_error),
             'created_at': u.created_at,
             'updated_at': u.updated_at,
-            'proxy_url': u.proxy_url,
-            'is_parse': u.is_parse,
+            # 'proxy_url': u.proxy_url,
+            'is_active': u.is_active,
+            'thread_count': thread_count,
+            'has_unread': has_unread,
         }
-        for u in users
+        for u, thread_count, has_unread in users
     ]
-    # print(accounts)
+    
     return accounts
 
 
+# new
 @user_router.get("/accounts/{account_id}",
-                 response_model=AccountSchema)
+                 response_model=NewAccountSchema,
+                 response_model_by_alias=False)
 async def get_account_by_id(account_id: int,
                             admin: admin_dependency,
                             session: session_dependency):
+    thread_alias = aliased(Thread)
+    
     query = (
-        select(Account)
-        .options(
-            selectinload(Account.threads)
-                .joinedload(Thread.insta_user),
-        )\
+        select(
+            Account,
+            func.count(Thread.id),
+            exists()
+            .where(
+                and_(
+                    thread_alias.account_id == Account.id,
+                    thread_alias.is_unread == True,
+                )
+            ),
+        )
+        .outerjoin(Thread, Thread.account_id == Account.id)
         .where(
             Account.id == account_id,
         )
+        .group_by(Account.id)
     )
     result = await execute_and_catch_db_error(session.execute(query),
                                               session)
-    account = result.scalar_one_or_none()
+    account, thread_count, has_unread = result.one_or_none()
 
     if account:
         account_data =  {
-            "id": str(account.id),
+            "id": account.id,
             "username": account.username,
-            "insta_id": account.insta_id,
-            'is_active': account.is_active,
+            "fullname": account.full_name,
             'created_at': account.created_at,
             'updated_at': account.updated_at,
-            'proxy_url': account.proxy_url,
-            'is_parse': account.is_parse,
+            'photo_url': generate_valid_media_url(account.photo_url),
+            'is_active': account.is_active,
+            'thread_count': thread_count,
+            'has_unread': has_unread,
+            'has_error': -(account.has_error),
+            'information': account.information,
+            'folder_id': account.folder_id,
+            'profile_id': account.profile_id,
         }
-        
-        threads = []
-        for thread in account.threads:
-            threads.append({
-                "id": str(thread.id),
-                "thread_id": thread.thread_id,
-                "guest_id": thread.insta_user_id,
-                "guest_username": f'{account.username} - {thread.insta_user.username}',
-                'pending_msgs': thread.messages_count,
-                "last_activity": (
-                    thread.timestamp_last_seen_message.strftime("%Y-%m-%d %H:%M")
-                    if thread.timestamp_last_seen_message else ""
-                ),
-            })
-
-        account_data['threads'] = threads
 
         return account_data
+
+
+@user_router.get("/accounts/{account_id}/threads",
+                 response_model=list[ThreadSchema])
+async def get_threads_by_account_id(account_id: int,
+                                    admin: admin_dependency,
+                                    session: session_dependency):
+    result = await session.execute(
+        select(Thread)
+        .options(
+            joinedload(Thread.account),
+            joinedload(Thread.insta_user)
+        )
+        .where(
+            Thread.account_id == account_id
+        )
+    )
+    threads = result.scalars().all()
+    # grouped = defaultdict(list)
+    thread_list = []
+    for t in threads:
+        # account_key = str(t.account_id) if t.account_id else "unassigned"
+        thread_list.append(ThreadSchema(**{
+            "id": t.id,
+            # "thread_id": t.thread_id,
+            # "guest_id": t.insta_user_id,
+            "account_name": t.account.username,
+            "user_name": t.insta_user.username,
+            'has_unread': t.is_unread,
+            'color_level': t.color_level,
+            "last_activity": (
+                t.timestamp_last_seen_message.strftime("%Y-%d-%m %H:%M")
+                if t.timestamp_last_seen_message else ""
+            ),
+        }))
+    return thread_list
+
+
+@user_router.patch("/threads/edit_color_level")
+async def edit_color_level_by_thread_id(data: EditThreadColorLevelSchema,
+                                        admin: admin_dependency,
+                                        session: session_dependency):
+    query = (
+        select(1)
+        .where(
+            Thread.id == data.thread_id,
+        )
+    )
+
+    result = await execute_and_catch_db_error(session.execute(query),
+                                              session)
+    
+    check_exist = result.scalar_one_or_none()
+
+    if not check_exist:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Thread not found')
+    
+    update_query = (
+        update(
+            Thread
+        )\
+        .values(color_level=data.color_level)\
+        .where(
+            Thread.id == data.thread_id,
+        )
+    )
+
+    result = await execute_and_catch_db_error(session.execute(update_query),
+                                              session,
+                                              with_rollback=True)
+    
+    await session.commit()
+
+
+@user_router.get("/folders")
+async def get_vision_folders(admin: admin_dependency,
+                             session: session_dependency):
+    data: dict = await get_vision_folder_list()
+
+    folders = data.get('data')
+
+    return [{
+        'folder_id': folder['id'],
+        'folder_name': folder['folder_name'],
+        'folder_icon': folder['folder_icon'],
+        'folder_icon': folder['folder_icon'],
+        'folder_color': folder['folder_color'],
+    } for folder in folders if not folder['deleted_at']] # if not folder['deleted_at']
+
+
+
+@user_router.get("/folder_profiles")
+async def get_vision_folder_profiles(folder_id: str,
+                                     admin: admin_dependency,
+                                     session: session_dependency):
+    data = await get_folder_profiles(folder_id)
+
+    profiles = data.get('data').get('items')
+
+    query = (
+        select(
+            Account.profile_id,
+        )\
+        .where(
+            Account.folder_id == folder_id,
+        )
+    )
+
+    res = await execute_and_catch_db_error(session.execute(query),
+                                           session)
+    
+    folder_profile_id_from_db = res.scalars().all()
+
+    if folder_profile_id_from_db:
+        folder_profile_id_from_db = set(folder_profile_id_from_db)
+
+    return [{
+        'profile_id': profile['id'],
+        'folder_id': profile['folder_id'],
+        'profile_name': profile['profile_name'],
+        'profile_status': profile['profile_status'],
+    } for profile in profiles if profile['id'] not in folder_profile_id_from_db]
+
+
+@user_router.patch("/update_profile_data_by_account")
+async def update_profile_data_by_account(data: UpdateProfileDataSchema,
+                                         admin: admin_dependency,
+                                         session: session_dependency):
+    account_query = (
+        select(Account)\
+        .where(
+            Account.id == data.account_id,
+        )
+    )
+
+    res = await execute_and_catch_db_error(session.execute(account_query),
+                                           session)
+    
+    account: Account = res.scalar_one_or_none()
+
+    if not account:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Account not found by given account_id')
+    
+    check_query = (
+        select(1)\
+        .where(
+            and_(
+                Account.folder_id == data.folder_id,
+                Account.profile_id == data.profile_id,
+                Account.id != data.account_id,
+            )
+        )
+    )
+    has_record_res = await execute_and_catch_db_error(session.execute(check_query),
+                                                      session)
+    
+    has_record = has_record_res.scalar_one_or_none()
+    
+    if has_record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='This profile link with another account already')
+
+    account.folder_id = data.folder_id
+    account.profile_id = data.profile_id
+
+    try:
+        await execute_and_catch_db_error(session.commit(),
+                                        session,
+                                        with_rollback=True)
+        
+        return {
+            'status': 'success',
+            'detail': 'Profile successfully linked',
+        }
+
+    except Exception as ex:
+        print(ex)
+        raise
+
+
+# @user_router.get("/start_account_profile")
+# async def update_profile_data_by_account(account_id: UpdateProfileDataSchema,
+#                                          admin: admin_dependency,
+#                                          session: session_dependency):
 
 
 @user_router.patch("/accounts")
@@ -308,7 +437,7 @@ async def get_account_by_id(data: PatchAccountSchema,
     
     account = res.scalar_one_or_none()
 
-    print(account.username)
+    # print(account.username)
 
     if not account:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
@@ -316,20 +445,50 @@ async def get_account_by_id(data: PatchAccountSchema,
     
     has_edit = False
 
-    if data.proxy_url:
-        if not account.proxy_url:
-            account.proxy_url = data.proxy_url
-            has_edit = True
-        elif account.proxy_url != data.proxy_url:
-            account.proxy_url = data.proxy_url
-            has_edit = True
-    else:
-        if account.proxy_url:
-            account.proxy_url = None
-            has_edit = True
+    if account.is_active != data.is_active:
+        account.is_active = data.is_active
+        has_edit = True
 
-    if account.is_parse != data.is_parse:
-        account.is_parse = data.is_parse
+    if not has_edit:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail='Nothing change')
+    else:
+        await execute_and_catch_db_error(session.commit(),
+                                         session,
+                                         with_rollback=True)
+        return {
+            'status': 'success',
+        }
+
+
+@user_router.patch("/set_account_information")
+async def set_account_information(data: PatchInformationAccountSchema,
+                                  admin: admin_dependency,
+                                  session: session_dependency):
+    query = (
+        select(
+            Account
+        )\
+        .where(
+            Account.id == data.account_id
+        )
+    )
+
+    res = await execute_and_catch_db_error(session.execute(query),
+                                           session)
+    
+    account: Account = res.scalar_one_or_none()
+
+    # print(account.username)
+
+    if not account:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Account not found')
+    
+    has_edit = False
+
+    if account.information != data.information:
+        account.information = data.information
         has_edit = True
 
     if not has_edit:
@@ -344,8 +503,51 @@ async def get_account_by_id(data: PatchAccountSchema,
         }
     
 
+@user_router.patch("/set_account_photo")
+async def set_photo_information(data: PatchPhotoAccountSchema,
+                                admin: admin_dependency,
+                                session: session_dependency):
+    query = (
+        select(
+            Account
+        )\
+        .where(
+            Account.id == data.account_id
+        )
+    )
 
-@user_router.get("/threads")
+    res = await execute_and_catch_db_error(session.execute(query),
+                                           session)
+    
+    account: Account = res.scalar_one_or_none()
+
+    # print(account.username)
+
+    if not account:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Account not found')
+    
+    # has_edit = False
+
+    # if account.information != data.information:
+    #     account.information = data.information
+    #     has_edit = True
+
+    # if not has_edit:
+    #     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+    #                         detail='Nothing change')
+    account.photo_url = data.media_url
+
+    # else:
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)
+    return {
+        'status': 'success',
+    }
+
+# old
+# @user_router.get("/threads")
 async def get_threads(admin: admin_dependency,
                       session: session_dependency):
     # result = await session.execute(select(Thread))
@@ -367,14 +569,204 @@ async def get_threads(admin: admin_dependency,
             "guest_id": t.insta_user_id,
             "guest_username": f'{t.account.username} - {t.insta_user.username}',
             "last_activity": (
-                t.timestamp_last_seen_message.strftime("%Y-%m-%d %H:%M")
+                t.timestamp_last_seen_message.strftime("%Y-%d-%m %H:%M")
                 if t.timestamp_last_seen_message else ""
             ),
         })
     return dict(grouped)
 
+# new
+@user_router.get("/threads")
+async def get_threads(admin: admin_dependency,
+                      session: session_dependency):
+    result = await session.execute(
+        select(Thread)
+        .options(
+            joinedload(Thread.account),
+            joinedload(Thread.insta_user)
+        )
+    )
+    threads = result.scalars().all()
+    # grouped = defaultdict(list)
+    thread_list = []
+    for t in threads:
+        # account_key = str(t.account_id) if t.account_id else "unassigned"
+        thread_list.append({
+            "id": t.id,
+            # "thread_id": t.thread_id,
+            # "guest_id": t.insta_user_id,
+            "account_name": t.account.username,
+            "guest_name": t.insta_user.username,
+            'has_unread': t.is_unread,
+            'color_level': t.color_level,
+            "last_activity": (
+                t.timestamp_last_seen_message.strftime("%Y-%d-%m %H:%M")
+                if t.timestamp_last_seen_message else ""
+            ),
+        })
+    return thread_list
 
-@user_router.get("/messages")
+
+
+@user_router.get("/add_user_information")
+async def add_info(admin: admin_dependency,
+                      session: session_dependency,
+                      thread_id: int):
+
+    user_information = {
+        'first_name': 'Denis',
+        'last_name': 'Rodman',
+        'age': 22,
+        'jobs': ['programmer', 'basketball player'],
+        'prefered_nicknames': ['joker', 'daddy'],
+        'first_city': 'Chicago',
+        'first_country': 'USA',
+        'current_city': 'New-York',
+        'current_country': 'USA',
+        'hobbies': ['chess', 'cooking', 'beer'],
+    }
+    try:
+        json_information = json.dumps(user_information)
+    except Exception as ex:
+        print(ex)
+        raise
+
+    thread_query = (
+        update(Thread)\
+        .values(user_information=json_information)
+        .where(Thread.id == thread_id)
+    )
+
+    await execute_and_catch_db_error(session.execute(thread_query),
+                                     session)
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)
+
+
+# new
+@user_router.get("/threads/{thread_id}",
+                 response_model=DetailThreadSchema)
+async def get_threads(admin: admin_dependency,
+                      session: session_dependency,
+                      thread_id: int):
+    message_query = (
+        select(Message)
+        .options(joinedload(Message.attachments))\
+        .where(
+            Message.thread_id == thread_id,
+        )
+        .order_by(Message.created_at.desc())
+    )
+    
+    message_query_result = await execute_and_catch_db_error(session.execute(message_query),
+                                                            session)
+    
+    thread_query = (
+        select(Thread)\
+        .options(
+            joinedload(Thread.account),
+            joinedload(Thread.insta_user),
+        )
+        .where(Thread.id == thread_id)
+    )
+
+    thread_context_query_result = await execute_and_catch_db_error(session.execute(thread_query),
+                                                                   session)
+
+    # messages = message_query_result.scalars().all()
+    messages = message_query_result.unique().scalars().all()
+
+    thread = thread_context_query_result.scalar_one_or_none()
+
+    if not thread:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Thread not found')
+
+    message_list = []
+
+    try:
+        user_information = json.loads(thread.user_information)
+    except Exception as ex:
+        print('JSON SERIALIZE ERROR', ex)
+        user_information = None
+
+    thread_info = {
+        'thread_name': f'{thread.account.username} - {thread.insta_user.username}',
+        'message_count': len(messages),
+        'account_information': {
+            'photo_url': generate_valid_media_url(thread.account.photo_url),
+            'information': thread.account.information,
+            'username': thread.account.username,
+            'full_name': thread.account.full_name,
+        },
+        'user_information': {
+            'photo_url': generate_valid_media_url(thread.insta_user.photo_url),
+            'information': user_information,
+            'insta_link': generate_valid_insta_url(thread.insta_user.username),
+            'username': thread.insta_user.username,
+            'full_name': thread.insta_user.full_name,
+        }
+
+        # 'account_photo_url': generate_valid_media_url(thread.account.photo_url),
+        # 'user_photo_url': generate_valid_media_url(thread.insta_user.photo_url),
+        # 'user_insta_link': generate_valid_insta_url(thread.insta_user.username),
+        # 'user_information': user_information,
+        # 'account_information': thread.account.information,
+    }
+    
+    # if thread.context:
+    thread_info['context'] = thread.context or ''
+
+    if messages:
+
+        # if thread.context:
+        #     message_dict = {
+        #         'id': None,
+        #         'role': 'system',
+        #         "content": thread.context,
+        #         "ts": "",
+        #         "modStatus": None,
+        #     }
+        #     message_list.append(message_dict)
+        
+        for message in messages:
+            attachments = message.attachments
+            attachment_list = []
+            content = message.text or ""
+
+            for _attachment in attachments:
+            # _attachment = message.attachments
+                # content = message.text or ""
+                
+                if _attachment:
+                    _attachment = {
+                        'media_type': _attachment.media_type,
+                        'media_url': generate_valid_media_url(_attachment.media_url),
+                    }
+                    # _attachment = None
+                    attachment_list.append(_attachment)
+                
+            message_dict = {
+                "id": str(message.id),
+                "role": message.sender,
+                "content": content,
+                "ts": (
+                    message.created_at.strftime("%Y-%d-%m %H:%M")
+                    if message.created_at else ""
+                ),
+                "modStatus": message.status,  # pending / approved / moderated
+                'attachments': attachment_list
+            }
+            message_list.append(message_dict)
+
+    thread_info['messages'] = message_list
+
+    return thread_info
+
+
+# old
+# @user_router.get("/messages")
 async def get_messages(admin: admin_dependency,
                        session: session_dependency):
     result = await session.execute(
@@ -422,7 +814,7 @@ async def get_messages(admin: admin_dependency,
             "role": message.sender,
             "content": content,
             "ts": (
-                message.created_at.strftime("%Y-%m-%d %H:%M")
+                message.created_at.strftime("%Y-%d-%m %H:%M")
                 if message.created_at else ""
             ),
             "modStatus": message.status,  # pending / approved / moderated
@@ -430,6 +822,122 @@ async def get_messages(admin: admin_dependency,
         })
 
     return dict(grouped)
+
+# new
+@user_router.get("/messages")
+async def new_get_messages(admin: admin_dependency,
+                       session: session_dependency):
+    # query = (
+    #     select(Message)
+    #     .options(
+    #         joinedload(Message.thread).joinedload(Thread.account),
+    #         joinedload(Message.thread).joinedload(Thread.insta_user),
+    #         joinedload(Message.attachment),
+    #     )
+    #     .order_by(
+    #         Message.created_at.desc(),
+    #     )
+    # )
+    query = (
+        select(Message)
+        .options(
+            selectinload(Message.thread).selectinload(Thread.account),
+            selectinload(Message.thread).selectinload(Thread.insta_user),
+            selectinload(Message.attachments),
+        )
+        .order_by(
+            Message.created_at.desc(),
+        )
+    )
+
+    result = await execute_and_catch_db_error(session.execute(query),
+                                              session)
+    
+    messages = result.scalars().all()
+
+    message_list = []
+    for message in messages:
+        _attachments = message.attachments
+        content = message.text or ""
+        attachment_list = []
+        
+        if _attachments:
+            for _attachment in _attachments:
+                _attachment = {
+                    'media_type': _attachment.media_type,
+                    'media_url': generate_valid_media_url(_attachment.media_url),
+                }
+                attachment_list.append(_attachment)
+
+        message_list.append({
+            "id": message.id,
+            "role": message.sender,
+            "content": content,
+            'account_name': message.thread.account.username,
+            'thread_name': f'{message.thread.account.username} - {message.thread.insta_user.username}',
+            "ts": (
+                message.created_at.strftime("%Y-%d-%m %H:%M")
+                if message.created_at else ""
+            ),
+            "modStatus": message.status,  # pending / approved / moderated
+            'attachment': attachment_list,
+        })
+
+    return message_list
+
+
+# new
+@user_router.get("/messages/{message_id}")
+async def new_get_messages(admin: admin_dependency,
+                           session: session_dependency,
+                           message_id: int):
+    query = (
+        select(Message)
+        .options(
+            joinedload(Message.thread).joinedload(Thread.account),
+            joinedload(Message.thread).joinedload(Thread.insta_user),
+            joinedload(Message.attachments),
+        )
+        .where(
+            Message.id == message_id,
+        )
+    )
+
+    result = await execute_and_catch_db_error(session.execute(query),
+                                              session)
+    
+    message = result.unique().scalar_one_or_none()
+
+    _attachments = message.attachments
+    content = message.text or ""
+    attachment_list = []
+    
+    if _attachments:
+        for _attachment in _attachments:
+            _attachment = {
+                'media_type': _attachment.media_type,
+                'media_url': generate_valid_media_url(_attachment.media_url),
+            }
+            attachment_list.append(_attachment)
+
+        # content = ''
+
+    result = {
+        "id": message.id,
+        "role": message.sender,
+        "content": content,
+        'account_name': message.thread.account.username,
+        'thread_name': f'{message.thread.account.username} - {message.thread.insta_user.username}',
+        "ts": (
+            message.created_at.strftime("%Y-%d-%m %H:%M")
+            if message.created_at else ""
+        ),
+        "modStatus": message.status,  # pending / approved / moderated
+        'attachment': attachment_list,
+        'thread_id': message.thread_id,
+    }
+
+    return result
 
 
 @user_router.post("/create_message")
@@ -471,6 +979,7 @@ async def create_new_message(data: CreateMessageSchema,
 
         new_attachment = Attachment(**insert_data)
         session.add(new_attachment)
+        
     await execute_and_catch_db_error(session.commit(),
                                      session,
                                      with_rollback=True)
@@ -534,30 +1043,30 @@ async def get_stats(session: session_dependency):
 
 
 # треды конкретного аккаунта
-@user_router.get("/accounts/{account_id}/threads")
-async def get_account_threads(account_id: str, session: session_dependency):
-    if account_id == "unassigned":
-        result = await session.execute(
-            select(Thread).where(Thread.account_id == None)
-        )
-    else:
-        result = await session.execute(
-            select(Thread).where(Thread.account_id == int(account_id))
-        )
-    threads = result.scalars().all()
-    return [
-        {
-            "id": str(t.id),
-            "thread_id": t.thread_id,
-            "guest_id": t.guest_id,
-            "guest_username": f"username {t.guest_id}",
-            "last_activity": (
-                t.timestamp_last_seen_message.strftime("%Y-%m-%d %H:%M")
-                if t.timestamp_last_seen_message else ""
-            ),
-        }
-        for t in threads
-    ]
+# @user_router.get("/accounts/{account_id}/threads")
+# async def get_account_threads(account_id: str, session: session_dependency):
+#     if account_id == "unassigned":
+#         result = await session.execute(
+#             select(Thread).where(Thread.account_id == None)
+#         )
+#     else:
+#         result = await session.execute(
+#             select(Thread).where(Thread.account_id == int(account_id))
+#         )
+#     threads = result.scalars().all()
+#     return [
+#         {
+#             "id": str(t.id),
+#             "thread_id": t.thread_id,
+#             "guest_id": t.guest_id,
+#             "guest_username": f"username {t.guest_id}",
+#             "last_activity": (
+#                 t.timestamp_last_seen_message.strftime("%Y-%m-%d %H:%M")
+#                 if t.timestamp_last_seen_message else ""
+#             ),
+#         }
+#         for t in threads
+#     ]
 
 
 # сообщения конкретного треда
@@ -589,7 +1098,7 @@ async def get_thread_messages(thread_id: str, session: session_dependency):
         })
 
     for m in messages:
-        _attachment = m.attachment
+        _attachments = m.attachments
         content = m.text or ""
         
         if _attachment:
@@ -603,7 +1112,7 @@ async def get_thread_messages(thread_id: str, session: session_dependency):
             "role": m.sender,
             "content": content,
             "ts": (
-                m.created_at.strftime("%Y-%m-%d %H:%M")
+                m.created_at.strftime("%Y-%d-%m %H:%M")
                 if m.created_at else ""
             ),
             "modStatus": m.status,
@@ -640,10 +1149,13 @@ async def upload_file(admin: admin_dependency,
         media_type = 'audio'
     elif content_type.startswith('video'):
         media_type = 'video'
+    else:
+        media_type = None
 
     return {
         'media_type': media_type,
         "media_url": media_url,
+        "media_preview": generate_valid_media_url(media_url),
     }
 
 
@@ -795,50 +1307,66 @@ async def return_all_users(session: session_dependency,
 #     return updated_user
 
 
+# from background.tasks import send_message_to_thread
 
 
-@user_router.get("/test")
-async def test_hander(session: session_dependency):
+@user_router.get("/run_background_send_message")
+async def test_hander(admin: admin_dependency,
+                      session: session_dependency,
+                      arq_pool: arq_dependency,
+                      account_id: int,
+                      message_id: int):
+    job = await arq_pool.enqueue_job(
+        'send_message_to_thread',   # имя = __name__ функции, зарегистрированной в воркере
+        account_id,
+        message_id,
+        _queue_name='arq:message',
+    )
+    return {"status": "queued", "job_id": job.job_id}
+    # async with session as _session:
+    # await send_message_to_thread(account_id=account_id,
+    #                             message_id=message_id,
+    #                             session=session)
     # ACCOUNT_USERNAME = 'yashenkov.q'
     # ACCOUNT_PASSWORD = 'QazWsxEdc123!'
     # insta_client.login(ACCOUNT_USERNAME, ACCOUNT_PASSWORD)
-    users = await get_all_users(session)
+    # users = await get_all_users(session)
 
-    db_user = users[0]
+    # db_user = users[0]
 
-    for user in users:
-        insta_client = Client()
-        insta_client.logger.setLevel("DEBUG")
+    # for user in users:
+    #     insta_client = Client()
+    #     insta_client.logger.setLevel("DEBUG")
         
-        insta_client.set_settings(user.session)
-        my_acc = insta_client.account_info()
+    #     insta_client.set_settings(user.session)
+    #     my_acc = insta_client.account_info()
 
-        owner_user_id = my_acc.pk
+    #     owner_user_id = my_acc.pk
         
-        # print(my_acc)
-        # print(my_acc.__dict__)
+    #     # print(my_acc)
+    #     # print(my_acc.__dict__)
 
-        threads = insta_client.direct_threads()
+    #     threads = insta_client.direct_threads()
 
-        # print('THREADS!!!!', threads)
+    #     # print('THREADS!!!!', threads)
 
-        for thread in threads:
-            # print(thread.messages)
-            for message in thread.messages:
-                if message.user_id != owner_user_id:
-                    print('MESSAGE OBJ', message)
-                    print('MESSAGE TEXT!!!',message.text)
-                    print(message.user_id)
-                    print('*' * 10)
-            # print(thread.users)
-            # print('*' * 10)
-            # print(thread.admin_user_ids)
+    #     for thread in threads:
+    #         # print(thread.messages)
+    #         for message in thread.messages:
+    #             if message.user_id != owner_user_id:
+    #                 print('MESSAGE OBJ', message)
+    #                 print('MESSAGE TEXT!!!',message.text)
+    #                 print(message.user_id)
+    #                 print('*' * 10)
+    #         # print(thread.users)
+    #         # print('*' * 10)
+    #         # print(thread.admin_user_ids)
 
-        db_user.session = insta_client.get_settings()
+    #     db_user.session = insta_client.get_settings()
 
-        await execute_and_catch_db_error(session.commit(),
-                                                session,
-                                                with_rollback=True)
+    #     await execute_and_catch_db_error(session.commit(),
+    #                                             session,
+    #                                             with_rollback=True)
 
 
 

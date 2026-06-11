@@ -50,34 +50,44 @@ services:
   #     options:
   #         max-size: "20m"
 
-  # arq_high:
+  # arq_polling:
   #   build: .
+  #   volumes:
+  #     - .:/app
+  #     - media_data:/app/media
   #   env_file:
   #     - ./.env
   #   environment:
-  #     - POSTGRES_HOST=psql_db
-  #     - REDIS_HOST=redis_tg_bot_db
-  #     # - DB_PORT=5432
-
+  #     - POSTGRES_HOST=ai_psql_db
+  #     - REDIS_HOST=ai_redis_db
+  #     - DB_PORT=5432
+  #     - REDIS_PORT=6379
+  #     # - VISION_BROWSER_HOST=host.docker.internal
+  #   command: arq background.polling_worker.WorkerSettings
   #   networks:
-  #     - bot_network
-  #   command: arq background.high_worker.WorkerSettings
-  #   depends_on:
-  #     - redis_tg_bot_db
+  #     - shared_network
+    # extra_hosts:
+    #     - "host.docker.internal:host-gateway"
 
-  # arq_low:
+
+  # arq_message:
   #   build: .
+  #   volumes:
+  #     - .:/app
+  #     - media_data:/app/media
   #   env_file:
   #     - ./.env
   #   environment:
-  #     - POSTGRES_HOST=psql_db
-  #     # - DB_PORT=5432
-  #     - REDIS_HOST=redis_tg_bot_db
+  #     - POSTGRES_HOST=ai_psql_db
+  #     - REDIS_HOST=ai_redis_db
+  #     - DB_PORT=5432
+  #     - REDIS_PORT=6379
+  #     - VISION_BROWSER_HOST=host.docker.internal
+  #   command: arq background.message_worker.WorkerSettings
   #   networks:
-  #     - bot_network
-  #   command: arq background.low_worker.WorkerSettings
-  #   depends_on:
-  #     - redis_tg_bot_db
+  #     - shared_network
+  #   extra_hosts:
+  #       - "host.docker.internal:host-gateway"
 
   # arq_popular:
   #   build: .
@@ -123,7 +133,7 @@ services:
       - "8000:8000"
     volumes:
       - .:/app
-      - media_data:/app/media
+      - /Users/skxnny/web/ai_orchestrator/media:/app/media
     env_file:
       - ./.env
     environment:
@@ -136,8 +146,8 @@ services:
 
 volumes:
   ai-postgres-data:
-  media_data:
-    name: shared_media_data
+  # media_data:
+  #   name: shared_media_data
 
 networks:
   shared_network:

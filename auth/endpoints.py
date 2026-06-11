@@ -28,6 +28,11 @@ from utils.enums import SessionStatusEnum, MessageStatusEnum
 
 from utils.dependencies import user_dependency, session_dependency, admin_dependency
 from utils.celery import run_task
+from utils.scheduler import scheduler
+
+from background.tasks import start_polling_for_accounts
+
+from background.base import get_redis_pool, background_task_wrapper
 
 from .utils import (authenticate_user,
                     generate_tokens,
@@ -49,6 +54,38 @@ from config import SECRET_API
 
 auth_router = APIRouter(prefix='/auth',
                         tags=['Auth'])
+
+
+@auth_router.get('/test_arq')
+async def test_arq(admin: admin_dependency,
+                   session: session_dependency):
+    
+    # _redis_pool = get_redis_pool()
+
+    # await _redis_pool.enqueue_job('start_polling_for_accounts',
+    #                               _queue_name='arq:polling',
+    #                               _job_id='polling_accounts_task')
+
+    func_name = 'start_polling_for_accounts'
+
+    job = scheduler.add_job(background_task_wrapper,
+                            trigger='interval',
+                            minutes=1,
+                            id='start_polling_for_accounts',
+                            jobstore='sqlalchemy',
+                            coalesce=True,
+                            args=(func_name, ),
+                            kwargs={'_queue_name': 'arq:polling'})
+    
+    print(job)
+    # print(job.__dict__)
+
+    
+    # scheduler.add_job(start_polling_for_accounts,
+    #                   id='polling_accounts_task',
+    #                       trigger="interval",
+    #                       seconds=120)
+    print('success!!!')
 
 
 @auth_router.post('/create_admins')
@@ -320,7 +357,8 @@ async def register_admin(login_admin: LoginUserSchema,
     # return RegisterEndpointResponse(user=DetailUserSchema(**user.__dict__),
     #                                 token=tokens.get('access_token'))
     return {
-        'token': tokens.get('access_token'),
+        'access_token': tokens.get('access_token'),
+        'refresh_token': tokens.get('refresh_token'),
     }
 
 

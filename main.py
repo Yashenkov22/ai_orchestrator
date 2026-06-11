@@ -15,6 +15,10 @@ from api.base import main_router
 
 from utils.instagram_client import cl
 
+from utils.scheduler import scheduler
+
+from background.base import get_redis_background_pool
+
 from instagrapi.exceptions import TwoFactorRequired
 
 
@@ -23,9 +27,18 @@ from instagrapi.exceptions import TwoFactorRequired
 async def lifespan(app: FastAPI):
     # Код, который будет выполнен при старте приложения
     print("Приложение запускается...")
+    scheduler.start()
+    app.state.arq_pool = await get_redis_background_pool()
     # Инициализация БД
     # await init_models()
     yield  # Это место, где приложение будет работать
+
+    await app.state.arq_pool.close()
+
+    try:
+        scheduler.shutdown()
+    except Exception as ex:
+        print(ex)
     #
     print("Приложение останавливается...")
 

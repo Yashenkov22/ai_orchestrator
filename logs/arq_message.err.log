@@ -1,0 +1,124 @@
+17:25:25: redis connection error 127.0.0.1:6172 ConnectionError Error 61 connecting to 127.0.0.1:6172. Connect call failed ('127.0.0.1', 6172)., 5 retries remaining...
+17:25:26: redis connection error 127.0.0.1:6172 ConnectionError Error 61 connecting to 127.0.0.1:6172. Connect call failed ('127.0.0.1', 6172)., 4 retries remaining...
+17:25:27: redis connection error 127.0.0.1:6172 ConnectionError Error 61 connecting to 127.0.0.1:6172. Connect call failed ('127.0.0.1', 6172)., 3 retries remaining...
+17:25:28: redis connection error 127.0.0.1:6172 ConnectionError Error 61 connecting to 127.0.0.1:6172. Connect call failed ('127.0.0.1', 6172)., 2 retries remaining...
+17:25:29: redis connection error 127.0.0.1:6172 ConnectionError Error 61 connecting to 127.0.0.1:6172. Connect call failed ('127.0.0.1', 6172)., 1 retries remaining...
+Traceback (most recent call last):
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/redis/asyncio/connection.py", line 276, in connect
+    await self.retry.call_with_retry(
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/redis/asyncio/retry.py", line 59, in call_with_retry
+    return await do()
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/redis/asyncio/connection.py", line 682, in _connect
+    reader, writer = await asyncio.open_connection(
+  File "/opt/homebrew/Cellar/python@3.10/3.10.16/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/streams.py", line 48, in open_connection
+    transport, _ = await loop.create_connection(
+  File "/opt/homebrew/Cellar/python@3.10/3.10.16/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/base_events.py", line 1076, in create_connection
+    raise exceptions[0]
+  File "/opt/homebrew/Cellar/python@3.10/3.10.16/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/base_events.py", line 1060, in create_connection
+    sock = await self._connect_sock(
+  File "/opt/homebrew/Cellar/python@3.10/3.10.16/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/base_events.py", line 969, in _connect_sock
+    await self.sock_connect(sock, address)
+  File "/opt/homebrew/Cellar/python@3.10/3.10.16/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/selector_events.py", line 501, in sock_connect
+    return await fut
+  File "/opt/homebrew/Cellar/python@3.10/3.10.16/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/selector_events.py", line 541, in _sock_connect_cb
+    raise OSError(err, f'Connect call failed {address}')
+ConnectionRefusedError: [Errno 61] Connect call failed ('127.0.0.1', 6172)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/skxnny/web/ai_orchestrator/venv/bin/arq", line 8, in <module>
+    sys.exit(cli())
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/click/core.py", line 1157, in __call__
+    return self.main(*args, **kwargs)
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/click/core.py", line 1078, in main
+    rv = self.invoke(ctx)
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/click/core.py", line 1434, in invoke
+    return ctx.invoke(self.callback, **ctx.params)
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/click/core.py", line 783, in invoke
+    return __callback(*args, **kwargs)
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/arq/cli.py", line 54, in cli
+    run_worker(worker_settings_, **kwargs)
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/arq/worker.py", line 894, in run_worker
+    worker.run()
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/arq/worker.py", line 308, in run
+    self.loop.run_until_complete(self.main_task)
+  File "/opt/homebrew/Cellar/python@3.10/3.10.16/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/base_events.py", line 649, in run_until_complete
+    return future.result()
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/arq/worker.py", line 346, in main
+    self._pool = await create_pool(
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/arq/connections.py", line 280, in create_pool
+    await pool.ping()
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/redis/asyncio/client.py", line 610, in execute_command
+    conn = self.connection or await pool.get_connection(command_name, **options)
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/redis/asyncio/connection.py", line 1049, in get_connection
+    await self.ensure_connection(connection)
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/redis/asyncio/connection.py", line 1082, in ensure_connection
+    await connection.connect()
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/redis/asyncio/connection.py", line 284, in connect
+    raise ConnectionError(self._error_message(e))
+redis.exceptions.ConnectionError: Error 61 connecting to 127.0.0.1:6172. Connect call failed ('127.0.0.1', 6172).
+17:25:36: redis connection error 127.0.0.1:6172 ConnectionError Error 61 connecting to 127.0.0.1:6172. Connect call failed ('127.0.0.1', 6172)., 5 retries remaining...
+17:25:37: redis connection error 127.0.0.1:6172 ConnectionError Error 61 connecting to 127.0.0.1:6172. Connect call failed ('127.0.0.1', 6172)., 4 retries remaining...
+17:25:38: redis connection error 127.0.0.1:6172 ConnectionError Error 61 connecting to 127.0.0.1:6172. Connect call failed ('127.0.0.1', 6172)., 3 retries remaining...
+17:25:39: redis connection error 127.0.0.1:6172 ConnectionError Error 61 connecting to 127.0.0.1:6172. Connect call failed ('127.0.0.1', 6172)., 2 retries remaining...
+17:25:40: redis connection error 127.0.0.1:6172 ConnectionError Error 61 connecting to 127.0.0.1:6172. Connect call failed ('127.0.0.1', 6172)., 1 retries remaining...
+Traceback (most recent call last):
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/redis/asyncio/connection.py", line 276, in connect
+    await self.retry.call_with_retry(
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/redis/asyncio/retry.py", line 59, in call_with_retry
+    return await do()
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/redis/asyncio/connection.py", line 682, in _connect
+    reader, writer = await asyncio.open_connection(
+  File "/opt/homebrew/Cellar/python@3.10/3.10.16/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/streams.py", line 48, in open_connection
+    transport, _ = await loop.create_connection(
+  File "/opt/homebrew/Cellar/python@3.10/3.10.16/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/base_events.py", line 1076, in create_connection
+    raise exceptions[0]
+  File "/opt/homebrew/Cellar/python@3.10/3.10.16/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/base_events.py", line 1060, in create_connection
+    sock = await self._connect_sock(
+  File "/opt/homebrew/Cellar/python@3.10/3.10.16/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/base_events.py", line 969, in _connect_sock
+    await self.sock_connect(sock, address)
+  File "/opt/homebrew/Cellar/python@3.10/3.10.16/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/selector_events.py", line 501, in sock_connect
+    return await fut
+  File "/opt/homebrew/Cellar/python@3.10/3.10.16/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/selector_events.py", line 541, in _sock_connect_cb
+    raise OSError(err, f'Connect call failed {address}')
+ConnectionRefusedError: [Errno 61] Connect call failed ('127.0.0.1', 6172)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/skxnny/web/ai_orchestrator/venv/bin/arq", line 8, in <module>
+    sys.exit(cli())
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/click/core.py", line 1157, in __call__
+    return self.main(*args, **kwargs)
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/click/core.py", line 1078, in main
+    rv = self.invoke(ctx)
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/click/core.py", line 1434, in invoke
+    return ctx.invoke(self.callback, **ctx.params)
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/click/core.py", line 783, in invoke
+    return __callback(*args, **kwargs)
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/arq/cli.py", line 54, in cli
+    run_worker(worker_settings_, **kwargs)
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/arq/worker.py", line 894, in run_worker
+    worker.run()
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/arq/worker.py", line 308, in run
+    self.loop.run_until_complete(self.main_task)
+  File "/opt/homebrew/Cellar/python@3.10/3.10.16/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/base_events.py", line 649, in run_until_complete
+    return future.result()
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/arq/worker.py", line 346, in main
+    self._pool = await create_pool(
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/arq/connections.py", line 280, in create_pool
+    await pool.ping()
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/redis/asyncio/client.py", line 610, in execute_command
+    conn = self.connection or await pool.get_connection(command_name, **options)
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/redis/asyncio/connection.py", line 1049, in get_connection
+    await self.ensure_connection(connection)
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/redis/asyncio/connection.py", line 1082, in ensure_connection
+    await connection.connect()
+  File "/Users/skxnny/web/ai_orchestrator/venv/lib/python3.10/site-packages/redis/asyncio/connection.py", line 284, in connect
+    raise ConnectionError(self._error_message(e))
+redis.exceptions.ConnectionError: Error 61 connecting to 127.0.0.1:6172. Connect call failed ('127.0.0.1', 6172).
+17:25:46: redis connection error 127.0.0.1:6172 ConnectionError Error 61 connecting to 127.0.0.1:6172. Connect call failed ('127.0.0.1', 6172)., 5 retries remaining...
+17:25:47: redis connection error 127.0.0.1:6172 ConnectionError Error 61 connecting to 127.0.0.1:6172. Connect call failed ('127.0.0.1', 6172)., 4 retries remaining...
+17:25:48: redis connection error 127.0.0.1:6172 ConnectionError Error 61 connecting to 127.0.0.1:6172. Connect call failed ('127.0.0.1', 6172)., 3 retries remaining...
+17:25:49: redis connection error 127.0.0.1:6172 ConnectionError Error 61 connecting to 127.0.0.1:6172. Connect call failed ('127.0.0.1', 6172)., 2 retries remaining...

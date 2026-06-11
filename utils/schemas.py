@@ -10,7 +10,7 @@ from fastapi import HTTPException
 
 from pydantic.alias_generators import to_camel
 
-from utils.enums import MessageStatusEnum, MessageTypeEnum
+from utils.enums import MessageStatusEnum, MessageTypeEnum, ThreadColorEnum
 
 
 
@@ -185,7 +185,100 @@ class AccountSchema(BaseModel):
     threads: list[AccountThread]
 
 
+class NewAccountSchema(BaseModel):
+    id: int
+    username: str
+    fullname: str | None = Field(default=None)
+    # insta_id: str
+    created_at: datetime
+    updated_at: datetime
+    photo_url: str | None = Field(default=None)
+    is_active: bool
+    thread_count: int
+    has_unread: bool
+    has_error: bool
+    information: str | None = Field(default=None)
+    folder_id: str | None
+    profile_id: str | None
+
+
 class PatchAccountSchema(BaseModel):
     account_id: int
-    proxy_url: str
-    is_parse: bool
+    is_active: bool
+
+
+class PatchInformationAccountSchema(BaseModel):
+    account_id: int
+    information: str
+
+
+class PatchPhotoAccountSchema(BaseModel):
+    account_id: int
+    media_url: str
+
+
+class ThreadSchema(BaseModel):
+    id: int
+    account_name: str
+    user_name: str
+    has_unread: bool
+    last_activity: str
+    color_level: str
+
+
+class EditThreadColorLevelSchema(BaseModel):
+    thread_id: int
+    color_level: ThreadColorEnum
+
+
+class AttachmentSchema(BaseModel):
+    media_type: str
+    media_url: str
+
+
+class MessageSchema(BaseModel):
+    id: int
+    role: str
+    content: str
+    ts: str
+    modStatus: str
+    attachments: list[AttachmentSchema] | None
+
+
+
+
+class AccountInformationSchema(BaseModel):
+    photo_url: str | None
+    information: str | None
+
+
+class UserInformationSchema(BaseModel):
+    photo_url: str | None
+    information: dict | None
+    insta_link: str | None
+
+
+#
+class DetailThreadSchema(BaseModel):
+    thread_name: str
+    message_count: int
+    account_information: AccountInformationSchema | None
+    user_information: UserInformationSchema | None
+    context: str | None
+    messages: list[MessageSchema]
+
+
+class UpdateProfileDataSchema(BaseModel):
+    account_id: int
+    folder_id: str
+    profile_id: str
+# class DetailThreadSchema(BaseModel):
+#     thread_name: str
+#     message_count: int
+#     account_photo_url: str | None
+#     user_photo_url: str | None
+#     user_information: dict | None
+#     user_insta_link: str | None
+#     account_information: str | None
+#     context: str | None
+#     messages: list[MessageSchema]

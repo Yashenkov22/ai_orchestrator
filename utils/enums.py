@@ -22,3 +22,10 @@ class SessionStatusEnum(str, Enum):
     ACTIVE = 'active'
     PROCESS = 'process'
     INACTIVE = 'inactive'
+
+
+class ThreadColorEnum(str, Enum):
+    GREEN = "green"
+    YELLOW = "yellow"
+    RED = "red"
+    GREY = "grey"
