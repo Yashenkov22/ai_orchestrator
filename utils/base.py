@@ -73,6 +73,9 @@ def generate_valid_media_url(url: str | None):
     if isinstance(url, str):
         url = url.replace('./','')
 
+    if isinstance(url, str):
+        url = url.replace('/srv','')
+
     return url
 
 
