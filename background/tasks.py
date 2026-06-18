@@ -5,6 +5,8 @@ from asyncio import sleep
 
 from arq import Retry
 
+from fastapi import HTTPException, status
+
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -17,9 +19,9 @@ from sqlalchemy import insert, select, and_, update, func, desc
 from sqlalchemy.orm import selectinload
 
 from db.base import Account, get_session
-from db.queries import execute_and_catch_db_error, get_message_by_id
+from db.queries import execute_and_catch_db_error, get_message_by_id, get_account_by_id
 
-from utils.base import get_active_profiles, try_start_profile, try_stop_profile
+from utils.base import get_active_profiles, try_start_profile, try_stop_profile, try_connect_to_main_instagram_page
 from utils.tasks import playwright_send_message, test_playwright
 
 from .base import get_redis_pool, acquire_lock, release_lock
@@ -74,36 +76,6 @@ async def start_polling_for_accounts(cxt):
                 )
 
                 print('ACCOUNT PARSE JOB RUNNING...', job)
-                # return {"status": "queued", "job_id": job.job_id}
-                    #try start profile
-        #             actived_profile = await try_start_profile(folder_id,
-        #                                                       profile_id)
-                    
-        #             print(actived_profile)
-                    
-        #             profile_port = actived_profile.get('port')
-
-        #             print('PORT', profile_port)
-
-        #             if profile_port:
-        #                 await sleep(10)
-
-        #                 await test_playwright(account.id,
-        #                                       profile_port,
-        #                                       sessionmaker)
-        #                 # print('RUNNING PROFILE', actived_profile)
-
-        #                 await sleep(10)
-
-        #                 stopped_profile = await try_stop_profile(folder_id,
-        #                                                         profile_id)
-        #                 print('STOPPED PROFILE', stopped_profile)
-
-        # await sleep(10)
-
-        # active_profiles = await get_active_profiles()
-
-        # print('AFTER ACTIVE PROFILES', active_profiles)
 
 
 async def parse_account(cxt,
@@ -223,3 +195,43 @@ async def send_message_to_thread(cxt,
         print('ERROR WITH TRY SEND MESSAGE', ex)
     finally:
             release_lock(account_id, available_lock)
+
+
+async def try_start_stop_vision_profile_by_account_id(cxt,
+                                                      account_id: int,
+                                                      marker: Literal['start', 'stop']):
+    sessionmaker= cxt['sessionmaker']
+
+    async with sessionmaker() as _session:
+        _session: AsyncSession
+        account = await get_account_by_id(account_id,
+                                        _session)
+    
+    is_success = None
+    
+    if not account or\
+          not (account.folder_id and account.profile_id):
+        raise
+
+    match marker:
+        case 'start':
+            actived_profile = await try_start_profile(account.folder_id,
+                                                    account.profile_id)
+
+            profile_port = actived_profile.get('port')
+
+            warning_message = actived_profile.get('message')
+
+            print('PORT', profile_port)
+
+            if warning_message:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                    detail=warning_message)
+
+            if profile_port:
+                is_success = await try_connect_to_main_instagram_page(profile_port)
+
+            return is_success
+        case 'stop':
+            await try_stop_profile(account.folder_id,
+                                   account.profile_id)

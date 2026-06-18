@@ -1,4 +1,5 @@
-from .tasks import (send_message_to_thread)
+from .tasks import (send_message_to_thread,
+                    try_start_stop_vision_profile_by_account_id)
 from background.base import (redis_settings,
                              _redis_pool,
                              get_redis_background_pool)
@@ -36,6 +37,7 @@ async def shutdown(ctx):
 class WorkerSettings:
     functions = [
         send_message_to_thread,
+        try_start_stop_vision_profile_by_account_id,
         ]
     on_startup = startup
     on_shutdown = shutdown

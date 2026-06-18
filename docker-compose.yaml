@@ -133,7 +133,8 @@ services:
       - "8000:8000"
     volumes:
       - .:/app
-      - /Users/skxnny/web/ai_orchestrator/media:/app/media
+      # - /Users/skxnny/web/ai_orchestrator/media:/app/media
+      - ${MEDIA_PATH}:/app/media
     env_file:
       - ./.env
     environment:
@@ -141,11 +142,49 @@ services:
       - REDIS_HOST=ai_redis_db
       - DB_PORT=5432
       - REDIS_PORT=6379
+      - TRANSLATOR_URL=translator
+    networks:
+      - shared_network
+
+  # translator:
+  #   build: .
+  #   container_name: translator_service
+  #   command: uvicorn main:app --host 0.0.0.0 --port 8000
+  #   ports:
+  #     - "8001:8000"
+  #   volumes:
+  #     - .:/app
+  #     # - /Users/skxnny/web/ai_orchestrator/media:/app/media
+  #   env_file:
+  #     - ./.env
+  #   environment:
+  #     - POSTGRES_HOST=ai_psql_db
+  #     - REDIS_HOST=ai_redis_db
+  #     - DB_PORT=5432
+  #     - REDIS_PORT=6379
+  #   networks:
+  #     - shared_network
+  translator:
+    build:
+      context: ./translator
+    container_name: translator_service
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./translator:/app
+      # - ./models:/models
+      - huggingface_cache:/models
+    env_file:
+      - ./.env
+    environment:
+      HF_HOME: /models
     networks:
       - shared_network
 
 volumes:
   ai-postgres-data:
+  huggingface_cache:
   # media_data:
   #   name: shared_media_data
 

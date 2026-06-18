@@ -1,14 +1,46 @@
 import pytz
 import aiohttp
+import asyncio
 
-import enum
+from lingua import  Language
 
 from passlib.context import CryptContext
 
-from config import ADMIN_URL, X_TOKEN, VISION_BROWSER_HOST, VISION_BROWSER_PORT
+from playwright.async_api import async_playwright
+
+from config import ADMIN_URL, X_TOKEN, VISION_BROWSER_HOST, VISION_BROWSER_PORT, TRANSLATOR_LINK
 
 
 INSTA_URL_PREFIX = 'https://www.instagram.com/'
+
+
+# AVAILABLE_LANGUAGES = {
+#     Language.RUSSIAN: "rus_Cyrl",
+#     Language.ENGLISH: "eng_Latn",
+#     Language.SPANISH: "spa_Latn",
+#     Language.ARABIC: "arb_Arab",
+#     Language.FRENCH: "fra_Latn",
+#     Language.PORTUGUESE: "por_Latn",
+#     Language.UKRAINIAN: "ukr_Cyrl",
+#     Language.BELARUSIAN: "bel_Cyrl",
+#     Language.CHINESE: "zho_Hans",
+#     Language.ITALIAN: "ita_Latn",
+#     Language.HINDI: "hin_Deva",
+# }
+
+# AVAILABLE_LANGUAGES = {
+#     Language.RUSSIAN: "ru",
+#     Language.ENGLISH: "en",
+#     Language.SPANISH: "es",
+#     Language.ARABIC: "ar",
+#     Language.FRENCH: "fr",
+#     Language.PORTUGUESE: "pt",
+#     Language.UKRAINIAN: "uk",
+#     Language.BELARUSIAN: "be",
+#     Language.CHINESE: "zh",
+#     Language.ITALIAN: "it",
+#     Language.HINDI: "hi",
+# }
 
 
 
@@ -19,6 +51,19 @@ pwd_context = CryptContext(
     schemes=["argon2"],
     deprecated="auto"
 )
+
+RATIO_LIMIT = 0.3
+RATIO_LEN_LIMIT = 4
+
+
+def russian_ratio(text):
+    letters = [c for c in text if c.isalpha()]
+
+    if not letters:
+        return 0
+
+    russian = sum('А' <= c <= 'я' or c in 'Ёё' for c in letters)
+    return russian / len(letters)
 
 
 def generate_valid_media_url(url: str | None):
@@ -63,6 +108,25 @@ async def get_vision_folder_list(_timeout: int = 10):
     except Exception as ex:
         print(ex)
         raise
+
+
+async def dismiss_notifications_popup(page):
+    """Закрывает popup с запросом уведомлений"""
+    dismiss_texts = [
+        'ไม่ใช่ตอนนี้',   # тайский
+        'Not Now',          # английский
+        'Не сейчас',        # русский
+        'Jetzt nicht',      # немецкий
+    ]
+    for text in dismiss_texts:
+        try:
+            btn = page.get_by_role('button', name=text)
+            if await btn.is_visible():
+                await btn.click()
+                print(f"Notifications popup dismissed ({text})")
+                return
+        except Exception:
+            continue
 
 
 async def get_folder_profiles(folder_id: str,
@@ -133,6 +197,8 @@ async def try_start_profile(folder_id: str,
             #                              timeout=_timeout)
                 # content_type = response.headers.get('Content-Type', '').lower()
                 _response = await response.json()
+                # print('START STATUS -> ',response.status)
+                # print('START RESULT -> ', _response)
         
         # print('FOLDER LIST', _response)
         return _response
@@ -157,6 +223,46 @@ async def try_stop_profile(folder_id: str,
             #                              timeout=_timeout)
                 # content_type = response.headers.get('Content-Type', '').lower()
                 _response = await response.json()
+                # print('STOP STATUS -> ',response.status)
+                # print('STOP RESULT -> ', _response)
+        
+        # print('FOLDER LIST', _response)
+        return _response
+    except Exception as ex:
+        print(ex)
+        raise
+
+
+async def try_connect_to_main_instagram_page(profile_port: int):
+        async with async_playwright() as p:
+            browser = await p.chromium.connect_over_cdp(f'http://{VISION_BROWSER_HOST}:{profile_port}')
+            print(f"CONNECTED ON {profile_port} PORT")
+
+            context = browser.contexts[0] if browser.contexts else await browser.new_context()
+            page = context.pages[0] if context.pages else await context.new_page()
+
+            current_url = page.url
+            if 'instagram.com/' in current_url:
+                await page.reload(wait_until='domcontentloaded')
+            else:
+                await page.goto('https://www.instagram.com/',
+                                wait_until='domcontentloaded')
+            
+            await asyncio.sleep(2)
+            
+            return page.url.startswith('https://www.instagram')
+
+
+async def try_translate_text(text: str):
+    url = f'http://{TRANSLATOR_LINK}/translate/translate_text?text={text}'
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url=url) as response:
+            # response = await session.get(xml_url,
+            #                              headers=headers,
+            #                              timeout=_timeout)
+                # content_type = response.headers.get('Content-Type', '').lower()
+                _response = await response.text()
         
         # print('FOLDER LIST', _response)
         return _response

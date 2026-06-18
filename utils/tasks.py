@@ -27,7 +27,9 @@ from db.base import Message, Thread
 
 from utils.enums import MessageStatusEnum
 
-from config import VISION_BROWSER_HOST
+from utils.base import dismiss_notifications_popup
+
+from config import VISION_BROWSER_HOST, MEDIA_PATH
 
 # === Конфигурация ===
 
@@ -722,7 +724,7 @@ async def process_thread_messages(messages: list,
 
     result = {'thread_id': thread.id}
     all_messages = []
-    mark_as_unread = False
+    mark_as_unread = None
 
     for msg in messages:
         node = msg['node']
@@ -1041,6 +1043,8 @@ async def test_playwright(account_id: int,
         else:
             await page.goto('https://www.instagram.com/direct/inbox/',
                             wait_until='domcontentloaded')
+            
+        await dismiss_notifications_popup(page)
 
         try:
             await asyncio.wait_for(inbox_received.wait(), timeout=15)
@@ -1153,6 +1157,8 @@ async def playwright_send_message(message: Message,
 
         await asyncio.sleep(3)
 
+        await dismiss_notifications_popup(page)
+
         if not is_approved_thread:
             is_approved = await approve_request_chat(page,
                                                      page.url)
@@ -1170,39 +1176,85 @@ async def playwright_send_message(message: Message,
                     _attachment = _attachments[0]
                     media_url = _attachment.media_url
 
-                    if not media_url.startswith('./'):
-                        media_url = './' + media_url
+                    if media_url.startswith('./'):
+                        media_url = media_url[2:]
+                    if media_url.startswith('media/'):
+                        media_url = media_url[len('media/'):]
+
+                    media_url_for_send = f'{MEDIA_PATH}/{media_url}'
 
                     try:
                         inp = page.locator('input[type="file"]')
 
-                        await inp.set_input_files(media_url)   # абсолютный путь
+                        await inp.set_input_files(media_url_for_send)   # абсолютный путь
                         await asyncio.sleep(2.5)
 
-                        # print("dialogs:", await page.locator('div[role="dialog"]').count())
-
+                        # ждём появления превью вложения (кнопка "Remove")
                         await page.wait_for_selector(
-                            'button[aria-label^="ลบไฟล์แนบ"], [aria-label^="ลบไฟล์แนบ"]',
+                            'button[aria-label^="Remove"], [aria-label^="Remove"]',
                             timeout=20000)
-                        # await human_pause(0.8, 2.0)
 
-                        # Отправка через Enter в композере — обходит локализацию кнопки.
+                        # Отправка через Enter в композере
                         box = page.locator('div[role="textbox"]').last
                         await box.click()
                         await page.keyboard.press("Enter")
 
                         # Подтверждение: кнопка удаления вложения исчезла = ушло
                         await page.wait_for_selector(
-                            'button[aria-label^="ลบไฟล์แนบ"]',
+                            'button[aria-label^="Remove"]',
                             state="detached", timeout=20000)
-                        # await human_pause(1.0, 2.0)
                         print("фото отправлено")
                         send_success = True
                     except Exception as ex:
                         print('ERROR WITH TRY SEND MESSAGE', ex)
-                    
+
                 case _:
                     pass
+
+        # if media:
+        #     match media:
+        #         case 'photo':
+        #             _attachments = message.attachments
+        #             _attachment = _attachments[0]
+        #             media_url = _attachment.media_url
+
+        #             if media_url.startswith('./'):
+        #                 media_url = media_url[2:]
+        #             if media_url.startswith('media/'):
+        #                 media_url = media_url[len('media/'):]
+
+        #             media_url_for_send = f'{MEDIA_PATH}/{media_url}'
+
+        #             try:
+        #                 inp = page.locator('input[type="file"]')
+
+        #                 await inp.set_input_files(media_url_for_send)   # абсолютный путь
+        #                 await asyncio.sleep(2.5)
+
+        #                 # print("dialogs:", await page.locator('div[role="dialog"]').count())
+
+        #                 await page.wait_for_selector(
+        #                     'button[aria-label^="ลบไฟล์แนบ"], [aria-label^="ลบไฟล์แนบ"]',
+        #                     timeout=20000)
+        #                 # await human_pause(0.8, 2.0)
+
+        #                 # Отправка через Enter в композере — обходит локализацию кнопки.
+        #                 box = page.locator('div[role="textbox"]').last
+        #                 await box.click()
+        #                 await page.keyboard.press("Enter")
+
+        #                 # Подтверждение: кнопка удаления вложения исчезла = ушло
+        #                 await page.wait_for_selector(
+        #                     'button[aria-label^="ลบไฟล์แนบ"]',
+        #                     state="detached", timeout=20000)
+        #                 # await human_pause(1.0, 2.0)
+        #                 print("фото отправлено")
+        #                 send_success = True
+        #             except Exception as ex:
+        #                 print('ERROR WITH TRY SEND MESSAGE', ex)
+                    
+        #         case _:
+        #             pass
         else:
             try:
                 message_text = message.text

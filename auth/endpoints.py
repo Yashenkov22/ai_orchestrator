@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 
-from instagrapi import Client
+# from instagrapi import Client
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, insert, delete
@@ -97,80 +97,80 @@ async def create_admins(secret: SecretShcema,
     await create_admin_accounts(session)
 
 
-@auth_router.post('/get_insta_session_by_id')
-async def get_insta_session_by_id(account_id: int,
-                                  admin: admin_dependency,
-                                  session: session_dependency):
-    account = await get_account_by_id(account_id,
-                                      session)
-    if not account:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+# @auth_router.post('/get_insta_session_by_id')
+# async def get_insta_session_by_id(account_id: int,
+#                                   admin: admin_dependency,
+#                                   session: session_dependency):
+#     account = await get_account_by_id(account_id,
+#                                       session)
+#     if not account:
+#         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
-    # result = run_task('get_session_by_id',
-    #                   data={'account_id': account_id})
+#     # result = run_task('get_session_by_id',
+#     #                   data={'account_id': account_id})
     
-    account.is_active = SessionStatusEnum.PROCESS
+#     account.is_active = SessionStatusEnum.PROCESS
 
-    await execute_and_catch_db_error(session.commit(),
-                                     session,
-                                     with_rollback=True)
-    await get_session_by_id(account,
-                            session)
+#     await execute_and_catch_db_error(session.commit(),
+#                                      session,
+#                                      with_rollback=True)
+#     await get_session_by_id(account,
+#                             session)
     
-    return
+#     return
 
-@auth_router.post('/test_session')
-async def test_session(admin: admin_dependency,
-                                  session: session_dependency):
-    insta_client = Client()
-    insta_client.logger.setLevel("DEBUG")
-    insta_client.load_settings('././ses.json')
+# @auth_router.post('/test_session')
+# async def test_session(admin: admin_dependency,
+#                                   session: session_dependency):
+#     insta_client = Client()
+#     insta_client.logger.setLevel("DEBUG")
+#     insta_client.load_settings('././ses.json')
 
-    info = insta_client.account_info()
+#     info = insta_client.account_info()
 
-    print('Вход в аккаунт✅')
-    print(info.__dict__)
-    pass
+#     print('Вход в аккаунт✅')
+#     print(info.__dict__)
+#     pass
 
 
-async def get_session_by_id(account: Account,
-                            session: AsyncSession):
-    print('Задача получения сессии запущена✅!!!')
+# async def get_session_by_id(account: Account,
+#                             session: AsyncSession):
+#     print('Задача получения сессии запущена✅!!!')
 
-    # if not account.session:
-    password = decrypt_password(account.password)
+#     # if not account.session:
+#     password = decrypt_password(account.password)
 
-    # print(password)
-    # try:
-    #     if not insta_client:
-    insta_client = Client()
+#     # print(password)
+#     # try:
+#     #     if not insta_client:
+#     insta_client = Client()
     
-    insta_client.logger.setLevel("DEBUG")
-    # insta_client.set_proxy("http://cdsepibb:h4j3h7cmanp8@82.23.102.45:7272")
-    try:
-        print('пробую залогиниться...')
-        print(f'login - {account.username}\npassword - {password}')
-        insta_client.login(username=account.username,
-                            password=password)
-        _session = insta_client.get_settings()
-        info = insta_client.account_info()
+#     insta_client.logger.setLevel("DEBUG")
+#     # insta_client.set_proxy("http://cdsepibb:h4j3h7cmanp8@82.23.102.45:7272")
+#     try:
+#         print('пробую залогиниться...')
+#         print(f'login - {account.username}\npassword - {password}')
+#         insta_client.login(username=account.username,
+#                             password=password)
+#         _session = insta_client.get_settings()
+#         info = insta_client.account_info()
 
-        account.session = _session
-        account.insta_id = info.pk
-        account.is_active = SessionStatusEnum.ACTIVE
-    except Exception as ex:
-        print('ERROR WITH TRY GET INSTA SESSION!!!', ex)
-        account.is_active = SessionStatusEnum.INACTIVE
+#         account.session = _session
+#         account.insta_id = info.pk
+#         account.is_active = SessionStatusEnum.ACTIVE
+#     except Exception as ex:
+#         print('ERROR WITH TRY GET INSTA SESSION!!!', ex)
+#         account.is_active = SessionStatusEnum.INACTIVE
 
-        # print('Введи код...')
-        # code = input()
-        # insta_client.login(username=account.username,
-        #                    password=password,
-        #                    verification_code=code)
-    finally:
-        await execute_and_catch_db_error(session.commit(),
-                                        session,
-                                        with_rollback=True)
+#         # print('Введи код...')
+#         # code = input()
+#         # insta_client.login(username=account.username,
+#         #                    password=password,
+#         #                    verification_code=code)
+#     finally:
+#         await execute_and_catch_db_error(session.commit(),
+#                                         session,
+#                                         with_rollback=True)
 
 
 @auth_router.post('/send_message_to_user')

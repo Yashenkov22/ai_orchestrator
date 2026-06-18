@@ -175,6 +175,10 @@ class Message(Base):
     status = Column(String,
                     nullable=False,
                     default=MessageStatusEnum.PENDING)
+    translated_text = Column(Text,
+                  nullable=True,
+                  default=None,
+                  server_default=None)
     # is_read = Column(Boolean,
     #                  default=False)
 #     sender_id = Column(

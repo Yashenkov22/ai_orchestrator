@@ -14,7 +14,8 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from db.base import Account, Admin, Message, Thread, InstaUser, Attachment
 
-from utils.base import moscow_tz
+from utils.ai import ai_generate_text
+from utils.base import RATIO_LEN_LIMIT, RATIO_LIMIT, moscow_tz, russian_ratio, try_translate_text
 from utils.exc import DB_ERROR_EXCEPTION, ChatNotFound, NotAccessToChat
 
 
@@ -421,12 +422,6 @@ async def try_add_new_thread(thread_data: dict,
 
     session.add(new_thread)
 
-    # insert_query = (
-    #     insert(
-    #         InstaUser
-    #     )\
-    #     .values(**insert_data)
-    # )
 
     await execute_and_catch_db_error(session.flush(),
                                      session)
@@ -466,7 +461,8 @@ async def try_add_messages(message_data: dict,
     messages = message_data.get('messages')
     mark_as_unread = message_data.get('mark_as_unread')
     insert_messages = []
-    # attachment_list = []
+
+    unread_messages_text = ''
 
     if thread_id and messages:
         for message in reversed(messages):
@@ -485,43 +481,45 @@ async def try_add_messages(message_data: dict,
                 'sender': sender,
                 'status': 'approved',
                 'thread_id': thread_id,
-
             }
-            # new_message = Message(**msg_data)
 
-            # session.add(new_message)
+            # check message language
+            if _msg_text := msg_data.get('text'):
+                if len(_msg_text) > RATIO_LEN_LIMIT:
+                    ratio = russian_ratio(_msg_text)
 
-            # await session.flush() 
+                    if ratio < RATIO_LIMIT:
+                        translated_text = await try_translate_text(_msg_text)
+                        msg_data['translated_text'] = translated_text
 
-            # # await execute_and_catch_db_error(session.flush(),
-            # #                                 session)
-            
-            # attachments = message.get('files')
-
-            # if attachments:
-            #     for attachment in attachments:
-            #         media_type, media_url = attachment
-                    
-            #         _data = {
-            #             'media_type': media_type,
-            #             'media_url': media_url}
-
-            #         new_attachment = Attachment(**_data)
-
-            #         # attachment_list.append(new_attachment)
-
-            #         # session.add(new_attachment)
-            #         new_message.attachments.append(new_attachment)
             new_message = Message(**msg_data,
                                   attachments=[Attachment(media_type=t, media_url=u) for t, u in message.get("media_files", [])])
             insert_messages.append(new_message)
 
-        # _is_unread = False if sender != 'user' else True
 
-        thread.timestamp_last_seen_message = ts
-        thread.is_unread = mark_as_unread
+            if new_message.text:
+                _text = f'{new_message.text} | {new_message.created_at} | {new_message.sender}'
+                unread_messages_text += _text
 
         session.add_all(insert_messages)
+
+        # print('UNREAD MESSAGES TEXT -> ',unread_messages_text)
+
+        thread.timestamp_last_seen_message = ts
+
+        if mark_as_unread is not None:
+            thread.is_unread = mark_as_unread
+
+        context_from_db = thread.context or ''
+
+        text_for_ai = 'Контекст:\n' + context_from_db + '\nНовые сообщения:\n' + unread_messages_text
+
+        new_context = await ai_generate_text(text=text_for_ai,
+                                             for_db=True)
+        
+        # print('NEW CONTEXT -> ',new_context)
+
+        thread.context = new_context
 
         await execute_and_catch_db_error(session.commit(),
                                         session,
@@ -547,136 +545,31 @@ async def check_new_messages_in_thread(message: Message,
     return has_new_messages
 
 
-    # user = res.scalar_one_or_none()
+async def try_update_message_text(message_id: int,
+                                  message_text: str,
+                                  session: AsyncSession):
+    query = (
+        select(
+            Message
+        )\
+        .where(
+            Message.id == message_id
+        )
+    )
 
-    # return user
-
-    # if not user:
-    #     # try save user photo
-    #     # ...
-    #     # add new user
-    #     insert_data = {
-    #         'insta_id': user_id,
-    #         'username': insta_user.get('username'),
-    #         'full_name': insta_user.get('full_name')
-    #     }
-
-
-# async def add_new_chat_to_db_return_id(insert_data: dict,
-#                              _session: AsyncSession,
-#                              user: User = None):
-#     chat = Chat(**insert_data)
-#     chat._participants.append(ChatParticipant(user_id=user.id,
-#                                               joined_at=datetime.now(timezone.utc)))
-#     _session.add(chat)
-
-#     try:
-#         await _session.flush()
-#         await _session.commit()
-#         await _session.refresh(chat, attribute_names=["users"])
-#     except SQLAlchemyError as ex:
-#         print(ex)
-#         await _session.rollback()
-#         raise DB_ERROR_EXCEPTION
+    res = await execute_and_catch_db_error(session.execute(query),
+                                           session)
     
-#     return chat
+    message = res.scalar_one_or_none()
 
-
-
-# async def get_chats_by_user_id(user_id: int,
-#                                _session: AsyncSession):
-#     stmt = select(Chat)\
-#         .join(ChatParticipant)\
-#         .where(ChatParticipant.user_id == user_id)\
-#         .options(
-#             selectinload(Chat.users)\
-#             .selectinload(User.photos))\
-#         .order_by(Chat.created_at.desc())
+    if not message:
+        return
     
-#     result = await execute_and_catch_db_error(_session.execute(stmt),
-#                                                _session)
-#     # try:
-#     #     result = await _session.execute(stmt)
-#     chats = result.scalars().unique().all()
-#     # except SQLAlchemyError as ex:
-#     #     print(ex)
-#     #     raise DB_ERROR_EXCEPTION
-    
-#     return chats
+    if message.text != message_text:
+        message.text = message_text
 
-
-# async def get_chat_by_id(chat_id: int,
-#                          user_id: int,
-#                          session: AsyncSession) -> Chat:
-#     query = select(
-#         exists().where(Chat.id == chat_id)
-#     )
-
-#     result = await execute_and_catch_db_error(
-#         session.execute(query),
-#         session
-#     )
-
-#     chat_exists = result.scalar()
-
-#     if not chat_exists:
-#         raise ChatNotFound()
-    
-#     query = select(Chat)\
-#         .join(ChatParticipant)\
-#         .where(
-#             and_(
-#                 ChatParticipant.user_id == user_id,
-#                 Chat.id == chat_id,
-#             )
-#         )\
-#         .options(
-#             selectinload(Chat.users)\
-#             .selectinload(User.photos))\
-            
-#     result = await execute_and_catch_db_error(session.execute(query),
-#                                               session)
-
-#     chat = result.scalar_one_or_none()
-
-#     if not chat:
-#         raise NotAccessToChat()
-    
-#     return chat
-
-
-# async def get_chat_by_id(chat_id: int,
-#                          _session: AsyncSession):
-#     stmt = (
-#         select(Chat)
-#         .options(selectinload(Chat.users))
-#         .where(Chat.id == chat_id)
-#     )
-
-#     result = await execute_and_catch_db_error(_session.execute(stmt),
-#                                               _session)
-#     # try:
-#         # result = await _session.execute(stmt)
-#     chat = result.scalar_one()
-#     # except SQLAlchemyError as ex:
-#         # raise DB_ERROR_EXCEPTION
-#     return chat
-
-
-# async def add_and_return_new_message(data: dict,
-#                                      _session: AsyncSession):
-#     new_message = Message(**data,
-#                           created_at=datetime.now(timezone.utc),
-#                           updated_at=datetime.now(timezone.utc))
-    
-#     _session.add(new_message)
-
-#     await execute_and_catch_db_error(_session.flush(),
-#                                      _session,
-#                                      with_rollback=True)
-    
-#     await execute_and_catch_db_error(_session.commit(),
-#                                      _session,
-#                                      with_rollback=True)
-    
-#     return new_message
+        await execute_and_catch_db_error(session.commit(),
+                                         session,
+                                         with_rollback=True)
+        
+    return True

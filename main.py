@@ -13,13 +13,9 @@ from db.base import init_models
 
 from api.base import main_router
 
-from utils.instagram_client import cl
-
 from utils.scheduler import scheduler
 
 from background.base import get_redis_background_pool
-
-from instagrapi.exceptions import TwoFactorRequired
 
 
 

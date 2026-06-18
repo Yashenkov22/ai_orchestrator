@@ -240,6 +240,7 @@ class MessageSchema(BaseModel):
     id: int
     role: str
     content: str
+    translated_content: str | None = Field(default=None)
     ts: str
     modStatus: str
     attachments: list[AttachmentSchema] | None
