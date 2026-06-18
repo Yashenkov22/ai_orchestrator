@@ -46,7 +46,7 @@ SECRET_FOR_PASSWORD = os.environ.get('SECRET_FOR_PASSWORD')
 SECRET_API = os.environ.get('SECRET_API')
 
 
-ADMIN_URL = 'http://localhost:3000/'
+ADMIN_URL = os.environ.get('ADMIN_URL')
 
 
 JOB_STORE_URL= f'postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}'
