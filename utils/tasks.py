@@ -717,8 +717,9 @@ async def download_media(urls: list[dict], save_dir: str, thread_key: str, msg_i
 async def process_thread_messages(messages: list,
                                   thread: Thread,
                                   user_insta_id: str,
-                                  thread_key: str,
-                                  save_dir: str = './media'):
+                                  thread_key: str):
+    save_dir = MEDIA_PATH
+    
     thread_dir = os.path.join(save_dir, str(thread_key))
     Path(thread_dir).mkdir(parents=True, exist_ok=True)
 
@@ -781,7 +782,9 @@ async def process_thread_messages(messages: list,
     return result
 
 
-async def download_profile_pic(user_data: dict, save_dir: str = './media'):
+async def download_profile_pic(user_data: dict):
+    save_dir = MEDIA_PATH
+
     url = user_data.get('profile_pic_url')
     username = user_data.get('username', 'unknown')
 
@@ -963,7 +966,7 @@ async def process_threads(
 
 
             messages_data = await process_thread_messages(
-                messages, current_thread, user_insta_id, thread_key, save_dir='./media'
+                messages, current_thread, user_insta_id, thread_key
             )
             await try_add_messages(messages_data, current_thread, _session)
         else:
