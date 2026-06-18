@@ -79,6 +79,9 @@ async def get_vision_folders(admin: admin_dependency,
 
     folders = data.get('data')
 
+    if not folders:
+        return []
+
     return [{
         'folder_id': folder['id'],
         'folder_name': folder['folder_name'],

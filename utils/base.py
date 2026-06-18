@@ -103,7 +103,7 @@ async def get_vision_folder_list(_timeout: int = 10):
                 # content_type = response.headers.get('Content-Type', '').lower()
                 _response = await response.json()
         
-        # print('FOLDER LIST', _response)
+        print('FOLDER LIST', _response)
         return _response
     except Exception as ex:
         print(ex)
@@ -150,7 +150,7 @@ async def get_folder_profiles(folder_id: str,
                 # content_type = response.headers.get('Content-Type', '').lower()
                 _response = await response.json()
         
-        # print('FOLDER PROFILES', _response)
+        print('FOLDER PROFILES', _response)
         return _response
     except Exception as ex:
         print(ex)
