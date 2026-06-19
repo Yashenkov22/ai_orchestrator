@@ -61,7 +61,7 @@ async def start_polling_for_accounts(cxt):
 
             if folder_id and profile_id:
             # lock acount_id in redis
-                available_lock = acquire_lock(account.id, ttl=180)
+                available_lock = acquire_lock(account.id, ttl=300)
 
                 if not available_lock:
                     continue
@@ -139,7 +139,7 @@ async def send_message_to_thread(cxt,
     if not account:
             return
     
-    available_lock = acquire_lock(account.id, ttl=180)
+    available_lock = acquire_lock(account.id, ttl=300)
 
     if not available_lock:
         raise Retry(defer=30)

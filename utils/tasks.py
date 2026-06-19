@@ -1,16 +1,17 @@
-import asyncio
+import os
+import re
 import json
+import random
+import asyncio
+import aiofiles
+
+import aiohttp
+
 from urllib.parse import unquote
 
 from pathlib import Path
 
 from datetime import datetime, timezone
-
-import os
-import aiohttp
-import aiofiles
-import random
-import re
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -700,8 +701,9 @@ async def download_media(urls: list[dict], save_dir: str, thread_key: str, msg_i
                 async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                     if resp.status == 200:
                         data = await resp.read()
-                        with open(filepath, 'wb') as f:
-                            f.write(data)
+                        async with aiofiles.open(filepath, 'wb') as f:
+                            await f.write(data)
+                        
                         size_kb = len(data) / 1024
                         print(f"      Downloaded: {filename} ({size_kb:.1f} KB)")
                         if media_type in ('image', 'video_preview'):
