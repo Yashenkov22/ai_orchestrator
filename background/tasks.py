@@ -1,4 +1,3 @@
-from datetime import datetime, timedelta
 from typing import Literal
 
 from asyncio import sleep
@@ -7,16 +6,9 @@ from arq import Retry
 
 from fastapi import HTTPException, status
 
-from apscheduler.triggers.cron import CronTrigger
-from apscheduler.triggers.interval import IntervalTrigger
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
-from apscheduler.job import Job
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy import insert, select, and_, update, func, desc
-from sqlalchemy.orm import selectinload
+from sqlalchemy import select
 
 from db.base import Account, get_session
 from db.queries import execute_and_catch_db_error, get_message_by_id, get_account_by_id
@@ -26,8 +18,6 @@ from utils.tasks import playwright_send_message, test_playwright
 
 from .base import get_redis_pool, acquire_lock, release_lock
 
-from config import JOB_STORE_URL
-
 
 
 async def start_polling_for_accounts(cxt):
@@ -36,7 +26,6 @@ async def start_polling_for_accounts(cxt):
               select(Account)\
               .where(
                     Account.is_active == True,
-                    Account.username == 'yashenkov.q',
                     )
                 )
         
@@ -48,7 +37,6 @@ async def start_polling_for_accounts(cxt):
                                                       _session)
             accounts: list[Account] = result.scalars().all()
 
-        # http://127.0.0.1:3030/list
         active_profiles = await get_active_profiles()
 
         print('ACTIVE PROFILES', active_profiles)
@@ -67,7 +55,7 @@ async def start_polling_for_accounts(cxt):
                     continue
 
                 job = await _redis_pool.enqueue_job(
-                    'parse_account',   # имя = __name__ функции, зарегистрированной в воркере
+                    'parse_account',
                     account.id,
                     folder_id,
                     profile_id,
@@ -103,7 +91,6 @@ async def parse_account(cxt,
                 await test_playwright(account_id,
                                     profile_port,
                                     _session)
-            # print('RUNNING PROFILE', actived_profile)
 
             await sleep(10)
 
@@ -111,7 +98,6 @@ async def parse_account(cxt,
                                                     profile_id)
         finally:
             release_lock(account_id, lock_value)
-            # print('STOPPED PROFILE', stopped_profile)
 
 
 
@@ -177,9 +163,6 @@ async def send_message_to_thread(cxt,
 
                             media_type = _attachment.media_type
 
-                        # async with sessionmaker() as _session:
-                        #     _session: AsyncSession
-                        # await _session.merge(msg)
                         await playwright_send_message(msg,
                                                       profile_port,
                                                       _session,
