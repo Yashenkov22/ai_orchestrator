@@ -61,6 +61,8 @@ UPLOAD_DIR = 'media'
 
 AI_API_TOKEN = os.environ.get('AI_API_TOKEN')
 
+DEEPSEEK_API_TOKEN = os.environ.get('DEEPSEEK_API_TOKEN')
+
 TRANSLATOR_URL = os.environ.get('TRANSLATOR_URL')
 
 TRANSLATOR_PORT = os.environ.get('TRANSLATOR_PORT')

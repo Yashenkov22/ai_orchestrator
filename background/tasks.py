@@ -8,7 +8,7 @@ from fastapi import HTTPException, status
 
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, and_
 
 from db.base import Account, get_session
 from db.queries import execute_and_catch_db_error, get_message_by_id, get_account_by_id
@@ -25,7 +25,11 @@ async def start_polling_for_accounts(cxt):
         query = (
               select(Account)\
               .where(
+                  and_(
+                    Account.folder_id.isnot(None),
+                    Account.profile_id.isnot(None),
                     Account.is_active == True,
+                  )
                     )
                 )
         
@@ -108,10 +112,14 @@ async def send_message_to_thread(cxt,
     query = (
         select(Account)\
         .where(
-            Account.is_active == True,
-            Account.id == account_id,
+            and_(
+                Account.folder_id.isnot(None),
+                Account.profile_id.isnot(None),
+                Account.is_active == True,
+                Account.id == account_id,
             )
         )
+    )
 
     sessionmaker= cxt['sessionmaker']
 

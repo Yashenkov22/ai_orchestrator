@@ -771,6 +771,7 @@ async def process_thread_messages(messages: list,
             continue
 
         else:
+            print(ctype)
             media_urls = extract_media_urls(node)
             if media_urls:
                 files = await download_media(media_urls, thread_dir, str(thread_key), msg_id)

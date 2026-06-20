@@ -14,7 +14,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from db.base import Account, Admin, Message, Thread, InstaUser, Attachment
 
-from utils.ai import ai_generate_text
+from utils.ai import ai_generate_text, ai_translate_message
 from utils.base import RATIO_LEN_LIMIT, RATIO_LIMIT, moscow_tz, russian_ratio, try_translate_text
 from utils.exc import DB_ERROR_EXCEPTION, ChatNotFound, NotAccessToChat
 
@@ -489,7 +489,8 @@ async def try_add_messages(message_data: dict,
                     ratio = russian_ratio(_msg_text)
 
                     if ratio < RATIO_LIMIT:
-                        translated_text = await try_translate_text(_msg_text)
+                        # translated_text = await try_translate_text(_msg_text)
+                        translated_text = await ai_translate_message(_msg_text)
                         msg_data['translated_text'] = translated_text
 
             new_message = Message(**msg_data,

@@ -4,7 +4,14 @@ from openai import OpenAI, AsyncOpenAI
 
 # from .base import AVAILABLE_LANGUAGES
 
-from config import AI_API_TOKEN
+from config import AI_API_TOKEN, DEEPSEEK_API_TOKEN
+
+
+
+translate_client = AsyncOpenAI(
+    api_key=DEEPSEEK_API_TOKEN,
+    base_url="https://api.deepseek.com"   # было https://openrouter.ai/api/v1
+)
 
 
 client = AsyncOpenAI(
@@ -51,24 +58,27 @@ async def ai_generate_text(text: str,
 
 async def ai_translate_message(text: str):
     print('запрос к нейронке для перевода сообщения...')
-    
-    system_content =  "Ты — сервис для определения языка в сообщениях и для перевода этих сообщений на русский язык с сохранением смысла. Ты должен возвращать ответ в формате: если сообщение нужно переводить - <оригинальное сообщение>|<новое переведенное сообщение>|<язык исходного сообщения>, если сообщение не нужно переводить - то просто <оригинальное сообщение>"
-    user_content = f"Вот сообщение - {text}"
+    try:
+        system_content =  "Ты — сервис для перевода сообщений на русский язык. Тебе будут приходить сообщения на любом языке, переведи на русский и верни только перевод"
+        user_content = text
 
-    response = await client.chat.completions.create(
-        model="deepseek/deepseek-chat",
-        messages=[
-            {
-                "role": "system",
-                "content": system_content
-            },
-            {
-                "role": "user",
-                "content": user_content
-            }
-        ]
-    )
-    result = response.choices[0].message.content
-    print('ответ нейронки', result)
+        response = await client.chat.completions.create(
+            model="deepseek-v4-flash",
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_content
+                },
+                {
+                    "role": "user",
+                    "content": user_content
+                }
+            ]
+        )
+        result = response.choices[0].message.content
+        print('ответ нейронки', result)
 
-    return result
+        return result
+    except Exception as ex:
+        print('ERROR WITH TRY TRANSTALE THROUGH DEEPSEEK')
+        return None

@@ -58,27 +58,27 @@ services:
       options:
           max-size: "20m"
 
-  translator:
-    build:
-      context: ./translator
-    container_name: translator_service
-    command: uvicorn main:app --host 0.0.0.0 --port 8000
-    ports:
-      - "8001:8000"
-    volumes:
-      - ./translator:/app
-      - huggingface_cache:/models
-    env_file:
-      - ./.env
-    environment:
-      HF_HOME: /models
-    networks:
-      - shared_network
+  # translator:
+  #   build:
+  #     context: ./translator
+  #   container_name: translator_service
+  #   command: uvicorn main:app --host 0.0.0.0 --port 8000
+  #   ports:
+  #     - "8001:8000"
+  #   volumes:
+  #     - ./translator:/app
+  #     - huggingface_cache:/models
+  #   env_file:
+  #     - ./.env
+  #   environment:
+  #     HF_HOME: /models
+  #   networks:
+  #     - shared_network
 
 volumes:
   ai-postgres-data:
   ai_redis_data:
-  huggingface_cache:
+  # huggingface_cache:
 
 networks:
   shared_network:
