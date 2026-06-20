@@ -75,6 +75,8 @@ async def parse_account(cxt,
                         folder_id: str,
                         profile_id: str,
                         lock_value: str):
+    print(f'TASK PARSE ACCOUNT WITH ID {account_id} ✅')
+    
     actived_profile = await try_start_profile(folder_id,
                                               profile_id)
     
