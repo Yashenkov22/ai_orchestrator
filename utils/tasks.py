@@ -898,7 +898,6 @@ async def process_threads(
 ) -> dict:
     all_thread_data = {}
 
-
     for thread in threads:
         last_message_ts = thread.get('last_message_ts')
 

@@ -104,7 +104,7 @@ async def get_threads(admin: admin_dependency,
         .where(
             Message.thread_id == thread_id,
         )
-        .order_by(Message.created_at.desc())
+        .order_by(Message.created_at.asc())
     )
     
     message_query_result = await execute_and_catch_db_error(session.execute(message_query),

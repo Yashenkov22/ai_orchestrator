@@ -38,7 +38,7 @@ async def new_get_messages(admin: admin_dependency,
             selectinload(Message.attachments),
         )
         .order_by(
-            Message.created_at.desc(),
+            Message.created_at.asc(),
         )
     )
 
@@ -92,7 +92,7 @@ async def get_thread_messages(thread_id: str, session: session_dependency):
     msg_result = await session.execute(
         select(Message).options(joinedload(Message.attachment))
         .where(Message.thread_id == int(thread_id))
-        .order_by(Message.created_at.desc())
+        .order_by(Message.created_at.asc())
     )
     messages = msg_result.scalars().all()
 
