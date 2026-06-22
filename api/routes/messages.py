@@ -38,7 +38,7 @@ async def new_get_messages(admin: admin_dependency,
             selectinload(Message.attachments),
         )
         .order_by(
-            Message.created_at.asc(),
+            Message.created_at.desc(),
         )
     )
 

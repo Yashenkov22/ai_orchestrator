@@ -765,13 +765,30 @@ async def process_thread_messages(messages: list,
         mark_as_unread = _sender == user_insta_id
 
         if ctype == 'TEXT':
+            text_body = node.get('text_body')
+            content = node.get('content') or {}
+            content_typename = content.get('__typename')
+            # print(node)
             msg_data['text'] = node.get('text_body', '')
+
+            if text_body:
+                # обычное текстовое сообщение
+                msg_data['text'] = text_body
+
+            elif content_typename == 'SlideMessageAdminText':
+                # системное сообщение (звонки и прочие служебные события)
+                fragments = content.get('text_fragments') or []
+                admin_text = ' '.join(
+                    f.get('plaintext', '') for f in fragments
+                ).strip()
+
+                msg_data['text'] = admin_text
         elif ctype.startswith('REACTION'):
             # temporarily
             continue
 
         else:
-            print(ctype)
+            print('TYPE MESSAGE ->. ',ctype)
             media_urls = extract_media_urls(node)
             if media_urls:
                 files = await download_media(media_urls, thread_dir, str(thread_key), msg_id)
