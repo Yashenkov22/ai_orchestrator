@@ -171,7 +171,7 @@ async def try_start_vision_profile(admin: admin_dependency,
         'try_start_stop_vision_profile_by_account_id',
         account_id,
         'start',
-        _queue_name='arq:message',
+        _queue_name='arq:messages',
     )
     return {"status": "queued", "job_id": job.job_id}
 
@@ -185,7 +185,7 @@ async def try_stop_vision_profile(admin: admin_dependency,
         'try_start_stop_vision_profile_by_account_id',
         account_id,
         'stop',
-        _queue_name='arq:message',
+        _queue_name='arq:messages',
     )
     return {"status": "queued", "job_id": job.job_id}
 
