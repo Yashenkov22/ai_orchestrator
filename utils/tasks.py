@@ -1612,7 +1612,7 @@ async def get_inbox_tabs(page):
     Пустой список — разделения нет (норма).
     """
     found = []
-    for name in ("Primary", "General", "Request"):
+    for name in ("General", "Request"):
         # Request имеет счётчик 'Request (N)' — exact=False ловит по подстроке
         loc = page.get_by_text(name, exact=(name != "Request")).first
         try:
