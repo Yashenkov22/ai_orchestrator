@@ -1790,12 +1790,12 @@ async def test_playwright(account_id: int,
 
         # === 1. Inbox ===
 
-        current_url = page.url
-        if 'instagram.com/direct/inbox' in current_url:
-            await page.reload(wait_until='domcontentloaded')
-        else:
-            await page.goto('https://www.instagram.com/direct/inbox/',
-                            wait_until='domcontentloaded')
+        # current_url = page.url
+        # if 'instagram.com/direct/inbox' in current_url:
+        #     await page.reload(wait_until='domcontentloaded')
+        # else:
+        await page.goto('https://www.instagram.com/direct/inbox/',
+                        wait_until='domcontentloaded')
             
         await dismiss_notifications_popup(page)
 
@@ -1807,19 +1807,19 @@ async def test_playwright(account_id: int,
 
         await page.wait_for_timeout(2000)
 
-        for sel in ['a[href^="/direct/t/"]',
-                    'div[role="button"][role]',
-                    '[role="listitem"]',
-                    'div[role="list"] > div']:
-            cnt = await page.locator(sel).count()
-            print(f"[probe] {sel}: {cnt}")
+        # for sel in ['a[href^="/direct/t/"]',
+        #             'div[role="button"][role]',
+        #             '[role="listitem"]',
+        #             'div[role="list"] > div']:
+        #     cnt = await page.locator(sel).count()
+        #     print(f"[probe] {sel}: {cnt}")
 
-        total = await scroll_inbox_until_loaded(page)
+        # total = await scroll_inbox_until_loaded(page)
         await iterate_inbox_folders(page, inbox_received, collected_data)
 
         inbox_threads = collect_all_inbox_threads(collected_data)
 
-        print(f"Scrolled inbox, {total} thread links in DOM")
+        # print(f"Scrolled inbox, {total} thread links in DOM")
 
         # inbox_threads = extract_threads_from_inbox(
         #     collected_data.get('PolarisDirectInboxQuery', [])
