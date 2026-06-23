@@ -122,7 +122,7 @@ async def parse_thread(cxt,
     if not account or not thread:
         return
     
-    available_lock = acquire_lock(account.id, ttl=300)
+    available_lock = acquire_lock(account.id)
 
     if not available_lock:
         return

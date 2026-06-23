@@ -54,7 +54,7 @@ async def background_task_wrapper(func_name, *args, _queue_name):
     
 
 
-def acquire_lock(account_id, ttl=120):
+def acquire_lock(account_id, ttl=600):
     lock_key = f"lock:instagram:account:{account_id}"
     lock_value = str(uuid.uuid4())
 

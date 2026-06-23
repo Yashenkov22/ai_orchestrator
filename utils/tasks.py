@@ -1448,7 +1448,7 @@ async def process_thread(
     thread_key = thread.thread_id
     user_insta_id = thread.insta_user.insta_id
 
-    print('LEN THREAD RESPONSE BEFORE SCROLLING', len(thread_responses))
+    # print('LEN THREAD RESPONSE BEFORE SCROLLING', len(thread_responses))
 
     await scroll_messages_until_seen(
         page, thread_responses, thread_key,
@@ -1456,7 +1456,7 @@ async def process_thread(
     )
     await page.wait_for_timeout(500)
 
-    print('LEN THREAD RESPONSE AFTER SCROLLING', len(thread_responses))
+    # print('LEN THREAD RESPONSE AFTER SCROLLING', len(thread_responses))
 
     # 1) находим thread_fbid целевого треда по детальным ответам.
     #    detail-ответы (get_slide_thread_nullable) содержат users с
@@ -1668,7 +1668,7 @@ async def parse_thread_playwright(account_id: int,
             url = response.url
             if req.resource_type in ('xhr', 'fetch'):
                 fn = extract_friendly_name(req.post_data) if req.post_data else None
-                print(f"[REQ] {fn}")   # временно
+                # print(f"[REQ] {fn}")   # временно
             if '/api/graphql' not in url and '/graphql/query' not in url:
                 return
             if not req.post_data:
