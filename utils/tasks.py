@@ -1578,7 +1578,7 @@ async def get_inbox_tabs(page):
     found = []
     for name in ("Primary", "General", "Request"):
         # Request имеет меняющийся счётчик 'Request (N)' — матчим по префиксу
-        loc = page.get_by_role("button", name=re.compile(rf"^{name}")).first
+        loc = page.get_by_role("span", name=re.compile(rf"^{name}")).first
         try:
             if await loc.count() and await loc.is_visible():
                 found.append(name)
@@ -1592,7 +1592,7 @@ async def switch_inbox_tab(page, tab_name: str) -> bool:
     Переключает на вкладку. True — переключились, False — вкладки нет.
     Отсутствие вкладки НЕ ошибка: аккаунт без разделения инбокса.
     """
-    loc = page.get_by_role("button", name=re.compile(rf"^{tab_name}")).first
+    loc = page.get_by_role("span", name=re.compile(rf"^{tab_name}")).first
     try:
         if not (await loc.count() and await loc.is_visible()):
             print(f"[tab] '{tab_name}' отсутствует — пропускаем")
