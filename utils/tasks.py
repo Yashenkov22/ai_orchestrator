@@ -997,14 +997,18 @@ def extract_threads_from_inbox(data_list: list) -> list:
 
     for obj in flat:
         if not isinstance(obj, dict):
+            print("[extract] skip non-dict:", type(obj))   # ← диагностика
             continue
 
         data = obj.get('data', {}) or {}
+        print("[extract] data keys:", list(data.keys()))   # ← диагностика
         # разные query кладут mailbox под разными корнями — проверяем оба
         mailbox = (data.get('get_slide_mailbox_for_iris_subscription')
                    or data.get('fetch__SlideMailbox')
                    or {})
         edges = mailbox.get('threads_by_folder', {}).get('edges', [])
+
+        print("[extract] mailbox keys:", list(mailbox.keys()), "edges:", len(edges))  # ← диагностика
 
         for edge in edges:
             node = (edge.get('node', {}) or {}).get('as_ig_direct_thread', {})
