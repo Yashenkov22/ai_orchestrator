@@ -597,35 +597,82 @@ TARGET_QUERIES = {
 
 #             await page.wait_for_timeout(2000)
 
-async def scroll_inbox_until_loaded(page, max_rounds=40, pause_ms=1500):
-    container_sel = '[data-pagelet="IGDInboxThreadListScrollableAreaPagelet"]'
+# async def scroll_inbox_until_loaded(page, max_rounds=40, pause_ms=1500):
+#     container_sel = '[data-pagelet="IGDInboxThreadListScrollableAreaPagelet"]'
 
-    prev_count = -1
+#     prev_count = -1
+#     stable = 0
+
+#     for _ in range(max_rounds):
+#         count = await page.locator('a[href^="/direct/t/"]').count()
+
+#         if count == prev_count:
+#             stable += 1
+#             if stable >= 2:          # два круга подряд без прироста — дошли до конца
+#                 break
+#         else:
+#             stable = 0
+#         prev_count = count
+
+#         # скроллим контейнер в самый низ
+#         await page.evaluate(
+#             """(sel) => {
+#                 const el = document.querySelector(sel);
+#                 if (el) el.scrollTop = el.scrollHeight;
+#             }""",
+#             container_sel
+#         )
+
+#         await page.wait_for_timeout(pause_ms)
+
+#     return prev_count
+
+async def scroll_inbox_until_loaded(page, max_rounds=40,
+                                    wait_after_scroll=6.0, poll_interval=0.3):
+    item_sel = 'div[role="button"]'   # чаты = div role=button (по твоим probe)
+
+    scroll_js = """() => {
+        // находим самый "длинный" скроллируемый контейнер на странице
+        let best = null, max = 50;
+        for (const c of document.querySelectorAll('*')) {
+            const s = getComputedStyle(c);
+            if (s.overflowY === 'auto' || s.overflowY === 'scroll') {
+                const d = c.scrollHeight - c.clientHeight;
+                if (d > max) { max = d; best = c; }
+            }
+        }
+        if (!best) return {found: false};
+        const before = best.scrollTop;
+        best.scrollTop = best.scrollHeight;   // прыжок в самый низ
+        return {found: true, before: before, after: best.scrollTop,
+                sh: best.scrollHeight, ch: best.clientHeight};
+    }"""
+
+    prev = -1
     stable = 0
-
-    for _ in range(max_rounds):
-        count = await page.locator('a[href^="/direct/t/"]').count()
-
-        if count == prev_count:
+    for i in range(max_rounds):
+        count = await page.locator(item_sel).count()
+        if count == prev:
             stable += 1
-            if stable >= 2:          # два круга подряд без прироста — дошли до конца
+            if stable >= 2:
+                print(f"[scroll-inbox] stable at {count}, stop #{i}")
                 break
         else:
             stable = 0
-        prev_count = count
+        prev = count
 
-        # скроллим контейнер в самый низ
-        await page.evaluate(
-            """(sel) => {
-                const el = document.querySelector(sel);
-                if (el) el.scrollTop = el.scrollHeight;
-            }""",
-            container_sel
-        )
+        res = await page.evaluate(scroll_js)
+        print(f"[scroll-inbox #{i}] count={count} scroll={res}")
 
-        await page.wait_for_timeout(pause_ms)
+        # ждём прироста чатов
+        waited = 0.0
+        while waited < wait_after_scroll:
+            await page.wait_for_timeout(int(poll_interval * 1000))
+            waited += poll_interval
+            if await page.locator(item_sel).count() > count:
+                break
 
-    return prev_count
+    return prev
 
 
 def extract_friendly_name(payload: str) -> str | None:
@@ -1817,38 +1864,38 @@ async def test_playwright(account_id: int,
         # total = await scroll_inbox_until_loaded(page)
         await iterate_inbox_folders(page, inbox_received, collected_data)
 
-        debug = await page.evaluate(
-            """(sel) => {
-                const named = document.querySelector(sel);
-                // ищем ВСЕ скроллируемые контейнеры
-                const scrollables = [];
-                for (const c of document.querySelectorAll('*')) {
-                    const s = getComputedStyle(c);
-                    if (s.overflowY === 'auto' || s.overflowY === 'scroll') {
-                        const delta = c.scrollHeight - c.clientHeight;
-                        if (delta > 50) {
-                            scrollables.push({
-                                tag: c.tagName,
-                                cls: (c.className || '').toString().slice(0, 40),
-                                sh: c.scrollHeight,
-                                ch: c.clientHeight,
-                                top: c.scrollTop,
-                                delta: delta
-                            });
-                        }
-                    }
-                }
-                scrollables.sort((a, b) => b.delta - a.delta);
-                return {
-                    named_found: !!named,
-                    named_sh: named ? named.scrollHeight : null,
-                    named_ch: named ? named.clientHeight : null,
-                    scrollables: scrollables.slice(0, 5)
-                };
-            }""",
-            '[data-pagelet="IGDInboxThreadListScrollableAreaPagelet"]'
-        )
-        print("[scroll-debug]", debug)
+        # debug = await page.evaluate(
+        #     """(sel) => {
+        #         const named = document.querySelector(sel);
+        #         // ищем ВСЕ скроллируемые контейнеры
+        #         const scrollables = [];
+        #         for (const c of document.querySelectorAll('*')) {
+        #             const s = getComputedStyle(c);
+        #             if (s.overflowY === 'auto' || s.overflowY === 'scroll') {
+        #                 const delta = c.scrollHeight - c.clientHeight;
+        #                 if (delta > 50) {
+        #                     scrollables.push({
+        #                         tag: c.tagName,
+        #                         cls: (c.className || '').toString().slice(0, 40),
+        #                         sh: c.scrollHeight,
+        #                         ch: c.clientHeight,
+        #                         top: c.scrollTop,
+        #                         delta: delta
+        #                     });
+        #                 }
+        #             }
+        #         }
+        #         scrollables.sort((a, b) => b.delta - a.delta);
+        #         return {
+        #             named_found: !!named,
+        #             named_sh: named ? named.scrollHeight : null,
+        #             named_ch: named ? named.clientHeight : null,
+        #             scrollables: scrollables.slice(0, 5)
+        #         };
+        #     }""",
+        #     '[data-pagelet="IGDInboxThreadListScrollableAreaPagelet"]'
+        # )
+        # print("[scroll-debug]", debug)
 
         inbox_threads = collect_all_inbox_threads(collected_data)
 
