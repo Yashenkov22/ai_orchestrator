@@ -1817,6 +1817,39 @@ async def test_playwright(account_id: int,
         # total = await scroll_inbox_until_loaded(page)
         await iterate_inbox_folders(page, inbox_received, collected_data)
 
+        debug = await page.evaluate(
+            """(sel) => {
+                const named = document.querySelector(sel);
+                // ищем ВСЕ скроллируемые контейнеры
+                const scrollables = [];
+                for (const c of document.querySelectorAll('*')) {
+                    const s = getComputedStyle(c);
+                    if (s.overflowY === 'auto' || s.overflowY === 'scroll') {
+                        const delta = c.scrollHeight - c.clientHeight;
+                        if (delta > 50) {
+                            scrollables.push({
+                                tag: c.tagName,
+                                cls: (c.className || '').toString().slice(0, 40),
+                                sh: c.scrollHeight,
+                                ch: c.clientHeight,
+                                top: c.scrollTop,
+                                delta: delta
+                            });
+                        }
+                    }
+                }
+                scrollables.sort((a, b) => b.delta - a.delta);
+                return {
+                    named_found: !!named,
+                    named_sh: named ? named.scrollHeight : null,
+                    named_ch: named ? named.clientHeight : null,
+                    scrollables: scrollables.slice(0, 5)
+                };
+            }""",
+            '[data-pagelet="IGDInboxThreadListScrollableAreaPagelet"]'
+        )
+        print("[scroll-debug]", debug)
+
         inbox_threads = collect_all_inbox_threads(collected_data)
 
         # print(f"Scrolled inbox, {total} thread links in DOM")
