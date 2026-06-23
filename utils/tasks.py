@@ -1570,15 +1570,51 @@ async def process_thread(
         print(f"No matching data found for thread {thread_key}")
 
 
+# async def get_inbox_tabs(page):
+#     """
+#     Возвращает список доступных вкладок инбокса.
+#     Если разделения нет — вернёт пустой список (это норма).
+#     """
+#     found = []
+#     for name in ("Primary", "General", "Request"):
+#         # Request имеет меняющийся счётчик 'Request (N)' — матчим по префиксу
+#         loc = page.get_by_role("span", name=re.compile(rf"^{name}")).first
+#         try:
+#             if await loc.count() and await loc.is_visible():
+#                 found.append(name)
+#         except Exception:
+#             pass
+#     return found
+
+
+# async def switch_inbox_tab(page, tab_name: str) -> bool:
+#     """
+#     Переключает на вкладку. True — переключились, False — вкладки нет.
+#     Отсутствие вкладки НЕ ошибка: аккаунт без разделения инбокса.
+#     """
+#     loc = page.get_by_role("span", name=re.compile(rf"^{tab_name}")).first
+#     try:
+#         if not (await loc.count() and await loc.is_visible()):
+#             print(f"[tab] '{tab_name}' отсутствует — пропускаем")
+#             return False
+#         await loc.scroll_into_view_if_needed()
+#         await loc.click()
+#         await page.wait_for_timeout(1200)
+#         print(f"[tab] переключились на '{tab_name}'")
+#         return True
+#     except Exception as e:
+#         print(f"[tab] клик по '{tab_name}' не удался: {e}")
+#         return False
+
 async def get_inbox_tabs(page):
     """
-    Возвращает список доступных вкладок инбокса.
-    Если разделения нет — вернёт пустой список (это норма).
+    Возвращает список доступных вкладок инбокса (Primary/General/Request).
+    Пустой список — разделения нет (норма).
     """
     found = []
     for name in ("Primary", "General", "Request"):
-        # Request имеет меняющийся счётчик 'Request (N)' — матчим по префиксу
-        loc = page.get_by_role("span", name=re.compile(rf"^{name}")).first
+        # Request имеет счётчик 'Request (N)' — exact=False ловит по подстроке
+        loc = page.get_by_text(name, exact=(name != "Request")).first
         try:
             if await loc.count() and await loc.is_visible():
                 found.append(name)
@@ -1589,10 +1625,9 @@ async def get_inbox_tabs(page):
 
 async def switch_inbox_tab(page, tab_name: str) -> bool:
     """
-    Переключает на вкладку. True — переключились, False — вкладки нет.
-    Отсутствие вкладки НЕ ошибка: аккаунт без разделения инбокса.
+    Переключает на вкладку по тексту. True — переключились, False — вкладки нет.
     """
-    loc = page.get_by_role("span", name=re.compile(rf"^{tab_name}")).first
+    loc = page.get_by_text(tab_name, exact=(tab_name != "Request")).first
     try:
         if not (await loc.count() and await loc.is_visible()):
             print(f"[tab] '{tab_name}' отсутствует — пропускаем")
