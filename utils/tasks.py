@@ -887,13 +887,18 @@ async def download_profile_pic(user_data: dict):
     save_dir = MEDIA_PATH
 
     url = user_data.get('profile_pic_url')
-    username = user_data.get('username', 'unknown')
+    # username = user_data.get('username', 'unknown')
+
+    base = (user_data.get('insta_id')
+            or user_data.get('id')
+            or user_data.get('interop_messaging_user_fbid'))
 
     if not url:
         return None
 
-    Path(save_dir).mkdir(parents=True, exist_ok=True)
-    filepath = os.path.join(save_dir, f"{username}.jpg")
+    # Path(save_dir).mkdir(parents=True, exist_ok=True)
+    filename = f"{base}.jpg"
+    filepath = os.path.join(save_dir, filename)
 
     async with aiohttp.ClientSession() as session:
         try:
@@ -902,12 +907,12 @@ async def download_profile_pic(user_data: dict):
                     data = await resp.read()
                     async with aiofiles.open(filepath, 'wb') as f:
                         await f.write(data)
-                    print(f"  Profile pic: {username}.jpg ({len(data)/1024:.1f} KB)")
+                    print(f"  Profile pic: {base}.jpg ({len(data)/1024:.1f} KB)")
                     return filepath
                 else:
-                    print(f"  Failed: {username} — status {resp.status}")
+                    print(f"  Failed: {base} — status {resp.status}")
         except Exception as e:
-            print(f"  Error: {username} — {e}")
+            print(f"  Error: {base} — {e}")
 
     return None
 
@@ -1091,7 +1096,7 @@ def extract_threads_from_inbox(data_list: list) -> list:
                 # покажем, что реально в edge
                 print("[extract] edge node keys:", list((edge.get('node', {}) or {}).keys()))
                 continue
-            
+
             last_message_ts = None
             sm = node.get('slide_messages', {}).get('edges')
             if sm:
