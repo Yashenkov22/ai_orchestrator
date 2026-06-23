@@ -1807,6 +1807,13 @@ async def test_playwright(account_id: int,
 
         await page.wait_for_timeout(2000)
 
+        for sel in ['a[href^="/direct/t/"]',
+                    'div[role="button"][role]',
+                    '[role="listitem"]',
+                    'div[role="list"] > div']:
+            cnt = await page.locator(sel).count()
+            print(f"[probe] {sel}: {cnt}")
+
         total = await scroll_inbox_until_loaded(page)
         await iterate_inbox_folders(page, inbox_received, collected_data)
 
