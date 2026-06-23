@@ -42,6 +42,7 @@ TARGET_QUERIES = {
     'IGDThreadDetailQuery',
     'PolarisDirectMessageRequestQuery',
     'IGDMessageListOffMsysQuery',
+    'IGDThreadListProfessionalOffMsysPaginationQuery',
 }
 
 # === Утилиты ===
@@ -1754,12 +1755,28 @@ async def iterate_inbox_folders(page, inbox_received, collected_data):
 #     print(f"[collect] total after dedup: {len(result)}")
 #     return result
 
+# def collect_all_inbox_threads(collected_data):
+#     all_threads = []
+#     for key, value in collected_data.items():
+#         # и PolarisDirectInboxQuery, и пагинация fetch__SlideMailbox
+#         if key.startswith('PolarisDirectInboxQuery') or key.startswith('SlideMailboxPages'):
+#             all_threads.extend(extract_threads_from_inbox(value))
+
+#     seen, result = set(), []
+#     for t in all_threads:
+#         tid = t.get('thread_id')
+#         if tid and tid not in seen:
+#             seen.add(tid)
+#             result.append(t)
+#     return result
+
 def collect_all_inbox_threads(collected_data):
     all_threads = []
     for key, value in collected_data.items():
-        # и PolarisDirectInboxQuery, и пагинация fetch__SlideMailbox
         if key.startswith('PolarisDirectInboxQuery') or key.startswith('SlideMailboxPages'):
-            all_threads.extend(extract_threads_from_inbox(value))
+            extracted = extract_threads_from_inbox(value)
+            print(f"[collect] {key}: pages={len(value)}, threads={len(extracted)}")  # ← диагностика
+            all_threads.extend(extracted)
 
     seen, result = set(), []
     for t in all_threads:
@@ -1767,6 +1784,7 @@ def collect_all_inbox_threads(collected_data):
         if tid and tid not in seen:
             seen.add(tid)
             result.append(t)
+    print(f"[collect] total after dedup: {len(result)}")
     return result
 
 
@@ -1789,49 +1807,103 @@ async def test_playwright(account_id: int,
         page = context.pages[0] if context.pages else await context.new_page()
 
         async def on_response(response):
-            req = response.request
-            if req.resource_type not in ('xhr', 'fetch'):
-                return
-            url = response.url
-            if '/api/graphql' not in url and '/graphql/query' not in url:
-                return
-            if not req.post_data:
-                return
-            fn = extract_friendly_name(req.post_data) if req.post_data else None
-            if fn:
-                print(f"[REQ] {fn}")
+                    req = response.request
+                    if req.resource_type not in ('xhr', 'fetch'):
+                        return
+                    url = response.url
+                    if '/api/graphql' not in url and '/graphql/query' not in url:
+                        return
+                    if not req.post_data:
+                        return
 
-            friendly_name = extract_friendly_name(req.post_data)
-            variables = extract_variables(req.post_data)
+                    friendly_name = extract_friendly_name(req.post_data)
+                    if friendly_name:
+                        print(f"[REQ] {friendly_name}")
 
-            # print(f"[ALL] {friendly_name} | folder: {variables.get('folder') if variables else '-'}")
+                    variables = extract_variables(req.post_data)
 
-            if friendly_name not in TARGET_QUERIES:
-                return
+                    if friendly_name not in TARGET_QUERIES:
+                        return
 
-            try:
-                body = await response.text()
-                parsed = parse_ig_response(body)
+                    try:
+                        body = await response.text()
+                        parsed = parse_ig_response(body)
 
-                key = friendly_name
-                if variables and 'folder' in variables:
-                    key = f"{friendly_name}:{variables['folder']}"
+                        key = friendly_name
+                        if variables and 'folder' in variables:
+                            key = f"{friendly_name}:{variables['folder']}"
 
-                if friendly_name == 'IGDThreadDetailQuery':
-                    thread_responses.append(parsed)
-                    thread_received.set()
-                else:
-                    # collected_data[key] = parsed
-                    collected_data.setdefault(key, []).append(parsed)
+                        if friendly_name == 'IGDThreadDetailQuery':
+                            thread_responses.append(parsed)
+                            thread_received.set()
 
-                if friendly_name == 'PolarisDirectInboxQuery':
-                    inbox_received.set()
+                        # пагинация списка чатов (бизнес-аккаунт) — накапливаем отдельно
+                        elif friendly_name == 'IGDThreadListProfessionalOffMsysPaginationQuery':
+                            # разовая диагностика структуры
+                            try:
+                                sample = parsed[0] if isinstance(parsed, list) and parsed else parsed
+                                if isinstance(sample, dict):
+                                    print("[mailbox-page] data keys:", list(sample.get('data', {}).keys()))
+                            except Exception:
+                                pass
+                            collected_data.setdefault('SlideMailboxPages', []).append(parsed)
 
-                if friendly_name == 'PolarisDirectMessageRequestQuery':
-                    request_message_received.set()
+                        else:
+                            collected_data.setdefault(key, []).append(parsed)
 
-            except Exception as e:
-                print(f"[ERROR] {friendly_name}: {e}")
+                        if friendly_name == 'PolarisDirectInboxQuery':
+                            inbox_received.set()
+
+                        if friendly_name == 'PolarisDirectMessageRequestQuery':
+                            request_message_received.set()
+
+                    except Exception as e:
+                        print(f"[ERROR] {friendly_name}: {e}")
+
+        # async def on_response(response):
+        #     req = response.request
+        #     if req.resource_type not in ('xhr', 'fetch'):
+        #         return
+        #     url = response.url
+        #     if '/api/graphql' not in url and '/graphql/query' not in url:
+        #         return
+        #     if not req.post_data:
+        #         return
+        #     fn = extract_friendly_name(req.post_data) if req.post_data else None
+        #     if fn:
+        #         print(f"[REQ] {fn}")
+
+        #     friendly_name = extract_friendly_name(req.post_data)
+        #     variables = extract_variables(req.post_data)
+
+        #     # print(f"[ALL] {friendly_name} | folder: {variables.get('folder') if variables else '-'}")
+
+        #     if friendly_name not in TARGET_QUERIES:
+        #         return
+
+        #     try:
+        #         body = await response.text()
+        #         parsed = parse_ig_response(body)
+
+        #         key = friendly_name
+        #         if variables and 'folder' in variables:
+        #             key = f"{friendly_name}:{variables['folder']}"
+
+        #         if friendly_name == 'IGDThreadDetailQuery':
+        #             thread_responses.append(parsed)
+        #             thread_received.set()
+        #         else:
+        #             # collected_data[key] = parsed
+        #             collected_data.setdefault(key, []).append(parsed)
+
+        #         if friendly_name == 'PolarisDirectInboxQuery':
+        #             inbox_received.set()
+
+        #         if friendly_name == 'PolarisDirectMessageRequestQuery':
+        #             request_message_received.set()
+
+        #     except Exception as e:
+        #         print(f"[ERROR] {friendly_name}: {e}")
 
         page.on("response", on_response)
 
