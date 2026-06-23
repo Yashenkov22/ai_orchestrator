@@ -1621,19 +1621,19 @@ async def iterate_inbox_folders(page, inbox_received, collected_data):
         return
 
     # есть вкладки — обходим интересующие (Request обычно пропускают)
-    target_tabs = [t for t in tabs if t in ("Primary", "General")]
-    print(f"[inbox] вкладки: {tabs}, обходим: {target_tabs}")
+    # target_tabs = [t for t in tabs if t in ("Primary", "General")]
+    # print(f"[inbox] вкладки: {tabs}, обходим: {target_tabs}")
 
-    for tab in target_tabs:
-        switched = await switch_inbox_tab(page, tab)
-        if not switched:
-            continue
-        inbox_received.clear()
-        try:
-            await asyncio.wait_for(inbox_received.wait(), timeout=15)
-        except asyncio.TimeoutError:
-            print(f"[inbox] таймаут ожидания ответа для '{tab}'")
-        await scroll_inbox_until_loaded(page)
+    # for tab in target_tabs:
+    switched = await switch_inbox_tab(page, "General")
+    if not switched:
+        pass
+    inbox_received.clear()
+    try:
+        await asyncio.wait_for(inbox_received.wait(), timeout=15)
+    except asyncio.TimeoutError:
+        print(f"[inbox] таймаут ожидания ответа для General")
+    await scroll_inbox_until_loaded(page)
 
 
 # def collect_all_inbox_threads(collected_data):
