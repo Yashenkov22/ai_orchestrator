@@ -1,5 +1,6 @@
 from .tasks import (send_message_to_thread,
-                    try_start_stop_vision_profile_by_account_id)
+                    try_start_stop_vision_profile_by_account_id,
+                    parse_thread)
 from background.base import (redis_settings,
                              _redis_pool,
                              get_redis_background_pool)
@@ -38,10 +39,11 @@ class WorkerSettings:
     functions = [
         send_message_to_thread,
         try_start_stop_vision_profile_by_account_id,
+        parse_thread,
         ]
     on_startup = startup
     on_shutdown = shutdown
-    queue_name = "arq:message"
+    queue_name = "arq:messages"
     redis_settings = redis_settings
     keep_result = 0
     job_defaults = {

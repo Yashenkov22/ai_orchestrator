@@ -188,6 +188,36 @@ async def get_message_by_id(_id: int,
     return message.scalar_one_or_none()
 
 
+async def get_message_only_by_id(_id: int,
+                            _session: AsyncSession) -> Message | None:
+
+    query = (
+        select(Message)
+        .where(Message.id == _id)
+    )
+    
+    message = await execute_and_catch_db_error(_session.execute(query),
+                                               _session)
+    
+    return message.scalar_one_or_none()
+
+
+async def get_thread_by_id(_id: int,
+                            _session: AsyncSession) -> Message | None:
+
+    query = (
+        select(Thread)\
+        .options(selectinload(Thread.insta_user),
+                 selectinload(Thread.account))
+        .where(Thread.id == _id)
+    )
+    
+    message = await execute_and_catch_db_error(_session.execute(query),
+                                               _session)
+    
+    return message.scalar_one_or_none()
+
+
 async def save_refresh_token_for_user(admin: Admin,
                                       refresh_token: str,
                                       _session: AsyncSession):
@@ -307,7 +337,7 @@ async def delete_user_and_return_result(user: Account,
     return has_deleted
 
 
-async def get_thread_by_id(thread_id: str,
+async def get_thread_by_id(thread_id: int,
                            session: AsyncSession) -> Thread:
     query = (
         select(Thread)
@@ -426,9 +456,9 @@ async def try_add_new_thread(thread_data: dict,
     await execute_and_catch_db_error(session.flush(),
                                      session)
     
-    await execute_and_catch_db_error(session.commit(),
-                                     session,
-                                     with_rollback=True)
+    # await execute_and_catch_db_error(session.commit(),
+    #                                  session,
+    #                                  with_rollback=True)
     
     return new_thread
 
@@ -449,6 +479,26 @@ async def update_approve_thread(thread_id: int,
     await execute_and_catch_db_error(session.execute(query),
                                      session)
     
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)
+    
+
+async def update_thread_is_unread_by_id(thread_id: int,
+                                        session: AsyncSession):
+    query = (
+        update(
+            Thread
+        )\
+        .values(is_unread=True)\
+        .where(
+            Thread.id == thread_id
+        )
+    )
+
+    await execute_and_catch_db_error(session.execute(query),
+                                     session)
+
     await execute_and_catch_db_error(session.commit(),
                                      session,
                                      with_rollback=True)
@@ -483,16 +533,6 @@ async def try_add_messages(message_data: dict,
                 'thread_id': thread_id,
             }
 
-            # check message language
-            if _msg_text := msg_data.get('text'):
-                if len(_msg_text) > RATIO_LEN_LIMIT:
-                    ratio = russian_ratio(_msg_text)
-
-                    if ratio < RATIO_LIMIT:
-                        # translated_text = await try_translate_text(_msg_text)
-                        translated_text = await ai_translate_message(_msg_text)
-                        msg_data['translated_text'] = translated_text
-
             new_message = Message(**msg_data,
                                   attachments=[Attachment(media_type=t, media_url=u) for t, u in message.get("media_files", [])])
             insert_messages.append(new_message)
@@ -503,8 +543,6 @@ async def try_add_messages(message_data: dict,
                 unread_messages_text += _text
 
         session.add_all(insert_messages)
-
-        # print('UNREAD MESSAGES TEXT -> ',unread_messages_text)
 
         thread.timestamp_last_seen_message = ts
 
@@ -517,8 +555,6 @@ async def try_add_messages(message_data: dict,
 
         new_context = await ai_generate_text(text=text_for_ai,
                                              for_db=True)
-        
-        # print('NEW CONTEXT -> ',new_context)
 
         thread.context = new_context
 

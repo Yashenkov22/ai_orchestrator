@@ -22,7 +22,7 @@ from db.queries import (check_insta_user, check_new_messages_in_thread,
                         try_add_insta_user,
                         try_add_messages,
                         try_add_new_thread,
-                        execute_and_catch_db_error, update_approve_thread)
+                        execute_and_catch_db_error, update_approve_thread, update_thread_is_unread_by_id)
 
 from db.base import Message, Thread
 
@@ -41,6 +41,7 @@ TARGET_QUERIES = {
     'IGDBadgeCountOffMsysQuery',
     'IGDThreadDetailQuery',
     'PolarisDirectMessageRequestQuery',
+    'IGDMessageListOffMsysQuery',
 }
 
 # === Утилиты ===
@@ -596,6 +597,36 @@ TARGET_QUERIES = {
 
 #             await page.wait_for_timeout(2000)
 
+async def scroll_inbox_until_loaded(page, max_rounds=40, pause_ms=1500):
+    container_sel = '[data-pagelet="IGDInboxThreadListScrollableAreaPagelet"]'
+
+    prev_count = -1
+    stable = 0
+
+    for _ in range(max_rounds):
+        count = await page.locator('a[href^="/direct/t/"]').count()
+
+        if count == prev_count:
+            stable += 1
+            if stable >= 2:          # два круга подряд без прироста — дошли до конца
+                break
+        else:
+            stable = 0
+        prev_count = count
+
+        # скроллим контейнер в самый низ
+        await page.evaluate(
+            """(sel) => {
+                const el = document.querySelector(sel);
+                if (el) el.scrollTop = el.scrollHeight;
+            }""",
+            container_sel
+        )
+
+        await page.wait_for_timeout(pause_ms)
+
+    return prev_count
+
 
 def extract_friendly_name(payload: str) -> str | None:
     for part in payload.split('&'):
@@ -627,6 +658,7 @@ def parse_ig_response(text: str) -> list[dict]:
         try:
             results.append(json.loads(line))
         except json.JSONDecodeError:
+            print('error!!!!')
             continue
     return results
 
@@ -720,6 +752,7 @@ async def process_thread_messages(messages: list,
                                   thread: Thread,
                                   user_insta_id: str,
                                   thread_key: str):
+    print('LEN MESSAGES BEFORE SAVE', len(messages))
     save_dir = MEDIA_PATH
     
     thread_dir = os.path.join(save_dir, str(thread_key))
@@ -755,7 +788,7 @@ async def process_thread_messages(messages: list,
 
         msg_data = {
             'id': msg_id,
-            'sender': 'user' if _sender == user_insta_id else 'assistant',
+            'sender': 'assistant' if _sender == user_insta_id else 'user',
             'type': ctype,
             'timestamp': _ts,
             'text': None,
@@ -837,11 +870,50 @@ async def human_pause(a=0.4, b=1.2):
 
 # ===================== НОВЫЕ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====================
 
+# def extract_threads_from_inbox(data_list: list) -> list:
+#     threads = []
+#     last_message_ts = None
+
+#     for obj in data_list:
+#         edges = (obj.get('data', {})
+#                     .get('get_slide_mailbox_for_iris_subscription', {})
+#                     .get('threads_by_folder', {})
+#                     .get('edges', []))
+
+#         for edge in edges:
+#             node = edge['node'].get('as_ig_direct_thread', {})
+#             slide_messages = node.get('slide_messages').get('edges')
+
+#             if slide_messages:
+#                 last_message = slide_messages[0].get('node')
+#                 last_message_ts = last_message.get('timestamp_ms')
+
+#             threads.append({
+#                 'thread_key': node.get('thread_key'),
+#                 'users': list(node.get('users', [])),
+#                 'last_activity': node.get('last_activity_timestamp_ms'),
+#                 'is_group': node.get('is_group'),
+#                 'unread': node.get('marked_as_unread'),
+#                 'last_message_ts': last_message_ts,
+#             })
+#     return threads
+
 def extract_threads_from_inbox(data_list: list) -> list:
     threads = []
     last_message_ts = None
 
+    # нормализуем: разворачиваем вложенные списки страниц в плоский список объектов
+    flat = []
+    for item in data_list:
+        if isinstance(item, list):
+            flat.extend(item)        # это страница со списком объектов
+        else:
+            flat.append(item)        # это уже объект
+    data_list = flat
+
     for obj in data_list:
+        if not isinstance(obj, dict):
+            continue                 # подстраховка от неожиданных типов
         edges = (obj.get('data', {})
                     .get('get_slide_mailbox_for_iris_subscription', {})
                     .get('threads_by_folder', {})
@@ -849,7 +921,7 @@ def extract_threads_from_inbox(data_list: list) -> list:
 
         for edge in edges:
             node = edge['node'].get('as_ig_direct_thread', {})
-            slide_messages = node.get('slide_messages').get('edges')
+            slide_messages = node.get('slide_messages', {}).get('edges')
 
             if slide_messages:
                 last_message = slide_messages[0].get('node')
@@ -866,12 +938,88 @@ def extract_threads_from_inbox(data_list: list) -> list:
     return threads
 
 
+# def extract_threads_from_requests(data_list: list) -> tuple[list, list]:
+#     """Возвращает (request_threads, spam_threads)"""
+#     request_threads = []
+#     spam_threads = []
+#     last_message_ts = None
+
+#     for obj in data_list:
+#         data = obj.get('data', {})
+
+#         # Обычные requests
+#         for edge in (data.get('get_slide_mailbox_for_iris_subscription', {})
+#                          .get('threads_by_folder', {})
+#                          .get('edges', [])):
+#             node = edge['node'].get('as_ig_direct_thread', edge.get('node', {}))
+#             slide_messages = node.get('slide_messages').get('edges')
+
+#             if slide_messages:
+#                 last_message = slide_messages[0].get('node')
+#                 last_message_ts = last_message.get('timestamp_ms')
+
+#             request_threads.append({
+#                 'thread_key': node.get('thread_key'),
+#                 'users': list(node.get('users', [])),
+#                 'last_activity': node.get('last_activity_timestamp_ms'),
+#                 'is_group': node.get('is_group'),
+#                 'unread': node.get('marked_as_unread'),
+#                 'last_message_ts': last_message_ts,
+#             })
+
+#         # Spam
+#         for edge in (data.get('spamMailbox', {})
+#                          .get('threads_by_folder', {})
+#                          .get('edges', [])):
+#             node = edge['node'].get('as_ig_direct_thread', edge.get('node', {}))
+#             slide_messages = node.get('slide_messages').get('edges')
+
+#             if slide_messages:
+#                 last_message = slide_messages[0].get('node')
+#                 last_message_ts = last_message.get('timestamp_ms')
+                
+#             spam_threads.append({
+#                 'thread_key': node.get('thread_key'),
+#                 'users': list(node.get('users', [])),
+#                 'last_activity': node.get('last_activity_timestamp_ms'),
+#                 'is_group': node.get('is_group'),
+#                 'unread': node.get('marked_as_unread'),
+#                 'last_message_ts': last_message_ts,
+#             })
+
+#     return request_threads, spam_threads
 def extract_threads_from_requests(data_list: list) -> tuple[list, list]:
     """Возвращает (request_threads, spam_threads)"""
     request_threads = []
     spam_threads = []
 
+    # нормализуем: разворачиваем вложенные списки страниц в плоский список объектов
+    flat = []
+    for item in data_list:
+        if isinstance(item, list):
+            flat.extend(item)
+        else:
+            flat.append(item)
+    data_list = flat
+
+    def build_thread(node: dict) -> dict:
+        slide_messages = node.get('slide_messages', {}).get('edges')
+        last_message_ts = None
+        if slide_messages:
+            last_message = slide_messages[0].get('node', {})
+            last_message_ts = last_message.get('timestamp_ms')
+        return {
+            'thread_key': node.get('thread_key'),
+            'users': list(node.get('users', [])),
+            'last_activity': node.get('last_activity_timestamp_ms'),
+            'is_group': node.get('is_group'),
+            'unread': node.get('marked_as_unread'),
+            'last_message_ts': last_message_ts,
+        }
+
     for obj in data_list:
+        if not isinstance(obj, dict):
+            continue
         data = obj.get('data', {})
 
         # Обычные requests
@@ -879,26 +1027,14 @@ def extract_threads_from_requests(data_list: list) -> tuple[list, list]:
                          .get('threads_by_folder', {})
                          .get('edges', [])):
             node = edge['node'].get('as_ig_direct_thread', edge.get('node', {}))
-            request_threads.append({
-                'thread_key': node.get('thread_key'),
-                'users': list(node.get('users', [])),
-                'last_activity': node.get('last_activity_timestamp_ms'),
-                'is_group': node.get('is_group'),
-                'unread': node.get('marked_as_unread'),
-            })
+            request_threads.append(build_thread(node))
 
         # Spam
         for edge in (data.get('spamMailbox', {})
                          .get('threads_by_folder', {})
                          .get('edges', [])):
             node = edge['node'].get('as_ig_direct_thread', edge.get('node', {}))
-            spam_threads.append({
-                'thread_key': node.get('thread_key'),
-                'users': list(node.get('users', [])),
-                'last_activity': node.get('last_activity_timestamp_ms'),
-                'is_group': node.get('is_group'),
-                'unread': node.get('marked_as_unread'),
-            })
+            spam_threads.append(build_thread(node))
 
     return request_threads, spam_threads
 
@@ -957,43 +1093,427 @@ async def process_threads(
             last_message_ts = datetime.fromtimestamp(int(last_message_ts) / 1000, tz=timezone.utc)
             if last_message_ts <= current_thread.timestamp_last_seen_message:
                 print('SKIP THIS THREAD CAUSE LAST MESSAGE IN RESPONSE EQUAL WITH LAST MESSAGE FROM DB')
-                continue
+                # continue
+            else:
+                current_thread.is_unread = True
+                # await update_thread_is_unread_by_id(current_thread.id,
+                #                                     _session)
         
-        thread_responses.clear()
-        await enter_thread(page, thread_key, thread_received)
-        await page.wait_for_timeout(2000)
-
-        matching_parts = []
-        for parts in thread_responses:
-            for obj in parts:
-                td = (obj.get('data', {})
-                         .get('get_slide_thread_nullable', {})
-                         .get('as_ig_direct_thread', {}))
-                t_users = [u.get('interop_messaging_user_fbid')
-                           for u in td.get('users', [])]
-                if str(thread_key) in t_users:
-                    matching_parts.append(obj)
-
-        if matching_parts:
-            best = max(matching_parts, key=lambda x: len(json.dumps(x)))
-            all_thread_data[thread_key] = best
-
-            thread_info = (best.get('data', {})
-                              .get('get_slide_thread_nullable', {})
-                              .get('as_ig_direct_thread', {}))
-            messages = thread_info.get('slide_messages', {}).get('edges', [])
-
-
-            messages_data = await process_thread_messages(
-                messages, current_thread, user_insta_id, thread_key
-            )
-            await try_add_messages(messages_data, current_thread, _session)
         else:
-            print(f"  No matching data found for thread {thread_key}")
+            current_thread.is_unread = True
+            # await update_thread_is_unread_by_id(current_thread.id,
+            #                                     _session)
+            # current_thread.is_unread = True
+        await execute_and_catch_db_error(_session.commit(),
+                                            _session,
+                                            with_rollback=True)
+            # continue
+        
+    #     thread_responses.clear()
+    #     await enter_thread(page, thread_key, thread_received)
+    #     await page.wait_for_timeout(2000)
 
-        await page.wait_for_timeout(2000)
+    #     matching_parts = []
+    #     for parts in thread_responses:
+    #         for obj in parts:
+    #             td = (obj.get('data', {})
+    #                      .get('get_slide_thread_nullable', {})
+    #                      .get('as_ig_direct_thread', {}))
+    #             t_users = [u.get('interop_messaging_user_fbid')
+    #                        for u in td.get('users', [])]
+    #             if str(thread_key) in t_users:
+    #                 matching_parts.append(obj)
 
-    return all_thread_data
+    #     if matching_parts:
+    #         best = max(matching_parts, key=lambda x: len(json.dumps(x)))
+    #         all_thread_data[thread_key] = best
+
+    #         thread_info = (best.get('data', {})
+    #                           .get('get_slide_thread_nullable', {})
+    #                           .get('as_ig_direct_thread', {}))
+    #         messages = thread_info.get('slide_messages', {}).get('edges', [])
+
+
+    #         messages_data = await process_thread_messages(
+    #             messages, current_thread, user_insta_id, thread_key
+    #         )
+    #         await try_add_messages(messages_data, current_thread, _session)
+    #     else:
+    #         print(f"  No matching data found for thread {thread_key}")
+
+    #     await page.wait_for_timeout(2000)
+
+    # return all_thread_data
+
+def _extract_slide_thread(obj: dict) -> dict:
+    data = obj.get('data', {})
+    return (data.get('get_slide_thread_nullable')
+            or data.get('fetch__SlideThread')
+            or {}).get('as_ig_direct_thread', {})
+
+
+def oldest_ts_from_thread_responses(thread_responses: list, thread_key=None) -> int | None:
+    oldest = None
+    for parts in thread_responses:
+        for obj in parts:
+            td = _extract_slide_thread(obj)
+            # при желании фильтруем по нужному треду (как в твоём matching_parts)
+            if thread_key is not None:
+                users = [u.get('interop_messaging_user_fbid') for u in td.get('users', [])]
+                if str(thread_key) not in users:
+                    continue
+            for edge in td.get('slide_messages', {}).get('edges', []):
+                ts = edge.get('node', {}).get('timestamp_ms')
+                if ts is not None:
+                    ts = int(ts)
+                    if oldest is None or ts < oldest:
+                        oldest = ts
+    return oldest
+
+
+def has_more_older_messages(thread_responses: list, thread_key=None) -> bool:
+    found_any = False
+    has_next = False
+    for parts in thread_responses:
+        for obj in parts:
+            td = _extract_slide_thread(obj)
+            if thread_key is not None:
+                users = [u.get('interop_messaging_user_fbid') for u in td.get('users', [])]
+                if str(thread_key) not in users:
+                    continue
+            page_info = td.get('slide_messages', {}).get('page_info', {})
+            if page_info:
+                found_any = True
+                has_next = bool(page_info.get('has_next_page', False))
+    # если ни одной страницы ещё не пришло — считаем, что грузить можно
+    return has_next if found_any else True
+
+
+# async def scroll_messages_until_seen(page, thread_responses, thread_key,
+#                                      last_seen_ts=None,
+#                                      max_rounds=50, pause_ms=3000):
+#     container_sel = '[data-pagelet="IGDMessagesList"]'
+#     last_seen = int(last_seen_ts) if last_seen_ts else None
+
+#     for _ in range(max_rounds):
+#         if last_seen is not None:
+#             oldest = oldest_ts_from_thread_responses(thread_responses, thread_key)
+#             if oldest is not None and oldest <= last_seen:
+#                 break
+
+#         if not has_more_older_messages(thread_responses, thread_key):
+#             break
+
+#         await page.evaluate(
+#             "(sel) => { const el = document.querySelector(sel); if (el) el.scrollTop = 0; }",
+#             container_sel
+#         )
+#         await page.wait_for_timeout(pause_ms)
+
+# async def scroll_messages_until_seen(page, thread_responses, thread_key,
+#                                      last_seen_ts=None,
+#                                      max_rounds=50, pause_ms=3000):
+#     last_seen = int(last_seen_ts) if last_seen_ts else None
+
+#     box = await page.query_selector('[data-pagelet="IGDMessagesList"]')
+#     b = await box.bounding_box() if box else None
+#     if not b:
+#         print("[scroll] messages container not found")
+#         return
+
+#     cx = b['x'] + b['width'] / 2
+#     cy = b['y'] + b['height'] / 2
+
+#     prev_oldest = None
+#     stable = 0
+
+#     for i in range(max_rounds):
+#         oldest = oldest_ts_from_thread_responses(thread_responses, thread_key)
+#         more = has_more_older_messages(thread_responses, thread_key)
+
+#         if last_seen is not None and oldest is not None and oldest <= last_seen:
+#             break
+#         if not more:
+#             break
+
+#         # детект застоя: если самый старый таймстемп не меняется несколько кругов — выходим
+#         if oldest == prev_oldest:
+#             stable += 1
+#             if stable >= 4:
+#                 print("[scroll] no progress, stop")
+#                 break
+#         else:
+#             stable = 0
+#         prev_oldest = oldest
+
+#         # реальный скролл колесом вверх
+#         await page.mouse.move(cx, cy)
+#         await page.mouse.wheel(0, -500)        # вверх
+#         print(f"[scroll #{i}] responses={len(thread_responses)} oldest={oldest}")
+
+#         await page.wait_for_timeout(pause_ms)
+
+
+async def scroll_messages_until_seen(page, thread_responses, thread_key,
+                                     last_seen_ts=None, max_rounds=80,
+                                     wait_after_scroll=8.0, poll_interval=0.3):
+    # last_seen = int(last_seen_ts) if last_seen_ts else None
+    if last_seen_ts is None:
+        last_seen = None
+    elif isinstance(last_seen_ts, datetime):
+        last_seen = int(last_seen_ts.timestamp() * 1000)
+    else:
+        last_seen = int(last_seen_ts)
+    container_sel = '[data-pagelet="IGDMessagesList"]'
+
+    # JS: находит скроллящийся reverse-контейнер ленты и гонит его к границе старых сообщений.
+    # В reverse-ленте (column-reverse) scrollTop отрицательный: 0 = низ (свежие),
+    # минимум = -(scrollHeight - clientHeight) = верх (старые).
+    scroll_js = """(sel) => {
+        const root = document.querySelector(sel) || document.body;
+        const candidates = [root, ...root.querySelectorAll('*')];
+        let target = null, maxDelta = 20;
+        for (const el of candidates) {
+            const s = getComputedStyle(el);
+            const scrollable = (s.overflowY === 'auto' || s.overflowY === 'scroll');
+            const delta = el.scrollHeight - el.clientHeight;
+            if (scrollable && delta > maxDelta) { target = el; maxDelta = delta; }
+        }
+        if (!target) return {found: false};
+
+        const before = target.scrollTop;
+        const minScroll = -(target.scrollHeight - target.clientHeight);  // граница старых
+
+        // жёстко прыгаем к самым старым из загруженных
+        target.scrollTop = minScroll;
+
+        // несколько wheel-импульсов "в стену" у границы — reverse-ленты часто
+        // триггерят догрузку именно по событию колеса, а не по достижению scrollTop
+        for (let k = 0; k < 4; k++) {
+            target.dispatchEvent(new WheelEvent('wheel',
+                {deltaY: -300, bubbles: true, cancelable: true}));
+        }
+
+        return {found: true, before: before, after: target.scrollTop,
+                min: minScroll, sh: target.scrollHeight, ch: target.clientHeight};
+    }"""
+
+    for i in range(max_rounds):
+        oldest = oldest_ts_from_thread_responses(thread_responses, thread_key)
+        more = has_more_older_messages(thread_responses, thread_key)
+
+        if last_seen is not None and oldest is not None and oldest <= last_seen:
+            print(f"[scroll] reached last_seen at #{i}")
+            break
+        if not more:
+            print(f"[scroll] no more older at #{i}")
+            break
+
+        count_before = len(thread_responses)
+
+        res = await page.evaluate(scroll_js, container_sel)
+        await page.wait_for_timeout(200)
+        print(f"[scroll #{i}] responses={count_before} oldest={oldest} scroll={res}")
+
+        # ждём прироста ответов, а не фиксированную паузу
+        waited = 0.0
+        while len(thread_responses) == count_before and waited < wait_after_scroll:
+            await page.wait_for_timeout(int(poll_interval * 1000))
+            waited += poll_interval
+
+        if len(thread_responses) == count_before:
+            print(f"[scroll] no new response at #{i}, stop")
+            break
+
+# async def scroll_messages_until_seen(page, thread_responses, thread_key,
+#                                      last_seen_ts=None,
+#                                      max_rounds=50,
+#                                      wait_after_scroll=6.0,   # макс. ждём ответ после скролла, сек
+#                                      poll_interval=0.3):
+#     last_seen = int(last_seen_ts) if last_seen_ts else None
+
+#     box = await page.query_selector('[data-pagelet="IGDMessagesList"]')
+#     b = await box.bounding_box() if box else None
+#     if not b:
+#         print("[scroll] messages container not found")
+#         return
+
+#     cx = b['x'] + b['width'] / 2
+#     cy = b['y'] + b['height'] / 2
+
+#     for i in range(max_rounds):
+#         oldest = oldest_ts_from_thread_responses(thread_responses, thread_key)
+#         more = has_more_older_messages(thread_responses, thread_key)
+
+#         if last_seen is not None and oldest is not None and oldest <= last_seen:
+#             print(f"[scroll] reached last_seen at #{i}")
+#             break
+#         if not more:
+#             print(f"[scroll] no more older messages at #{i}")
+#             break
+
+#         # запоминаем, сколько ответов было ДО скролла
+#         count_before = len(thread_responses)
+
+#         # скроллим вверх
+#         await page.mouse.move(cx, cy)
+#         await page.mouse.wheel(0, -500)
+#         print(f"[scroll #{i}] responses={count_before} oldest={oldest}")
+
+#         # ждём, пока придёт новая страница (responses вырастет) или истечёт таймаут
+#         waited = 0.0
+#         while len(thread_responses) == count_before and waited < wait_after_scroll:
+#             await page.wait_for_timeout(int(poll_interval * 1000))
+#             waited += poll_interval
+
+#         if len(thread_responses) == count_before:
+#             # за таймаут ничего не пришло — подгрузки больше нет
+#             print(f"[scroll] no new response after scroll, stop at #{i}")
+#             break
+
+
+
+# async def process_thread(
+#     thread: Thread,
+#     account_id: int,
+#     page,
+#     thread_responses: list,
+#     thread_received: asyncio.Event,
+#     _session: AsyncSession,
+#     is_request: bool = False,
+#     is_spam: bool = False,
+# ) -> dict:
+#     all_thread_data = {}
+#     thread_key = thread.thread_id
+#     user_insta_id = thread.insta_user.insta_id
+
+#     print('LEN THREAD RESPONSE BEFORE SCROLLING', len(thread_responses))
+
+#     await scroll_messages_until_seen(
+#         page, thread_responses, thread_key,
+#         last_seen_ts=thread.timestamp_last_seen_message
+#     )
+#     await page.wait_for_timeout(500)
+
+#     print('LEN THREAD RESPONSE AFTER SCROLLING', len(thread_responses))
+
+#     merged = {}
+#     print('LOOK -> ',thread_responses)
+
+#     # try:
+#     #     with open('./thread_responses_dump.json', 'w', encoding='utf-8') as f:
+#     #         json.dump(thread_responses, f, ensure_ascii=False, indent=2)
+#     #     print('DUMPED to thread_responses_dump.json')
+#     # except Exception as e:
+#     #     print('DUMP ERROR:', e)
+
+#     # return
+
+#     for parts in thread_responses:
+#         for obj in parts:
+#             td = _extract_slide_thread(obj)
+#             users = [u.get('interop_messaging_user_fbid') for u in td.get('users', [])]
+#             if str(thread_key) not in users:
+#                 continue
+#             for edge in td.get('slide_messages', {}).get('edges', []):
+#                 node = edge.get('node', {})
+#                 mid = node.get('id') or node.get('message_id')
+#                 if mid:
+#                     merged[mid] = edge          # дедуп по message_id
+
+#     if merged:
+#         # сортируем по времени убыванию — как в исходном порядке Instagram
+#         messages = sorted(
+#             merged.values(),
+#             key=lambda e: int(e['node'].get('timestamp_ms', 0)),
+#             reverse=True
+#         )
+#         messages_data = await process_thread_messages(
+#             messages, thread, user_insta_id, thread_key
+#         )
+#         await try_add_messages(messages_data, thread, _session)
+#     else:
+#         print(f"No matching data found for thread {thread_key}")
+async def process_thread(
+    thread: Thread,
+    account_id: int,
+    page,
+    thread_responses: list,
+    thread_received: asyncio.Event,
+    _session: AsyncSession,
+    is_request: bool = False,
+    is_spam: bool = False,
+) -> dict:
+    all_thread_data = {}
+    thread_key = thread.thread_id
+    user_insta_id = thread.insta_user.insta_id
+
+    print('LEN THREAD RESPONSE BEFORE SCROLLING', len(thread_responses))
+
+    await scroll_messages_until_seen(
+        page, thread_responses, thread_key,
+        last_seen_ts=thread.timestamp_last_seen_message
+    )
+    await page.wait_for_timeout(500)
+
+    print('LEN THREAD RESPONSE AFTER SCROLLING', len(thread_responses))
+
+    # 1) находим thread_fbid целевого треда по детальным ответам.
+    #    detail-ответы (get_slide_thread_nullable) содержат users с
+    #    interop_messaging_user_fbid == thread_key. Берём их thread_fbid.
+    target_fbid = None
+    for parts in thread_responses:
+        if not isinstance(parts, list):
+            parts = [parts]
+        for obj in parts:
+            if not isinstance(obj, dict):
+                continue
+            td = _extract_slide_thread(obj)
+            if not td:
+                continue
+            users = [u.get('interop_messaging_user_fbid') for u in td.get('users', [])]
+            if str(thread_key) in users:
+                # thread_fbid лежит и на уровне треда, и в каждом node
+                target_fbid = str(td.get('thread_fbid') or td.get('id') or '')
+                if target_fbid:
+                    break
+        if target_fbid:
+            break
+
+    # 2) собираем edges. Фильтр по node.thread_fbid — он есть и в detail,
+    #    и в пагинации (fetch__SlideThread), где блока users нет.
+    merged = {}
+    for parts in thread_responses:
+        if not isinstance(parts, list):
+            parts = [parts]
+        for obj in parts:
+            if not isinstance(obj, dict):
+                continue
+            td = _extract_slide_thread(obj)
+            if not td:
+                continue
+            for edge in td.get('slide_messages', {}).get('edges', []):
+                node = edge.get('node', {})
+                # отсекаем чужие префетченные треды (Elly, Антон и т.д.)
+                if target_fbid and str(node.get('thread_fbid')) != target_fbid:
+                    continue
+                mid = node.get('message_id') or node.get('id')
+                if mid:
+                    merged[mid] = edge          # дедуп по message_id
+
+    if merged:
+        # новые → старые
+        messages = sorted(
+            merged.values(),
+            key=lambda e: int(e['node'].get('timestamp_ms', 0)),
+            reverse=True
+        )
+        messages_data = await process_thread_messages(
+            messages, thread, user_insta_id, thread_key
+        )
+        await try_add_messages(messages_data, thread, _session)
+    else:
+        print(f"No matching data found for thread {thread_key}")
 
 
 # ===================== ОСНОВНАЯ ФУНКЦИЯ =====================
@@ -1044,7 +1564,8 @@ async def test_playwright(account_id: int,
                     thread_responses.append(parsed)
                     thread_received.set()
                 else:
-                    collected_data[key] = parsed
+                    # collected_data[key] = parsed
+                    collected_data.setdefault(key, []).append(parsed)
 
                 if friendly_name == 'PolarisDirectInboxQuery':
                     inbox_received.set()
@@ -1076,6 +1597,10 @@ async def test_playwright(account_id: int,
 
         await page.wait_for_timeout(2000)
 
+        total = await scroll_inbox_until_loaded(page)
+
+        print(f"Scrolled inbox, {total} thread links in DOM")
+
         inbox_threads = extract_threads_from_inbox(
             collected_data.get('PolarisDirectInboxQuery', [])
         )
@@ -1098,6 +1623,10 @@ async def test_playwright(account_id: int,
 
         await page.wait_for_timeout(2000)
 
+        # total = await scroll_inbox_until_loaded(page)
+        
+        # print(f"Scrolled inbox, {total} thread links in DOM")
+
         request_threads, spam_threads = extract_threads_from_requests(
             collected_data.get('PolarisDirectMessageRequestQuery', [])
         )
@@ -1111,6 +1640,153 @@ async def test_playwright(account_id: int,
         await process_threads(spam_threads, account_id, page,
                             thread_responses, thread_received, _session,
                             is_spam=True)
+        
+
+
+#####
+async def parse_thread_playwright(account_id: int,
+                                  thread: Thread,
+                                  profile_port: int,
+                                    _session: AsyncSession):
+    collected_data = {}
+    thread_responses = []
+    inbox_received = asyncio.Event()
+    thread_received = asyncio.Event()
+    request_message_received = asyncio.Event()
+
+    async with async_playwright() as p:
+        browser = await p.chromium.connect_over_cdp(f'http://{VISION_BROWSER_HOST}:{profile_port}')
+        print(f"CONNECTED ON {profile_port} PORT")
+
+        context = browser.contexts[0] if browser.contexts else await browser.new_context()
+        page = context.pages[0] if context.pages else await context.new_page()
+
+        async def on_response(response):
+            req = response.request
+            if req.resource_type not in ('xhr', 'fetch'):
+                return
+            url = response.url
+            if req.resource_type in ('xhr', 'fetch'):
+                fn = extract_friendly_name(req.post_data) if req.post_data else None
+                print(f"[REQ] {fn}")   # временно
+            if '/api/graphql' not in url and '/graphql/query' not in url:
+                return
+            if not req.post_data:
+                return
+
+            friendly_name = extract_friendly_name(req.post_data)
+            variables = extract_variables(req.post_data)
+
+            # print(f"[ALL] {friendly_name} | folder: {variables.get('folder') if variables else '-'}")
+
+            if friendly_name not in TARGET_QUERIES:
+                return
+
+            try:
+                body = await response.text()
+                parsed = parse_ig_response(body)
+
+                key = friendly_name
+                if variables and 'folder' in variables:
+                    key = f"{friendly_name}:{variables['folder']}"
+
+                if friendly_name == 'IGDMessageListOffMsysQuery':
+                    # print(f"MSGLIST PARSED type={type(parsed)} sample={str(parsed)[:400]}")
+                    # print('LOOK -> ',parsed)
+                    thread_responses.append(parsed)
+                    thread_received.set()
+
+                if friendly_name == 'IGDThreadDetailQuery':
+                    thread_responses.append(parsed)
+                    thread_received.set()
+                # if friendly_name in ('IGDThreadDetailQuery', 'IGDMessageListOffMsysQuery'):
+                #     thread_responses.append(parsed)
+                #     thread_received.set()
+                # else:
+                #     collected_data.setdefault(key, []).append(parsed)
+                else:
+                    # collected_data[key] = parsed
+                    collected_data.setdefault(key, []).append(parsed)
+
+                if friendly_name == 'PolarisDirectInboxQuery':
+                    inbox_received.set()
+
+                if friendly_name == 'PolarisDirectMessageRequestQuery':
+                    request_message_received.set()
+
+            except Exception as e:
+                print(f"[ERROR] {friendly_name}: {e}")
+
+        page.on("response", on_response)
+
+        # === 1. Inbox ===
+
+        current_url = page.url
+        if current_url.startswith(f'https://www.instagram.com/direct/t/{thread.thread_id}'):
+            await page.reload(wait_until='domcontentloaded')
+        else:
+            await page.goto(
+                f'https://www.instagram.com/direct/t/{thread.thread_id}/',
+                wait_until='domcontentloaded'
+            )
+
+        await asyncio.sleep(3)
+
+        await dismiss_notifications_popup(page)
+
+        try:
+            await asyncio.wait_for(inbox_received.wait(), timeout=15)
+            print("Thread received!")
+        except asyncio.TimeoutError:
+            print("Thread timeout")
+
+        await page.wait_for_timeout(2000)
+
+        # total = await scroll_inbox_until_loaded(page)
+
+        # print(f"Scrolled inbox, {total} thread links in DOM")
+
+        # inbox_threads = extract_threads_from_inbox(
+        #     collected_data.get('PolarisDirectInboxQuery', [])
+        # )
+        # print(f"Found {len(inbox_threads)} inbox threads")
+        await process_thread(thread, account_id, page,
+                              thread_responses, thread_received, _session)
+
+        # # === 2. Message Requests + Spam ===
+
+        # request_message_received.clear()
+
+        # await page.goto('https://www.instagram.com/direct/requests/',
+        #                 wait_until='domcontentloaded')
+
+        # try:
+        #     await asyncio.wait_for(request_message_received.wait(), timeout=15)
+        #     print("Message requests received!")
+        # except asyncio.TimeoutError:
+        #     print("Message requests timeout")
+
+        # await page.wait_for_timeout(2000)
+
+        # # total = await scroll_inbox_until_loaded(page)
+        
+        # # print(f"Scrolled inbox, {total} thread links in DOM")
+
+        # request_threads, spam_threads = extract_threads_from_requests(
+        #     collected_data.get('PolarisDirectMessageRequestQuery', [])
+        # )
+
+        # print(f"Found {len(request_threads)} request threads")
+        # await process_threads(request_threads, account_id, page,
+        #                     thread_responses, thread_received, _session,
+        #                     is_request=True)
+
+        # print(f"Found {len(spam_threads)} spam threads")
+        # await process_threads(spam_threads, account_id, page,
+        #                     thread_responses, thread_received, _session,
+        #                     is_spam=True)
+
+#####
 
 
 

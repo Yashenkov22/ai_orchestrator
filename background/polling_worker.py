@@ -8,7 +8,8 @@ from background.base import (redis_settings,
 from db.base import session
 
 from .tasks import (start_polling_for_accounts,
-                    parse_account)
+                    parse_account,
+                    parse_thread)
 
 from config import REDIS_HOST, REDIS_PASSWORD, JOB_STORE_URL
 
@@ -37,6 +38,7 @@ class WorkerSettings:
     functions = [
         start_polling_for_accounts,
         parse_account,
+        # parse_thread,
     ]
     on_startup = startup
     on_shutdown = shutdown

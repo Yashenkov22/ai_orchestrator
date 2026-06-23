@@ -12,11 +12,13 @@ from fastapi import (APIRouter,
 from sqlalchemy import select
 
 from db.queries import (execute_and_catch_db_error,
-                        get_account_by_id, try_update_message_text)
+                        get_account_by_id, get_message_only_by_id, try_update_message_text)
 
 from db.base import Account
 
+from db.queries import get_message_by_id
 
+from utils.ai import ai_translate_message
 from utils.dependencies import (admin_dependency,
                                 session_dependency,
                                 arq_dependency)
@@ -143,6 +145,21 @@ async def test_hander(admin: admin_dependency,
             _queue_name='arq:message',
         )
         return {"status": "queued", "job_id": job.job_id}
+    
+
+@utils_router.get("/run_background_parse_thread")
+async def run_background_parse_thread(admin: admin_dependency,
+                      session: session_dependency,
+                      arq_pool: arq_dependency,
+                      account_id: int,
+                      thread_id: int):
+    job = await arq_pool.enqueue_job(
+        'parse_thread',
+        account_id,
+        thread_id,
+        _queue_name='arq:messages',
+    )
+    return {"status": "queued", "job_id": job.job_id}
 
 
 @utils_router.get("/try_start_vision_profile")
@@ -172,3 +189,26 @@ async def try_stop_vision_profile(admin: admin_dependency,
     )
     return {"status": "queued", "job_id": job.job_id}
 
+
+@utils_router.get("/translate")
+async def try_translate_text(admin: admin_dependency,
+                             session: session_dependency,
+                             message_id: int):
+    message = await get_message_only_by_id(message_id,
+                                           session)
+    if not message.text:
+        return 'Message don`t have "text" field'
+    
+    if message.translated_text:
+        return message.translated_text
+    else:
+        try:
+            translated_text = await ai_translate_message(message.text)
+            message.translated_text = translated_text
+            await execute_and_catch_db_error(session.commit(),
+                                             session,
+                                             with_rollback=True)
+            return translated_text
+        except Exception as ex:
+            print(ex)
+            return 'Error with try translate text'

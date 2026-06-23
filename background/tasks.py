@@ -11,10 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 
 from db.base import Account, get_session
-from db.queries import execute_and_catch_db_error, get_message_by_id, get_account_by_id
+from db.queries import execute_and_catch_db_error, get_message_by_id, get_account_by_id, get_thread_by_id
 
 from utils.base import get_active_profiles, try_start_profile, try_stop_profile, try_connect_to_main_instagram_page
-from utils.tasks import playwright_send_message, test_playwright
+from utils.tasks import parse_thread_playwright, playwright_send_message, test_playwright
 
 from .base import get_redis_pool, acquire_lock, release_lock
 
@@ -95,8 +95,8 @@ async def parse_account(cxt,
         try:
             async with sessionmaker() as _session:
                 await test_playwright(account_id,
-                                    profile_port,
-                                    _session)
+                                      profile_port,
+                                      _session)
 
             await sleep(10)
 
@@ -104,6 +104,57 @@ async def parse_account(cxt,
                                                     profile_id)
         finally:
             release_lock(account_id, lock_value)
+
+
+async def parse_thread(cxt,
+                       account_id: int,
+                       thread_id: int):
+    print(f'TASK PARSE THREAD WITH ID {thread_id} ✅')
+
+    sessionmaker = cxt["sessionmaker"]
+
+    async with sessionmaker() as _session:
+        account = await get_account_by_id(account_id,
+                                          _session)
+        thread = await get_thread_by_id(thread_id,
+                                       _session)
+    
+    if not account or not thread:
+        return
+    
+    available_lock = acquire_lock(account.id, ttl=300)
+
+    if not available_lock:
+        return
+
+    actived_profile = await try_start_profile(account.folder_id,
+                                              account.profile_id)
+        
+    print(actived_profile)
+    
+    profile_port = actived_profile.get('port')
+
+    print('PORT', profile_port)
+
+    if profile_port:
+
+        await sleep(10)
+        
+        # try:
+        async with sessionmaker() as _session:
+            _session: AsyncSession
+            thread = await _session.merge(thread)
+            await parse_thread_playwright(account_id,
+                                            thread,
+                                            profile_port,
+                                            _session)
+
+        await sleep(10)
+
+        stopped_profile = await try_stop_profile(account.folder_id,
+                                                account.profile_id)
+        # finally:
+    release_lock(account_id, available_lock)
 
 
 
