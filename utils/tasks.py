@@ -1823,26 +1823,26 @@ async def test_playwright(account_id: int,
 
         # === 2. Message Requests + Spam ===
 
-        request_message_received.clear()
+        # request_message_received.clear()
 
-        await page.goto('https://www.instagram.com/direct/requests/',
-                        wait_until='domcontentloaded')
+        # await page.goto('https://www.instagram.com/direct/requests/',
+        #                 wait_until='domcontentloaded')
 
-        try:
-            await asyncio.wait_for(request_message_received.wait(), timeout=15)
-            print("Message requests received!")
-        except asyncio.TimeoutError:
-            print("Message requests timeout")
+        # try:
+        #     await asyncio.wait_for(request_message_received.wait(), timeout=15)
+        #     print("Message requests received!")
+        # except asyncio.TimeoutError:
+        #     print("Message requests timeout")
 
-        await page.wait_for_timeout(2000)
+        # await page.wait_for_timeout(2000)
 
-        # total = await scroll_inbox_until_loaded(page)
+        # # total = await scroll_inbox_until_loaded(page)
         
-        # print(f"Scrolled inbox, {total} thread links in DOM")
+        # # print(f"Scrolled inbox, {total} thread links in DOM")
 
-        request_threads, spam_threads = extract_threads_from_requests(
-            collected_data.get('PolarisDirectMessageRequestQuery', [])
-        )
+        # request_threads, spam_threads = extract_threads_from_requests(
+        #     collected_data.get('PolarisDirectMessageRequestQuery', [])
+        # )
 
         # print(f"Found {len(request_threads)} request threads")
         # await process_threads(request_threads, account_id, page,
