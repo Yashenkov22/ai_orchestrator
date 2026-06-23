@@ -898,38 +898,92 @@ async def human_pause(a=0.4, b=1.2):
 #             })
 #     return threads
 
+# def extract_threads_from_inbox(data_list: list) -> list:
+#     threads = []
+#     last_message_ts = None
+
+#     # нормализуем: разворачиваем вложенные списки страниц в плоский список объектов
+#     flat = []
+#     for item in data_list:
+#         if isinstance(item, list):
+#             flat.extend(item)        # это страница со списком объектов
+#         else:
+#             flat.append(item)        # это уже объект
+#     data_list = flat
+
+#     for obj in data_list:
+#         if not isinstance(obj, dict):
+#             continue                 # подстраховка от неожиданных типов
+#         edges = (obj.get('data', {})
+#                     .get('get_slide_mailbox_for_iris_subscription', {})
+#                     .get('threads_by_folder', {})
+#                     .get('edges', []))
+
+#         for edge in edges:
+#             node = edge['node'].get('as_ig_direct_thread', {})
+#             slide_messages = node.get('slide_messages', {}).get('edges')
+
+#             if slide_messages:
+#                 last_message = slide_messages[0].get('node')
+#                 last_message_ts = last_message.get('timestamp_ms')
+
+#             threads.append({
+#                 'thread_key': node.get('thread_key'),
+#                 'users': list(node.get('users', [])),
+#                 'last_activity': node.get('last_activity_timestamp_ms'),
+#                 'is_group': node.get('is_group'),
+#                 'unread': node.get('marked_as_unread'),
+#                 'last_message_ts': last_message_ts,
+#             })
+#     return threads
 def extract_threads_from_inbox(data_list: list) -> list:
     threads = []
-    last_message_ts = None
 
-    # нормализуем: разворачиваем вложенные списки страниц в плоский список объектов
+    # разворачиваем вложенные списки страниц в плоский список объектов
     flat = []
     for item in data_list:
         if isinstance(item, list):
-            flat.extend(item)        # это страница со списком объектов
+            flat.extend(item)
         else:
-            flat.append(item)        # это уже объект
-    data_list = flat
+            flat.append(item)
 
-    for obj in data_list:
+    for obj in flat:
         if not isinstance(obj, dict):
-            continue                 # подстраховка от неожиданных типов
-        edges = (obj.get('data', {})
-                    .get('get_slide_mailbox_for_iris_subscription', {})
-                    .get('threads_by_folder', {})
-                    .get('edges', []))
+            continue
+
+        data = obj.get('data', {}) or {}
+        # разные query кладут mailbox под разными корнями — проверяем оба
+        mailbox = (data.get('get_slide_mailbox_for_iris_subscription')
+                   or data.get('fetch__SlideMailbox')
+                   or {})
+        edges = mailbox.get('threads_by_folder', {}).get('edges', [])
 
         for edge in edges:
-            node = edge['node'].get('as_ig_direct_thread', {})
-            slide_messages = node.get('slide_messages', {}).get('edges')
+            node = (edge.get('node', {}) or {}).get('as_ig_direct_thread', {})
+            if not node:
+                continue
 
-            if slide_messages:
-                last_message = slide_messages[0].get('node')
+            # last_message_ts — ЛОКАЛЬНО для каждого треда (важно!)
+            last_message_ts = None
+            sm = node.get('slide_messages', {}).get('edges')
+            if sm:
+                last_message = sm[0].get('node') or {}
                 last_message_ts = last_message.get('timestamp_ms')
 
+            users = list(node.get('users', []))
+            first_user = users[0] if users else {}
+
             threads.append({
+                'thread_id': node.get('thread_id'),          # ← БЫЛО ПРОПУЩЕНО
+                'thread_fbid': node.get('thread_fbid'),
                 'thread_key': node.get('thread_key'),
-                'users': list(node.get('users', [])),
+                'thread_title': node.get('thread_title'),
+                'folder': node.get('folder'),
+                'system_folder': node.get('system_folder'),
+                'users': users,
+                'username': first_user.get('username'),
+                'full_name': first_user.get('full_name'),
+                'interop_messaging_user_fbid': first_user.get('interop_messaging_user_fbid'),
                 'last_activity': node.get('last_activity_timestamp_ms'),
                 'is_group': node.get('is_group'),
                 'unread': node.get('marked_as_unread'),
@@ -1516,6 +1570,124 @@ async def process_thread(
         print(f"No matching data found for thread {thread_key}")
 
 
+async def get_inbox_tabs(page):
+    """
+    Возвращает список доступных вкладок инбокса.
+    Если разделения нет — вернёт пустой список (это норма).
+    """
+    found = []
+    for name in ("Primary", "General", "Request"):
+        # Request имеет меняющийся счётчик 'Request (N)' — матчим по префиксу
+        loc = page.get_by_role("button", name=re.compile(rf"^{name}")).first
+        try:
+            if await loc.count() and await loc.is_visible():
+                found.append(name)
+        except Exception:
+            pass
+    return found
+
+
+async def switch_inbox_tab(page, tab_name: str) -> bool:
+    """
+    Переключает на вкладку. True — переключились, False — вкладки нет.
+    Отсутствие вкладки НЕ ошибка: аккаунт без разделения инбокса.
+    """
+    loc = page.get_by_role("button", name=re.compile(rf"^{tab_name}")).first
+    try:
+        if not (await loc.count() and await loc.is_visible()):
+            print(f"[tab] '{tab_name}' отсутствует — пропускаем")
+            return False
+        await loc.scroll_into_view_if_needed()
+        await loc.click()
+        await page.wait_for_timeout(1200)
+        print(f"[tab] переключились на '{tab_name}'")
+        return True
+    except Exception as e:
+        print(f"[tab] клик по '{tab_name}' не удался: {e}")
+        return False
+
+
+async def iterate_inbox_folders(page, inbox_received, collected_data):
+    """
+    Проходит по всем вкладкам инбокса и скроллит каждую.
+    Если вкладок нет — скроллит текущий единый список один раз.
+    """
+    tabs = await get_inbox_tabs(page)
+
+    # нет разделения на вкладки — обычный единый инбокс
+    if not tabs:
+        print("[inbox] вкладок нет, единый список")
+        await scroll_inbox_until_loaded(page)
+        return
+
+    # есть вкладки — обходим интересующие (Request обычно пропускают)
+    target_tabs = [t for t in tabs if t in ("Primary", "General")]
+    print(f"[inbox] вкладки: {tabs}, обходим: {target_tabs}")
+
+    for tab in target_tabs:
+        switched = await switch_inbox_tab(page, tab)
+        if not switched:
+            continue
+        inbox_received.clear()
+        try:
+            await asyncio.wait_for(inbox_received.wait(), timeout=15)
+        except asyncio.TimeoutError:
+            print(f"[inbox] таймаут ожидания ответа для '{tab}'")
+        await scroll_inbox_until_loaded(page)
+
+
+# def collect_all_inbox_threads(collected_data):
+#     all_threads = []
+#     for key, value in collected_data.items():
+#         if key.startswith('PolarisDirectInboxQuery'):
+#             all_threads.extend(extract_threads_from_inbox(value))
+#     # дедуп по thread_id, т.к. в теории чат может попасть в разные folder
+#     seen, result = set(), []
+#     for t in all_threads:
+#         tid = t.get('thread_id')
+#         if tid and tid not in seen:
+#             seen.add(tid)
+#             result.append(t)
+#     return result
+
+# def collect_all_inbox_threads(collected_data):
+#     # диагностика — какие ключи реально есть
+#     print("[collect] keys:", list(collected_data.keys()))
+#     for k, v in collected_data.items():
+#         print(f"[collect] {k}: type={type(v)}, len={len(v) if isinstance(v, list) else 'n/a'}")
+
+#     all_threads = []
+#     for key, value in collected_data.items():
+#         if key.startswith('PolarisDirectInboxQuery'):
+#             extracted = extract_threads_from_inbox(value)
+#             print(f"[collect] from {key}: {len(extracted)} threads")
+#             all_threads.extend(extracted)
+
+#     seen, result = set(), []
+#     for t in all_threads:
+#         tid = t.get('thread_id')
+#         if tid and tid not in seen:
+#             seen.add(tid)
+#             result.append(t)
+#     print(f"[collect] total after dedup: {len(result)}")
+#     return result
+
+def collect_all_inbox_threads(collected_data):
+    all_threads = []
+    for key, value in collected_data.items():
+        # и PolarisDirectInboxQuery, и пагинация fetch__SlideMailbox
+        if key.startswith('PolarisDirectInboxQuery') or key.startswith('SlideMailboxPages'):
+            all_threads.extend(extract_threads_from_inbox(value))
+
+    seen, result = set(), []
+    for t in all_threads:
+        tid = t.get('thread_id')
+        if tid and tid not in seen:
+            seen.add(tid)
+            result.append(t)
+    return result
+
+
 # ===================== ОСНОВНАЯ ФУНКЦИЯ =====================
 
 async def test_playwright(account_id: int,
@@ -1543,6 +1715,9 @@ async def test_playwright(account_id: int,
                 return
             if not req.post_data:
                 return
+            fn = extract_friendly_name(req.post_data) if req.post_data else None
+            if fn:
+                print(f"[REQ] {fn}")
 
             friendly_name = extract_friendly_name(req.post_data)
             variables = extract_variables(req.post_data)
@@ -1598,12 +1773,15 @@ async def test_playwright(account_id: int,
         await page.wait_for_timeout(2000)
 
         total = await scroll_inbox_until_loaded(page)
+        await iterate_inbox_folders(page, inbox_received, collected_data)
+
+        inbox_threads = collect_all_inbox_threads(collected_data)
 
         print(f"Scrolled inbox, {total} thread links in DOM")
 
-        inbox_threads = extract_threads_from_inbox(
-            collected_data.get('PolarisDirectInboxQuery', [])
-        )
+        # inbox_threads = extract_threads_from_inbox(
+        #     collected_data.get('PolarisDirectInboxQuery', [])
+        # )
         print(f"Found {len(inbox_threads)} inbox threads")
         await process_threads(inbox_threads, account_id, page,
                               thread_responses, thread_received, _session)
@@ -1631,15 +1809,15 @@ async def test_playwright(account_id: int,
             collected_data.get('PolarisDirectMessageRequestQuery', [])
         )
 
-        print(f"Found {len(request_threads)} request threads")
-        await process_threads(request_threads, account_id, page,
-                            thread_responses, thread_received, _session,
-                            is_request=True)
+        # print(f"Found {len(request_threads)} request threads")
+        # await process_threads(request_threads, account_id, page,
+        #                     thread_responses, thread_received, _session,
+        #                     is_request=True)
 
-        print(f"Found {len(spam_threads)} spam threads")
-        await process_threads(spam_threads, account_id, page,
-                            thread_responses, thread_received, _session,
-                            is_spam=True)
+        # print(f"Found {len(spam_threads)} spam threads")
+        # await process_threads(spam_threads, account_id, page,
+        #                     thread_responses, thread_received, _session,
+        #                     is_spam=True)
         
 
 

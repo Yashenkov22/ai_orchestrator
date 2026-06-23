@@ -557,6 +557,7 @@ async def try_add_messages(message_data: dict,
                                              for_db=True)
 
         thread.context = new_context
+        thread.is_unread = False
 
         await execute_and_catch_db_error(session.commit(),
                                         session,
