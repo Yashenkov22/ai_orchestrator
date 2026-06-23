@@ -44,8 +44,8 @@ class InstaUser(Base):
                       nullable=True,
                       default=None)
     username = Column(String,
-                      nullable=False,
-                      unique=True)
+                      nullable=True,
+                      default=None)
     full_name = Column(String,
                       nullable=True,
                       default=None)
