@@ -984,10 +984,82 @@ async def human_pause(a=0.4, b=1.2):
 #                 'last_message_ts': last_message_ts,
 #             })
 #     return threads
+# def extract_threads_from_inbox(data_list: list) -> list:
+#     threads = []
+
+#     # разворачиваем вложенные списки страниц в плоский список объектов
+#     flat = []
+#     for item in data_list:
+#         if isinstance(item, list):
+#             flat.extend(item)
+#         else:
+#             flat.append(item)
+
+#     for obj in flat:
+#         if not isinstance(obj, dict):
+#             print("[extract] skip non-dict:", type(obj))   # ← диагностика
+#             continue
+
+#         data = obj.get('data', {}) or {}
+#         print("[extract] data keys:", list(data.keys()))   # ← диагностика
+#         # разные query кладут mailbox под разными корнями — проверяем оба
+#         mailbox = (data.get('get_slide_mailbox_for_iris_subscription')
+#                    or data.get('fetch__SlideMailbox')
+#                    or {})
+#         edges = mailbox.get('threads_by_folder', {}).get('edges', [])
+
+#         print("[extract] mailbox keys:", list(mailbox.keys()), "edges:", len(edges))  # ← диагностика
+
+#         for edge in edges:
+#             node = (edge.get('node', {}) or {}).get('as_ig_direct_thread', {})
+#             if not node:
+#                 continue
+
+#             # last_message_ts — ЛОКАЛЬНО для каждого треда (важно!)
+#             last_message_ts = None
+#             sm = node.get('slide_messages', {}).get('edges')
+#             if sm:
+#                 last_message = sm[0].get('node') or {}
+#                 last_message_ts = last_message.get('timestamp_ms')
+
+#             users = list(node.get('users', []))
+#             first_user = users[0] if users else {}
+
+#             threads.append({
+#                 'thread_id': node.get('thread_id'),          # ← БЫЛО ПРОПУЩЕНО
+#                 'thread_fbid': node.get('thread_fbid'),
+#                 'thread_key': node.get('thread_key'),
+#                 'thread_title': node.get('thread_title'),
+#                 'folder': node.get('folder'),
+#                 'system_folder': node.get('system_folder'),
+#                 'users': users,
+#                 'username': first_user.get('username'),
+#                 'full_name': first_user.get('full_name'),
+#                 'interop_messaging_user_fbid': first_user.get('interop_messaging_user_fbid'),
+#                 'last_activity': node.get('last_activity_timestamp_ms'),
+#                 'is_group': node.get('is_group'),
+#                 'unread': node.get('marked_as_unread'),
+#                 'last_message_ts': last_message_ts,
+#             })
+#     return threads
+
+def _collect_edges(node):
+    """Рекурсивно собирает все списки 'edges' из произвольно вложенной структуры."""
+    found = []
+    if isinstance(node, dict):
+        for k, v in node.items():
+            if k == 'edges' and isinstance(v, list):
+                found.extend(v)
+            else:
+                found.extend(_collect_edges(v))
+    elif isinstance(node, list):
+        for item in node:
+            found.extend(_collect_edges(item))
+    return found
+
+
 def extract_threads_from_inbox(data_list: list) -> list:
     threads = []
-
-    # разворачиваем вложенные списки страниц в плоский список объектов
     flat = []
     for item in data_list:
         if isinstance(item, list):
@@ -997,25 +1069,29 @@ def extract_threads_from_inbox(data_list: list) -> list:
 
     for obj in flat:
         if not isinstance(obj, dict):
-            print("[extract] skip non-dict:", type(obj))   # ← диагностика
             continue
-
         data = obj.get('data', {}) or {}
-        print("[extract] data keys:", list(data.keys()))   # ← диагностика
-        # разные query кладут mailbox под разными корнями — проверяем оба
         mailbox = (data.get('get_slide_mailbox_for_iris_subscription')
                    or data.get('fetch__SlideMailbox')
                    or {})
+
+        # 1) основной путь — threads_by_folder (первый экран)
         edges = mailbox.get('threads_by_folder', {}).get('edges', [])
 
-        print("[extract] mailbox keys:", list(mailbox.keys()), "edges:", len(edges))  # ← диагностика
+        # 2) пагинация кладёт под threads_by_system_folder_and_ig_inbox_folder,
+        #    структура вложенная — собираем edges рекурсивно
+        if not edges:
+            tbsf = mailbox.get('threads_by_system_folder_and_ig_inbox_folder')
+            if tbsf:
+                edges = _collect_edges(tbsf)
 
         for edge in edges:
             node = (edge.get('node', {}) or {}).get('as_ig_direct_thread', {})
             if not node:
+                # покажем, что реально в edge
+                print("[extract] edge node keys:", list((edge.get('node', {}) or {}).keys()))
                 continue
-
-            # last_message_ts — ЛОКАЛЬНО для каждого треда (важно!)
+            
             last_message_ts = None
             sm = node.get('slide_messages', {}).get('edges')
             if sm:
@@ -1026,7 +1102,7 @@ def extract_threads_from_inbox(data_list: list) -> list:
             first_user = users[0] if users else {}
 
             threads.append({
-                'thread_id': node.get('thread_id'),          # ← БЫЛО ПРОПУЩЕНО
+                'thread_id': node.get('thread_id'),
                 'thread_fbid': node.get('thread_fbid'),
                 'thread_key': node.get('thread_key'),
                 'thread_title': node.get('thread_title'),
