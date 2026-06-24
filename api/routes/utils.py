@@ -142,7 +142,7 @@ async def test_hander(admin: admin_dependency,
             'send_message_to_thread',
             account_id,
             message_id,
-            _queue_name='arq:message',
+            _queue_name='arq:messages',
         )
         return {"status": "queued", "job_id": job.job_id}
     
