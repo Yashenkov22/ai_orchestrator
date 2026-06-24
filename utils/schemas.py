@@ -251,12 +251,17 @@ class MessageSchema(BaseModel):
 class AccountInformationSchema(BaseModel):
     photo_url: str | None
     information: str | None
+    username: str | None = Field(default=None)
+    full_name: str | None = Field(default=None)
+    account_id: int
 
 
 class UserInformationSchema(BaseModel):
     photo_url: str | None
     information: dict | None
     insta_link: str | None
+    username: str | None = Field(default=None)
+    full_name: str | None = Field(default=None)
 
 
 #

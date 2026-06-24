@@ -146,6 +146,7 @@ async def get_threads(admin: admin_dependency,
             'information': thread.account.information,
             'username': thread.account.username,
             'full_name': thread.account.full_name,
+            'account_id': thread.account_id,
         },
         'user_information': {
             'photo_url': generate_valid_media_url(thread.insta_user.photo_url),

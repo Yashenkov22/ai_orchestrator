@@ -800,7 +800,7 @@ async def process_thread_messages(messages: list,
                                   thread: Thread,
                                   user_insta_id: str,
                                   thread_key: str):
-    print('LEN MESSAGES BEFORE SAVE', len(messages))
+    # print('LEN MESSAGES BEFORE SAVE', len(messages))
     save_dir = MEDIA_PATH
     
     thread_dir = os.path.join(save_dir, str(thread_key))
@@ -817,11 +817,12 @@ async def process_thread_messages(messages: list,
         _ts = node.get('timestamp_ms', '')
         valid_ts = None
 
-        _sender = node.get('sender')
-        if _sender:
-            _sender = _sender.get('igid')
-        else:
-            _sender = None
+        _sender = node.get('sender_fbid')
+
+        if not _sender:
+            _sender = node.get('sender')
+            if _sender:
+                _sender = _sender.get('id')
 
         if _ts:
             valid_ts = datetime.fromtimestamp(int(_ts) / 1000, tz=timezone.utc)
@@ -833,10 +834,14 @@ async def process_thread_messages(messages: list,
         except Exception as ex:
             print(ex)
             raise
+        
+        # print('SENDERS', user_insta_id, type(user_insta_id), _sender, type(_sender))
+        view_sender = 'user' if _sender == user_insta_id else 'assistant'
+        # print(view_sender)
 
         msg_data = {
             'id': msg_id,
-            'sender': 'assistant' if _sender == user_insta_id else 'user',
+            'sender': view_sender,
             'type': ctype,
             'timestamp': _ts,
             'text': None,
@@ -1244,12 +1249,20 @@ async def process_threads(
         try:
             insta_user = thread['users'][0]
         except IndexError:
-            print(f"No users in thread {thread.get('thread_key')}")
+            # print(f"No users in thread {thread.get('thread_key')}")
             if is_request or is_spam:
                 continue
-            raise
+            insta_user = {
+                'username': thread['username'],
+                'full_name': thread['full_name'],
+                'interop_messaging_user_fbid': thread['interop_messaging_user_fbid'],
+            }
+            if not insta_user:
+                continue
+            # else:
 
-        _insta_user = await check_insta_user(str(insta_user.get('id')), _session)
+        _insta_user = await check_insta_user(str(insta_user.get('interop_messaging_user_fbid')),
+                                             _session)
 
         if not _insta_user:
             photo_url = await download_profile_pic(insta_user)
@@ -1670,6 +1683,7 @@ async def process_thread(
     # 2) собираем edges. Фильтр по node.thread_fbid — он есть и в detail,
     #    и в пагинации (fetch__SlideThread), где блока users нет.
     merged = {}
+    test_list = []
     for parts in thread_responses:
         if not isinstance(parts, list):
             parts = [parts]
@@ -1681,12 +1695,17 @@ async def process_thread(
                 continue
             for edge in td.get('slide_messages', {}).get('edges', []):
                 node = edge.get('node', {})
+                # print('RAW MESSAGE', node)
+                test_list.append(node)
                 # отсекаем чужие префетченные треды (Elly, Антон и т.д.)
                 if target_fbid and str(node.get('thread_fbid')) != target_fbid:
                     continue
                 mid = node.get('message_id') or node.get('id')
                 if mid:
                     merged[mid] = edge          # дедуп по message_id
+    
+    with open("./data.json", "w", encoding="utf-8") as f:
+        json.dump(merged, f, ensure_ascii=False, indent=4)
 
     if merged:
         # новые → старые
@@ -1870,6 +1889,10 @@ def collect_all_inbox_threads(collected_data):
             seen.add(tid)
             result.append(t)
     print(f"[collect] total after dedup: {len(result)}")
+
+    with open("./data_t.json", "w", encoding="utf-8") as f:
+        json.dump(all_threads, f, ensure_ascii=False, indent=4)
+
     return result
 
 

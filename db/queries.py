@@ -379,7 +379,7 @@ async def try_add_insta_user(insta_user: dict,
                              session: AsyncSession):
 
     insert_data = {
-        'insta_id': str(insta_user.get('id')),
+        'insta_id': str(insta_user.get('interop_messaging_user_fbid')),
         'username': insta_user.get('username'),
         'full_name': insta_user.get('full_name'),
         'photo_url': insta_user.get('photo_url'),
