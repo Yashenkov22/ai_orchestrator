@@ -1704,8 +1704,8 @@ async def process_thread(
                 if mid:
                     merged[mid] = edge          # дедуп по message_id
     
-    with open("./data.json", "w", encoding="utf-8") as f:
-        json.dump(merged, f, ensure_ascii=False, indent=4)
+    # with open("./data.json", "w", encoding="utf-8") as f:
+    #     json.dump(merged, f, ensure_ascii=False, indent=4)
 
     if merged:
         # новые → старые
@@ -1879,7 +1879,7 @@ def collect_all_inbox_threads(collected_data):
     for key, value in collected_data.items():
         if key.startswith('PolarisDirectInboxQuery') or key.startswith('SlideMailboxPages'):
             extracted = extract_threads_from_inbox(value)
-            print(f"[collect] {key}: pages={len(value)}, threads={len(extracted)}")  # ← диагностика
+            # print(f"[collect] {key}: pages={len(value)}, threads={len(extracted)}")  # ← диагностика
             all_threads.extend(extracted)
 
     seen, result = set(), []
@@ -1888,10 +1888,10 @@ def collect_all_inbox_threads(collected_data):
         if tid and tid not in seen:
             seen.add(tid)
             result.append(t)
-    print(f"[collect] total after dedup: {len(result)}")
+    # print(f"[collect] total after dedup: {len(result)}")
 
-    with open("./data_t.json", "w", encoding="utf-8") as f:
-        json.dump(all_threads, f, ensure_ascii=False, indent=4)
+    # with open("./data_t.json", "w", encoding="utf-8") as f:
+    #     json.dump(all_threads, f, ensure_ascii=False, indent=4)
 
     return result
 
