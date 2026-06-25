@@ -49,9 +49,13 @@ async def ai_generate_text(text: str,
             }
         ]
     )
-    result = response.choices[0].message.content
-    print('ответ нейронки',result)
 
+    if response.choices:
+        result = response.choices[0].message.content
+        print('ответ нейронки',result)
+    else:
+        result = ''
+    
     return result
 
 
