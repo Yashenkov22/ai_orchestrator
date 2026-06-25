@@ -16,7 +16,7 @@ from db.queries import execute_and_catch_db_error, get_message_by_id, get_accoun
 from utils.base import get_active_profiles, try_start_profile, try_stop_profile, try_connect_to_main_instagram_page
 from utils.tasks import parse_thread_playwright, playwright_send_message, test_playwright
 
-from .base import get_redis_pool, acquire_lock, release_lock
+from .base import get_redis_pool, acquire_lock, release_lock, redis_client
 
 
 
@@ -53,7 +53,7 @@ async def start_polling_for_accounts(cxt):
 
             if folder_id and profile_id:
             # lock acount_id in redis
-                available_lock = acquire_lock(account.id, ttl=300)
+                available_lock = acquire_lock(account.id)
 
                 if not available_lock:
                     continue
@@ -88,22 +88,22 @@ async def parse_account(cxt,
 
     print('PORT', profile_port)
 
-    if profile_port:
+    try:
+        if profile_port:
 
-        await sleep(10)
-        
-        try:
+            await sleep(10)
+            
             async with sessionmaker() as _session:
                 await test_playwright(account_id,
-                                      profile_port,
-                                      _session)
+                                    profile_port,
+                                    _session)
 
             await sleep(10)
 
             stopped_profile = await try_stop_profile(folder_id,
                                                     profile_id)
-        finally:
-            release_lock(account_id, lock_value)
+    finally:
+        release_lock(account_id, lock_value)
 
 
 async def parse_thread(cxt,
@@ -136,25 +136,25 @@ async def parse_thread(cxt,
 
     print('PORT', profile_port)
 
-    if profile_port:
+    try:
+        if profile_port:
 
-        await sleep(10)
-        
-        # try:
-        async with sessionmaker() as _session:
-            _session: AsyncSession
-            thread = await _session.merge(thread)
-            await parse_thread_playwright(account_id,
-                                            thread,
-                                            profile_port,
-                                            _session)
+            await sleep(10)
+            
+            async with sessionmaker() as _session:
+                _session: AsyncSession
+                thread = await _session.merge(thread)
+                await parse_thread_playwright(account_id,
+                                                thread,
+                                                profile_port,
+                                                _session)
 
-        await sleep(10)
+            await sleep(10)
 
-        stopped_profile = await try_stop_profile(account.folder_id,
-                                                account.profile_id)
-        # finally:
-    release_lock(account_id, available_lock)
+            stopped_profile = await try_stop_profile(account.folder_id,
+                                                    account.profile_id)
+    finally:
+        release_lock(account_id, available_lock)
 
 
 
@@ -238,7 +238,7 @@ async def send_message_to_thread(cxt,
     except Exception as ex:
         print('ERROR WITH TRY SEND MESSAGE', ex)
     finally:
-            release_lock(account_id, available_lock)
+        release_lock(account_id, available_lock)
 
 
 async def try_start_stop_vision_profile_by_account_id(cxt,
@@ -279,3 +279,4 @@ async def try_start_stop_vision_profile_by_account_id(cxt,
         case 'stop':
             await try_stop_profile(account.folder_id,
                                    account.profile_id)
+            redis_client.delete(f"lock:instagram:account:{account_id}")

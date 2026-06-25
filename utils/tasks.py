@@ -1455,7 +1455,7 @@ def has_more_older_messages(thread_responses: list, thread_key=None) -> bool:
 
 
 async def scroll_messages_until_seen(page, thread_responses, thread_key,
-                                     last_seen_ts=None, max_rounds=80,
+                                     last_seen_ts=None, max_rounds=200,
                                      wait_after_scroll=8.0, poll_interval=0.3):
     # last_seen = int(last_seen_ts) if last_seen_ts else None
     if last_seen_ts is None:
