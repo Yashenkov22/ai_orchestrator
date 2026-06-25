@@ -46,6 +46,7 @@ class WorkerSettings:
     queue_name = "arq:messages"
     redis_settings = redis_settings
     keep_result = 0
+    job_timeout = 900
     job_defaults = {
         'max_tries': 1, 
     }

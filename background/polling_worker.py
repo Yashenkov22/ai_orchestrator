@@ -46,6 +46,7 @@ class WorkerSettings:
     redis_settings = redis_settings
     max_jobs = 5
     keep_result = 0
+    job_timeout = 900
     job_defaults = {
         'max_tries': 1, 
     }
