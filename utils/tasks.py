@@ -2479,9 +2479,10 @@ async def playwright_send_message(message: Message,
 
                     print(f"[send] url={page.url}")
                     c = await page.locator('input[type=\"file\"]').count()
+                    w = await page.locator('div[role=\"textbox\"]').count()
                     print(f"[send] file inputs: {c}")
                     # есть ли композер (поле ввода сообщения)?
-                    print(f"[send] textbox: {await page.locator('div[role=\"textbox\"]').count()}")
+                    print(f"[send] textbox: {w}")
                     # не на approve-экране ли (кнопки Accept/Delete у реквестов)
                     body_snippet = (await page.locator('body').inner_text())[:200]
                     print(f"[send] body start: {body_snippet!r}")
