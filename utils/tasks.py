@@ -1293,7 +1293,7 @@ async def process_threads(
 
         if last_message_ts and current_thread.timestamp_last_seen_message:
             last_message_ts = datetime.fromtimestamp(int(last_message_ts) / 1000, tz=timezone.utc)
-            _last_activity = datetime.fromtimestamp(int(_last_activity) / 1000, tz=timezone.utc)
+            _last_activity = datetime.fromtimestamp(int(last_activity) / 1000, tz=timezone.utc)
             if current_thread.thread_id == '18071988617254182':
                 print('тут 22',last_message_ts, _last_activity, current_thread.timestamp_last_seen_message)
 
