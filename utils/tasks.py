@@ -2439,7 +2439,7 @@ async def playwright_send_message(message: Message,
         page = context.pages[0] if context.pages else await context.new_page()
 
         current_url = page.url
-        if 'instagram.com/direct/inbox' in current_url or current_url == f'https://www.instagram.com/direct/t/{message.thread.thread_id}/':
+        if current_url == f'https://www.instagram.com/direct/t/{message.thread.thread_id}/':
             await page.reload(wait_until='domcontentloaded')
         else:
             await page.goto(
@@ -2477,45 +2477,45 @@ async def playwright_send_message(message: Message,
 
                     media_url_for_send = f'{MEDIA_PATH}/{media_url}'
 
-                    print(f"[send] url={page.url}")
-                    c = await page.locator('input[type=\"file\"]').count()
-                    w = await page.locator('div[role=\"textbox\"]').count()
-                    print(f"[send] file inputs: {c}")
-                    # есть ли композер (поле ввода сообщения)?
-                    print(f"[send] textbox: {w}")
-                    # не на approve-экране ли (кнопки Accept/Delete у реквестов)
-                    body_snippet = (await page.locator('body').inner_text())[:200]
-                    print(f"[send] body start: {body_snippet!r}")
+                    # print(f"[send] url={page.url}")
+                    # c = await page.locator('input[type=\"file\"]').count()
+                    # w = await page.locator('div[role=\"textbox\"]').count()
+                    # print(f"[send] file inputs: {c}")
+                    # # есть ли композер (поле ввода сообщения)?
+                    # print(f"[send] textbox: {w}")
+                    # # не на approve-экране ли (кнопки Accept/Delete у реквестов)
+                    # body_snippet = (await page.locator('body').inner_text())[:200]
+                    # print(f"[send] body start: {body_snippet!r}")
 
                     try:
                         # берём именно тот input по accept или классу, не ждём видимости
-                        handle = await page.query_selector('input[type="file"]')
-                        if handle is None:
-                            # подстраховка: ждём появления в DOM (attached), но НЕ видимости
-                            await page.wait_for_selector('input[type="file"]', state='attached', timeout=15000)
-                            handle = await page.query_selector('input[type="file"]')
+                        # handle = await page.query_selector('input[type="file"]')
+                        # if handle is None:
+                        #     # подстраховка: ждём появления в DOM (attached), но НЕ видимости
+                        #     await page.wait_for_selector('input[type="file"]', state='attached', timeout=15000)
+                        #     handle = await page.query_selector('input[type="file"]')
 
-                        await handle.set_input_files(media_url_for_send)
-                        await asyncio.sleep(2.5)
-                        # inp = page.locator('input[type="file"]')
-
-                        # await inp.set_input_files(media_url_for_send)   # абсолютный путь
+                        # await handle.set_input_files(media_url_for_send)
                         # await asyncio.sleep(2.5)
+                        inp = page.locator('input[type="file"]')
 
-                        # # ждём появления превью вложения (кнопка "Remove")
-                        # await page.wait_for_selector(
-                        #     'button[aria-label^="Remove"], [aria-label^="Remove"]',
-                        #     timeout=20000)
+                        await inp.set_input_files(media_url_for_send)   # абсолютный путь
+                        await asyncio.sleep(2.5)
 
-                        # # Отправка через Enter в композере
-                        # box = page.locator('div[role="textbox"]').last
-                        # await box.click()
-                        # await page.keyboard.press("Enter")
+                        # ждём появления превью вложения (кнопка "Remove")
+                        await page.wait_for_selector(
+                            'button[aria-label^="Remove"], [aria-label^="Remove"]',
+                            timeout=20000)
 
-                        # # Подтверждение: кнопка удаления вложения исчезла = ушло
-                        # await page.wait_for_selector(
-                        #     'button[aria-label^="Remove"]',
-                        #     state="detached", timeout=20000)
+                        # Отправка через Enter в композере
+                        box = page.locator('div[role="textbox"]').last
+                        await box.click()
+                        await page.keyboard.press("Enter")
+
+                        # Подтверждение: кнопка удаления вложения исчезла = ушло
+                        await page.wait_for_selector(
+                            'button[aria-label^="Remove"]',
+                            state="detached", timeout=20000)
                         print("фото отправлено")
                         send_success = True
                     except Exception as ex:
