@@ -2477,6 +2477,14 @@ async def playwright_send_message(message: Message,
 
                     media_url_for_send = f'{MEDIA_PATH}/{media_url}'
 
+                    print(f"[send] url={page.url}")
+                    print(f"[send] file inputs: {await page.locator('input[type=\"file\"]').count()}")
+                    # есть ли композер (поле ввода сообщения)?
+                    print(f"[send] textbox: {await page.locator('div[role=\"textbox\"]').count()}")
+                    # не на approve-экране ли (кнопки Accept/Delete у реквестов)
+                    body_snippet = (await page.locator('body').inner_text())[:200]
+                    print(f"[send] body start: {body_snippet!r}")
+
                     try:
                         # берём именно тот input по accept или классу, не ждём видимости
                         handle = await page.query_selector('input[type="file"]')
