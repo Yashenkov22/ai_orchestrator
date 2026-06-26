@@ -1303,7 +1303,7 @@ async def process_threads(
                 #     print(last_message_ts, current_thread.timestamp_last_seen_message)
                 #     print('SKIP THIS THREAD CAUSE LAST MESSAGE IN RESPONSE EQUAL WITH LAST MESSAGE FROM DB')
                 #     print()
-                # continue
+                continue
             else:
                 current_thread.is_unread = True
                 # await update_thread_is_unread_by_id(current_thread.id,
