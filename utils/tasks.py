@@ -872,7 +872,7 @@ async def process_thread_messages(messages: list,
                 msg_data['text'] = admin_text
         elif ctype.startswith('REACTION'):
             # temporarily
-            continue
+            pass
 
         else:
             print('TYPE MESSAGE ->. ',ctype)
