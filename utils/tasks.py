@@ -28,7 +28,7 @@ from db.base import Message, Thread
 
 from utils.enums import MessageStatusEnum
 
-from utils.base import dismiss_notifications_popup
+from utils.base import dismiss_notifications_popup, generate_valid_media_url
 
 from config import VISION_BROWSER_HOST, MEDIA_PATH
 
@@ -2468,33 +2468,44 @@ async def playwright_send_message(message: Message,
                     _attachment = _attachments[0]
                     media_url = _attachment.media_url
 
-                    if media_url.startswith('./'):
-                        media_url = media_url[2:]
-                    if media_url.startswith('media/'):
-                        media_url = media_url[len('media/'):]
+                    media_url = generate_valid_media_url(media_url)
+
+                    # if media_url.startswith('./'):
+                    #     media_url = media_url[2:]
+                    # if media_url.startswith('media/'):
+                    #     media_url = media_url[len('media/'):]
 
                     media_url_for_send = f'{MEDIA_PATH}/{media_url}'
 
                     try:
-                        inp = page.locator('input[type="file"]')
+                        # берём именно тот input по accept или классу, не ждём видимости
+                        handle = await page.query_selector('input[type="file"]')
+                        if handle is None:
+                            # подстраховка: ждём появления в DOM (attached), но НЕ видимости
+                            await page.wait_for_selector('input[type="file"]', state='attached', timeout=15000)
+                            handle = await page.query_selector('input[type="file"]')
 
-                        await inp.set_input_files(media_url_for_send)   # абсолютный путь
+                        await handle.set_input_files(media_url_for_send)
                         await asyncio.sleep(2.5)
+                        # inp = page.locator('input[type="file"]')
 
-                        # ждём появления превью вложения (кнопка "Remove")
-                        await page.wait_for_selector(
-                            'button[aria-label^="Remove"], [aria-label^="Remove"]',
-                            timeout=20000)
+                        # await inp.set_input_files(media_url_for_send)   # абсолютный путь
+                        # await asyncio.sleep(2.5)
 
-                        # Отправка через Enter в композере
-                        box = page.locator('div[role="textbox"]').last
-                        await box.click()
-                        await page.keyboard.press("Enter")
+                        # # ждём появления превью вложения (кнопка "Remove")
+                        # await page.wait_for_selector(
+                        #     'button[aria-label^="Remove"], [aria-label^="Remove"]',
+                        #     timeout=20000)
 
-                        # Подтверждение: кнопка удаления вложения исчезла = ушло
-                        await page.wait_for_selector(
-                            'button[aria-label^="Remove"]',
-                            state="detached", timeout=20000)
+                        # # Отправка через Enter в композере
+                        # box = page.locator('div[role="textbox"]').last
+                        # await box.click()
+                        # await page.keyboard.press("Enter")
+
+                        # # Подтверждение: кнопка удаления вложения исчезла = ушло
+                        # await page.wait_for_selector(
+                        #     'button[aria-label^="Remove"]',
+                        #     state="detached", timeout=20000)
                         print("фото отправлено")
                         send_success = True
                     except Exception as ex:
