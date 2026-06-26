@@ -1293,6 +1293,7 @@ async def process_threads(
         if last_message_ts and current_thread.timestamp_last_seen_message:
             last_message_ts = datetime.fromtimestamp(int(last_message_ts) / 1000, tz=timezone.utc)
             if last_message_ts <= current_thread.timestamp_last_seen_message:
+                print(last_message_ts, current_thread.timestamp_last_seen_message)
                 print('SKIP THIS THREAD CAUSE LAST MESSAGE IN RESPONSE EQUAL WITH LAST MESSAGE FROM DB')
                 # continue
             else:
