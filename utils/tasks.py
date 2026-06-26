@@ -2475,7 +2475,7 @@ async def playwright_send_message(message: Message,
                     # if media_url.startswith('media/'):
                     #     media_url = media_url[len('media/'):]
 
-                    media_url_for_send = f'{MEDIA_PATH}/{media_url}'
+                    # media_url_for_send = f'{MEDIA_PATH}/{media_url}'
 
                     # print(f"[send] url={page.url}")
                     # c = await page.locator('input[type=\"file\"]').count()
@@ -2499,7 +2499,7 @@ async def playwright_send_message(message: Message,
                         # await asyncio.sleep(2.5)
                         inp = page.locator('input[type="file"]')
 
-                        await inp.set_input_files(media_url_for_send)   # абсолютный путь
+                        await inp.set_input_files(media_url)   # абсолютный путь
                         await asyncio.sleep(2.5)
 
                         # ждём появления превью вложения (кнопка "Remove")
