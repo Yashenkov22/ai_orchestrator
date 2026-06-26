@@ -1246,6 +1246,7 @@ async def process_threads(
 
     for thread in threads:
         last_message_ts = thread.get('last_message_ts')
+        last_activity = thread.get('last_activity')
 
         try:
             insta_user = thread['users'][0]
@@ -1292,9 +1293,16 @@ async def process_threads(
 
         if last_message_ts and current_thread.timestamp_last_seen_message:
             last_message_ts = datetime.fromtimestamp(int(last_message_ts) / 1000, tz=timezone.utc)
+            _last_activity = datetime.fromtimestamp(int(_last_activity) / 1000, tz=timezone.utc)
+            if current_thread.thread_id == '18071988617254182':
+                print('тут 22',last_message_ts, _last_activity, current_thread.timestamp_last_seen_message)
+
             if last_message_ts <= current_thread.timestamp_last_seen_message:
-                print(last_message_ts, current_thread.timestamp_last_seen_message)
                 print('SKIP THIS THREAD CAUSE LAST MESSAGE IN RESPONSE EQUAL WITH LAST MESSAGE FROM DB')
+                # if current_thread.thread_id == '18071988617254182':
+                #     print(last_message_ts, current_thread.timestamp_last_seen_message)
+                #     print('SKIP THIS THREAD CAUSE LAST MESSAGE IN RESPONSE EQUAL WITH LAST MESSAGE FROM DB')
+                #     print()
                 # continue
             else:
                 current_thread.is_unread = True
@@ -1307,8 +1315,8 @@ async def process_threads(
             #                                     _session)
             # current_thread.is_unread = True
         await execute_and_catch_db_error(_session.commit(),
-                                            _session,
-                                            with_rollback=True)
+                                          _session,
+                                          with_rollback=True)
             # continue
         
     #     thread_responses.clear()
