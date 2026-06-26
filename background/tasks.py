@@ -11,10 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 
 from db.base import Account, get_session
-from db.queries import execute_and_catch_db_error, get_message_by_id, get_account_by_id, get_thread_by_id
+from db.queries import execute_and_catch_db_error, get_message_by_id, get_account_by_id, get_thread_by_id, get_threads_by_id
 
 from utils.base import get_active_profiles, try_start_profile, try_stop_profile, try_connect_to_main_instagram_page
-from utils.tasks import parse_thread_playwright, playwright_send_message, test_playwright
+from utils.tasks import parse_thread_list_playwright, parse_thread_playwright, playwright_send_message, test_playwright
 
 from .base import get_redis_pool, acquire_lock, release_lock, redis_client
 
@@ -91,19 +91,67 @@ async def parse_account(cxt,
     try:
         if profile_port:
 
-            await sleep(10)
+            await sleep(5)
             
             async with sessionmaker() as _session:
                 await test_playwright(account_id,
                                     profile_port,
                                     _session)
 
-            await sleep(10)
+            await sleep(5)
 
             stopped_profile = await try_stop_profile(folder_id,
                                                     profile_id)
     finally:
         release_lock(account_id, lock_value)
+
+
+# async def parse_account_threads(cxt,
+#                                 account_id: int,
+#                                 thread_ids: list[int]):
+#     print(f'TASK PARSE ACCOUNT THREADS WITH ID {account_id} ✅')
+
+#     sessionmaker = cxt["sessionmaker"]
+
+#     async with sessionmaker() as _session:
+#         account = await get_account_by_id(account_id,
+#                                           _session)
+#         threads = await get_threads_by_id(thread_ids,
+#                                            _session)
+    
+#         if not account or not threads:
+#             return
+        
+#         available_lock = acquire_lock(account.id)
+
+#         if not available_lock:
+#             return
+
+#         actived_profile = await try_start_profile(account.folder_id,
+#                                                 account.profile_id)
+            
+#         print(actived_profile)
+        
+#         profile_port = actived_profile.get('port')
+
+#         print('PORT', profile_port)
+
+#         try:
+#             if profile_port:
+
+#                 await sleep(5)
+                
+#                 await parse_thread_list_playwright(account_id,
+#                                                     threads,
+#                                                     profile_port,
+#                                                     _session)
+
+#                 await sleep(5)
+
+#                 stopped_profile = await try_stop_profile(account.folder_id,
+#                                                         account.profile_id)
+#         finally:
+#             release_lock(account_id, available_lock)
 
 
 async def parse_thread(cxt,
@@ -129,7 +177,7 @@ async def parse_thread(cxt,
 
     actived_profile = await try_start_profile(account.folder_id,
                                               account.profile_id)
-        
+
     print(actived_profile)
     
     profile_port = actived_profile.get('port')
@@ -139,7 +187,7 @@ async def parse_thread(cxt,
     try:
         if profile_port:
 
-            await sleep(10)
+            await sleep(5)
             
             async with sessionmaker() as _session:
                 _session: AsyncSession
@@ -149,7 +197,7 @@ async def parse_thread(cxt,
                                                 profile_port,
                                                 _session)
 
-            await sleep(10)
+            await sleep(5)
 
             stopped_profile = await try_stop_profile(account.folder_id,
                                                     account.profile_id)
@@ -215,7 +263,7 @@ async def send_message_to_thread(cxt,
 
                     if profile_port:
                         
-                        await sleep(10)
+                        await sleep(5)
 
                         attachments = msg.attachments
 
@@ -229,7 +277,7 @@ async def send_message_to_thread(cxt,
                                                       _session,
                                                       media_type)      
 
-                        await sleep(10)
+                        await sleep(5)
 
                         stopped_profile = await try_stop_profile(folder_id,
                                                                 profile_id)

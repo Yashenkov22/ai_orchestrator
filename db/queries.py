@@ -218,6 +218,22 @@ async def get_thread_by_id(_id: int,
     return message.scalar_one_or_none()
 
 
+async def get_threads_by_id(ids: list[int],
+                            _session: AsyncSession) -> Message | None:
+
+    query = (
+        select(Thread)\
+        .options(selectinload(Thread.insta_user),
+                 selectinload(Thread.account))
+        .where(Thread.id.in_(ids))
+    )
+    
+    message = await execute_and_catch_db_error(_session.execute(query),
+                                               _session)
+    
+    return message.scalars().all()
+
+
 async def save_refresh_token_for_user(admin: Admin,
                                       refresh_token: str,
                                       _session: AsyncSession):

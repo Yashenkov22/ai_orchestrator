@@ -256,6 +256,7 @@ class Thread(Base):
     )
     is_approved = Column(Boolean, default=False)
     # is_spam = Column(Boolean, default=False)
+    #is_empty/is_new = Column(Boolean, default=True)
     insta_user_id = Column(
         BigInteger,
         ForeignKey("users.id",

@@ -2268,6 +2268,110 @@ async def parse_thread_playwright(account_id: int,
 
 #####
 
+async def parse_thread_list_playwright(account_id: int,
+                                       threads: list[Thread],
+                                       profile_port: int,
+                                       _session: AsyncSession):
+    collected_data = {}
+    thread_responses = []
+    inbox_received = asyncio.Event()
+    thread_received = asyncio.Event()
+    request_message_received = asyncio.Event()
+
+    async with async_playwright() as p:
+        browser = await p.chromium.connect_over_cdp(f'http://{VISION_BROWSER_HOST}:{profile_port}')
+        print(f"CONNECTED ON {profile_port} PORT")
+
+        context = browser.contexts[0] if browser.contexts else await browser.new_context()
+        page = context.pages[0] if context.pages else await context.new_page()
+
+        async def on_response(response):
+            req = response.request
+            if req.resource_type not in ('xhr', 'fetch'):
+                return
+            url = response.url
+            if req.resource_type in ('xhr', 'fetch'):
+                fn = extract_friendly_name(req.post_data) if req.post_data else None
+            if '/api/graphql' not in url and '/graphql/query' not in url:
+                return
+            if not req.post_data:
+                return
+
+            friendly_name = extract_friendly_name(req.post_data)
+            variables = extract_variables(req.post_data)
+
+            if friendly_name not in TARGET_QUERIES:
+                return
+
+            try:
+                body = await response.text()
+                parsed = parse_ig_response(body)
+
+                key = friendly_name
+                if variables and 'folder' in variables:
+                    key = f"{friendly_name}:{variables['folder']}"
+
+                # if friendly_name == 'IGDMessageListOffMsysQuery':
+                #     thread_responses.append(parsed)
+                #     thread_received.set()
+
+                # if friendly_name == 'IGDThreadDetailQuery':
+                #     thread_responses.append(parsed)
+                #     thread_received.set()
+                # else:
+                #     collected_data.setdefault(key, []).append(parsed)
+
+                # if friendly_name == 'PolarisDirectInboxQuery':
+                #     inbox_received.set()
+
+                # if friendly_name == 'PolarisDirectMessageRequestQuery':
+                #     request_message_received.set()
+                if friendly_name in ('IGDMessageListOffMsysQuery', 'IGDThreadDetailQuery'):
+                    thread_responses.append(parsed)
+                    thread_received.set()
+                elif friendly_name == 'PolarisDirectInboxQuery':
+                    collected_data.setdefault(key, []).append(parsed)
+                    inbox_received.set()
+                elif friendly_name == 'PolarisDirectMessageRequestQuery':
+                    collected_data.setdefault(key, []).append(parsed)
+                    request_message_received.set()
+                else:
+                    collected_data.setdefault(key, []).append(parsed)
+
+            except Exception as e:
+                print(f"[ERROR] {friendly_name}: {e}")
+
+        page.on("response", on_response)
+
+        for thread in threads:
+            thread_responses.clear()
+            thread_received.clear()
+            collected_data.clear()
+            
+            current_url = page.url
+            if current_url.startswith(f'https://www.instagram.com/direct/t/{thread.thread_id}'):
+                await page.reload(wait_until='domcontentloaded')
+            else:
+                await page.goto(
+                    f'https://www.instagram.com/direct/t/{thread.thread_id}/',
+                    wait_until='domcontentloaded'
+                )
+
+            await asyncio.sleep(3)
+
+            await dismiss_notifications_popup(page)
+
+            try:
+                await asyncio.wait_for(inbox_received.wait(), timeout=15)
+                print("Thread received!")
+            except asyncio.TimeoutError:
+                print("Thread timeout")
+
+            await page.wait_for_timeout(2000)
+
+            await process_thread(thread, account_id, page,
+                                thread_responses, thread_received, _session)
+
 
 
 async def approve_request_chat(page, thread_url: str):
