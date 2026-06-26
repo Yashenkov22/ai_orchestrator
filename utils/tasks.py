@@ -829,6 +829,7 @@ async def process_thread_messages(messages: list,
 
         try:
             if thread.timestamp_last_seen_message and thread.timestamp_last_seen_message >= valid_ts:
+                print(valid_ts, thread.timestamp_last_seen_message)
                 print('ALL NEW MESSAGES', all_messages)
                 break
         except Exception as ex:
