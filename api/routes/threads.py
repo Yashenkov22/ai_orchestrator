@@ -38,10 +38,8 @@ async def get_threads(admin: admin_dependency,
             joinedload(Thread.insta_user)
         )\
         .order_by(
-            and_(
-                Thread.is_unread.desc(),
-                Thread.timestamp_last_seen_message.desc()
-            )
+            Thread.is_unread.desc(),
+            Thread.timestamp_last_seen_message.desc()
         )
     )
     threads = result.scalars().all()
@@ -79,11 +77,9 @@ async def get_threads_by_account_id(account_id: int,
             Thread.account_id == account_id
         )\
         .order_by(
-            and_(
-                Thread.is_unread.desc(),
-                Thread.timestamp_last_seen_message.desc()
+            Thread.is_unread.desc(),
+            Thread.timestamp_last_seen_message.desc()
             )
-        )
     )
     threads = result.scalars().all()
     thread_list = []
