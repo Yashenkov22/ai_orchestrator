@@ -1735,9 +1735,13 @@ async def test_playwright(account_id: int,
                               thread_responses, thread_received, redis_pool, _session)
         
         await asyncio.sleep(2)
-
-        await page.close()
-
+        
+        try:
+            page.remove_listener("response", on_response)
+            await page.close()
+            await asyncio.sleep(1)
+        except Exception as ex:
+            print('ERROR WITH CLOSE PAGE',ex)
         # === 2. Message Requests + Spam ===
 
         # request_message_received.clear()
@@ -1903,9 +1907,9 @@ async def parse_thread_playwright(account: Account,
         await process_thread(thread, account.id, detail_thread_page,
                               thread_responses, thread_received, _session)
         
-        await asyncio.sleep(2)
-
+        detail_thread_page.remove_listener("response", on_response)
         await detail_thread_page.close()
+        await asyncio.sleep(1)
 
         # # === 2. Message Requests + Spam ===
 
@@ -2297,9 +2301,10 @@ async def playwright_send_message(message: Message,
                 print(ex)
                 pass
 
-        asyncio.sleep(2)
-
+        
+        thread_for_send_message_page.remove_listener("response", on_response)
         await thread_for_send_message_page.close()
+        asyncio.sleep(1)
         
         if send_success:
             message.status = 'approved'
