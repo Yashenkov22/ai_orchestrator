@@ -1650,8 +1650,9 @@ async def test_playwright(account_id: int,
             browser = await p.chromium.connect_over_cdp(f'http://{VISION_BROWSER_HOST}:{new_profile_port}')
             print(f"CONNECTED ON {profile_port} PORT")
         
-        context = browser.contexts[0] if browser.contexts else await browser.new_context()
+        # context = browser.contexts[0] if browser.contexts else await browser.new_context()
         # page = context.pages[0] if context.pages else await context.new_page()
+        context = await browser.new_context()
         page = await context.new_page()
 
 
@@ -1809,7 +1810,8 @@ async def parse_thread_playwright(account: Account,
             browser = await p.chromium.connect_over_cdp(f'http://{VISION_BROWSER_HOST}:{new_profile_port}')
             print(f"CONNECTED ON {profile_port} PORT")
 
-        context = browser.contexts[0] if browser.contexts else await browser.new_context()
+        # context = browser.contexts[0] if browser.contexts else await browser.new_context()
+        context = await browser.new_context()
         detail_thread_page = await context.new_page()
 
         async def on_response(response):
@@ -2122,7 +2124,8 @@ async def playwright_send_message(message: Message,
             browser = await p.chromium.connect_over_cdp(f'http://{VISION_BROWSER_HOST}:{new_profile_port}')
             print(f"CONNECTED ON {profile_port} PORT")
         
-        context = browser.contexts[0] if browser.contexts else await browser.new_context()
+        # context = browser.contexts[0] if browser.contexts else await browser.new_context()
+        context = await browser.new_context()
         thread_for_send_message_page = await context.new_page()
 
         async def on_response(response):
