@@ -39,7 +39,7 @@ class WorkerSettings:
     functions = [
         send_message_to_thread,
         try_start_stop_vision_profile_by_account_id,
-        parse_thread,
+        # parse_thread,
         ]
     on_startup = startup
     on_shutdown = shutdown
