@@ -2125,6 +2125,11 @@ async def playwright_send_message(message: Message,
             print(f"CONNECTED ON {profile_port} PORT")
         
         context = browser.contexts[0] if browser.contexts else await browser.new_context()
+        
+        # value for limit page count in one time
+        if len(context.pages) >= 6:
+            raise Retry(defer=5)
+        
         # context = await browser.new_context()
         thread_for_send_message_page = await context.new_page()
 
@@ -2187,9 +2192,9 @@ async def playwright_send_message(message: Message,
         thread_for_send_message_page.on("response", on_response)
 
 
-        # value for limit page count in one time
-        if len(context.pages) >= 6:
-            raise Retry(defer=5)
+        # # value for limit page count in one time
+        # if len(context.pages) >= 6:
+        #     raise Retry(defer=5)
 
         await thread_for_send_message_page.goto(
             f'https://www.instagram.com/direct/t/{message.thread.thread_id}/',
@@ -2317,10 +2322,20 @@ async def playwright_send_message(message: Message,
         await asyncio.sleep(1)
         
         if send_success:
-            message.status = 'approved'
+            msg = await get_message_only_by_id(message.id,
+                                               session)
+            
+            # if msg:
+
+            #     msg.status = MessageStatusEnum.REJECTED
+
+            #     await execute_and_catch_db_error(session.commit(),
+            #                                     session,
+            #                                     with_rollback=True)
+            msg.status = 'approved'
             ts = datetime.now(tz=timezone.utc)
-            message.created_at = ts
-            message.updated_at = ts
+            msg.created_at = ts
+            msg.updated_at = ts
             thread.timestamp_last_seen_message = ts
             thread.is_unread = False
 
