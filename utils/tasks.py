@@ -1812,6 +1812,10 @@ async def parse_thread_playwright(account: Account,
 
         context = browser.contexts[0] if browser.contexts else await browser.new_context()
         # context = await browser.new_context()
+
+        if len(context.pages) >= 6:
+            raise Retry(defer=5)
+
         detail_thread_page = await context.new_page()
 
         async def on_response(response):
@@ -1878,8 +1882,8 @@ async def parse_thread_playwright(account: Account,
         # if current_url.startswith(f'https://www.instagram.com/direct/t/{thread.thread_id}'):
         #     await page.reload(wait_until='domcontentloaded')
         # else:
-        if len(context.pages) >= 6:
-            raise Retry(defer=5)
+        # if len(context.pages) >= 6:
+        #     raise Retry(defer=5)
 
         await detail_thread_page.goto(
             f'https://www.instagram.com/direct/t/{thread.thread_id}/',
