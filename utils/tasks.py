@@ -21,7 +21,7 @@ from playwright.async_api import async_playwright
 
 from background.base import acquire_task_lock
 from db.queries import (check_insta_user, check_new_messages_in_thread,
-                        check_thread_in_db, get_message_only_by_id,
+                        check_thread_in_db, get_message_only_by_id, get_thread_by_id,
                         try_add_insta_user,
                         try_add_messages,
                         try_add_new_thread,
@@ -2210,8 +2210,11 @@ async def playwright_send_message(message: Message,
         
         # check new messages in this thread
 
-        has_new_messages = await process_thread(message.thread,
-                                                message.thread.account_id,
+        thread = await get_thread_by_id(message.thread_id,
+                                        session)
+        
+        has_new_messages = await process_thread(thread,
+                                                thread,
                                                 thread_for_send_message_page,
                                                 thread_responses,
                                                 thread_received,
@@ -2232,7 +2235,7 @@ async def playwright_send_message(message: Message,
                 
                 thread_for_send_message_page.remove_listener("response", on_response)
                 await thread_for_send_message_page.close()
-                asyncio.sleep(1)
+                await asyncio.sleep(1)
 
                 return
 
