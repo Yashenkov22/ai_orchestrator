@@ -210,6 +210,16 @@ async def try_start_profile(folder_id: str,
         raise
 
 
+async def try_get_profile_port(folder_id: str,
+                               profile_id: str):
+    actived_profile = await try_start_profile(folder_id,
+                                              profile_id)
+    
+    print(actived_profile)
+    
+    return actived_profile.get('port')
+
+
 async def try_stop_profile(folder_id: str,
                            profile_id: str):
     headers = {

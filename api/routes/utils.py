@@ -136,7 +136,7 @@ async def test_hander(admin: admin_dependency,
                       message_text: str):
     success = await try_update_message_text(message_id,
                                             message_text,
-                                  session)
+                                            session)
     if success:
         job = await arq_pool.enqueue_job(
             'send_message_to_thread',

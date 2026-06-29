@@ -178,7 +178,7 @@ async def get_message_by_id(_id: int,
     query = (
         select(Message)
         .options(selectinload(Message.attachments),
-                 selectinload(Message.thread))
+                 selectinload(Message.thread).selectinload(Thread.insta_user))
         .where(Message.id == _id)
     )
     
@@ -562,8 +562,9 @@ async def try_add_messages(message_data: dict,
 
         thread.timestamp_last_seen_message = ts
 
-        if mark_as_unread is not None:
-            thread.is_unread = mark_as_unread
+        # if mark_as_unread is not None:
+        #     thread.is_unread = mark_as_unread
+        is_unread = sender == 'user'
 
         context_from_db = thread.context or ''
 
@@ -573,11 +574,12 @@ async def try_add_messages(message_data: dict,
                                              for_db=True)
 
         thread.context = new_context
-        thread.is_unread = False
+        thread.is_unread = is_unread
 
         await execute_and_catch_db_error(session.commit(),
                                         session,
                                         with_rollback=True)
+        
         
     
 

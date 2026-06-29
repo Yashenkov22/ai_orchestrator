@@ -231,6 +231,15 @@ class EditThreadColorLevelSchema(BaseModel):
     color_level: ThreadColorEnum
 
 
+class EditThreadUnreadMarkSchema(BaseModel):
+    thread_id: int
+
+
+class EditThreadNotesSchema(BaseModel):
+    thread_id: int
+    notes: str | None
+
+
 class AttachmentSchema(BaseModel):
     media_type: str
     media_url: str
@@ -271,6 +280,7 @@ class DetailThreadSchema(BaseModel):
     account_information: AccountInformationSchema | None
     user_information: UserInformationSchema | None
     context: str | None
+    notes: str | None
     messages: list[MessageSchema]
 
 

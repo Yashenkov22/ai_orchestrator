@@ -264,6 +264,7 @@ class Thread(Base):
         nullable=True,
         default=None,
     )
+    notes = Column(Text)
     is_unread = Column(Boolean,
                        default=True)
     user_information = Column(JSONB,

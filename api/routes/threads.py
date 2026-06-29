@@ -13,7 +13,7 @@ from db.base import (Message,
                      Thread)
 
 from utils.schemas import (DetailThreadSchema,
-                           EditThreadColorLevelSchema,
+                           EditThreadColorLevelSchema, EditThreadNotesSchema, EditThreadUnreadMarkSchema,
                            ThreadSchema)
 from utils.dependencies import (admin_dependency,
                                 session_dependency)
@@ -166,7 +166,8 @@ async def get_threads(admin: admin_dependency,
     }
     
     thread_info['context'] = thread.context or ''
-
+    thread_info['notes'] = thread.notes or ''
+    
     if messages:
         
         for message in messages:
@@ -239,3 +240,81 @@ async def edit_color_level_by_thread_id(data: EditThreadColorLevelSchema,
                                               with_rollback=True)
     
     await session.commit()
+
+
+@thread_router.patch("/edit_unread_mark")
+async def edit_unread_mark_by_thread_id(data: EditThreadUnreadMarkSchema,
+                                        admin: admin_dependency,
+                                        session: session_dependency):
+    query = (
+        select(1)
+        .where(
+            Thread.id == data.thread_id,
+        )
+    )
+
+    result = await execute_and_catch_db_error(session.execute(query),
+                                              session)
+    
+    check_exist = result.scalar_one_or_none()
+
+    if not check_exist:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Thread not found')
+    
+    update_query = (
+        update(
+            Thread
+        )\
+        .values(is_unread=False)\
+        .where(
+            Thread.id == data.thread_id,
+        )
+    )
+
+    result = await execute_and_catch_db_error(session.execute(update_query),
+                                              session,
+                                              with_rollback=True)
+    
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)
+    
+
+@thread_router.patch("/edit_thread_notes")
+async def edit_notes_by_thread_id(data: EditThreadNotesSchema,
+                                        admin: admin_dependency,
+                                        session: session_dependency):
+    query = (
+        select(1)
+        .where(
+            Thread.id == data.thread_id,
+        )
+    )
+
+    result = await execute_and_catch_db_error(session.execute(query),
+                                              session)
+    
+    check_exist = result.scalar_one_or_none()
+
+    if not check_exist:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Thread not found')
+    
+    update_query = (
+        update(
+            Thread
+        )\
+        .values(notes=data.notes)\
+        .where(
+            Thread.id == data.thread_id,
+        )
+    )
+
+    result = await execute_and_catch_db_error(session.execute(update_query),
+                                              session,
+                                              with_rollback=True)
+    
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)

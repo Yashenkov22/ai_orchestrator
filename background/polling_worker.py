@@ -29,6 +29,8 @@ async def startup(ctx):
     scheduler.start()
     ctx['scheduler'] = scheduler
     ctx['sessionmaker'] = session
+    ctx['redis_pool'] = _redis_pool
+    
     print("Worker for account polling is starting up...")
 
 async def shutdown(ctx):
