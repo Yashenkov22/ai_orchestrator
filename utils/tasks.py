@@ -2311,15 +2311,15 @@ async def playwright_send_message(message: Message,
  
         thread_for_send_message_page.remove_listener("response", on_response)
         await thread_for_send_message_page.close()
-        asyncio.sleep(1)
+        await asyncio.sleep(1)
         
         if send_success:
             message.status = 'approved'
             ts = datetime.now(tz=timezone.utc)
             message.created_at = ts
             message.updated_at = ts
-            message.thread.timestamp_last_seen_message = ts
-            message.thread.is_unread = False
+            thread.timestamp_last_seen_message = ts
+            thread.is_unread = False
 
             await execute_and_catch_db_error(session.commit(),
                                              session,
