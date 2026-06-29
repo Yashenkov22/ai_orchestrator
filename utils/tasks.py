@@ -1876,7 +1876,7 @@ async def parse_thread_playwright(account: Account,
         # if current_url.startswith(f'https://www.instagram.com/direct/t/{thread.thread_id}'):
         #     await page.reload(wait_until='domcontentloaded')
         # else:
-        if len(context.pages) >= 5:
+        if len(context.pages) >= 6:
             raise Retry(defer=5)
 
         await detail_thread_page.goto(
@@ -2185,7 +2185,7 @@ async def playwright_send_message(message: Message,
 
 
         # value for limit page count in one time
-        if len(context.pages) >= 5:
+        if len(context.pages) >= 6:
             raise Retry(defer=5)
 
         await thread_for_send_message_page.goto(
@@ -2229,6 +2229,11 @@ async def playwright_send_message(message: Message,
                 await execute_and_catch_db_error(session.commit(),
                                                 session,
                                                 with_rollback=True)
+                
+                thread_for_send_message_page.remove_listener("response", on_response)
+                await thread_for_send_message_page.close()
+                asyncio.sleep(1)
+
                 return
 
         if media:
@@ -2300,8 +2305,7 @@ async def playwright_send_message(message: Message,
             except Exception as ex:
                 print(ex)
                 pass
-
-        
+ 
         thread_for_send_message_page.remove_listener("response", on_response)
         await thread_for_send_message_page.close()
         asyncio.sleep(1)
