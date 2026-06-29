@@ -1528,8 +1528,8 @@ async def process_thread(
         messages_data = await process_thread_messages(
             messages, thread, user_insta_id, thread_key
         )
-        await try_add_messages(messages_data, thread, _session)
-        return True
+        return await try_add_messages(messages_data, thread, _session)
+        # return True
     else:
         print(f"No matching data found for thread {thread_key}")
 
@@ -2214,7 +2214,7 @@ async def playwright_send_message(message: Message,
                                         session)
         
         has_new_messages = await process_thread(thread,
-                                                thread,
+                                                thread.account_id,
                                                 thread_for_send_message_page,
                                                 thread_responses,
                                                 thread_received,

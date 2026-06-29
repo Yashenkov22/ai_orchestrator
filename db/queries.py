@@ -558,29 +558,29 @@ async def try_add_messages(message_data: dict,
                 _text = f'{new_message.text} | {new_message.created_at} | {new_message.sender}'
                 unread_messages_text += _text
 
-        session.add_all(insert_messages)
+        if insert_messages:
+            session.add_all(insert_messages)
 
-        thread.timestamp_last_seen_message = ts
+            thread.timestamp_last_seen_message = ts
 
-        # if mark_as_unread is not None:
-        #     thread.is_unread = mark_as_unread
-        is_unread = sender == 'user'
+            # if mark_as_unread is not None:
+            #     thread.is_unread = mark_as_unread
+            is_unread = sender == 'user'
 
-        context_from_db = thread.context or ''
+            context_from_db = thread.context or ''
 
-        text_for_ai = 'Контекст:\n' + context_from_db + '\nНовые сообщения:\n' + unread_messages_text
+            text_for_ai = 'Контекст:\n' + context_from_db + '\nНовые сообщения:\n' + unread_messages_text
 
-        new_context = await ai_generate_text(text=text_for_ai,
-                                             for_db=True)
+            new_context = await ai_generate_text(text=text_for_ai,
+                                                for_db=True)
 
-        thread.context = new_context
-        thread.is_unread = is_unread
+            thread.context = new_context
+            thread.is_unread = is_unread
 
-        await execute_and_catch_db_error(session.commit(),
-                                        session,
-                                        with_rollback=True)
-        
-        
+            await execute_and_catch_db_error(session.commit(),
+                                            session,
+                                            with_rollback=True)
+            return True
     
 
 async def check_new_messages_in_thread(message: Message,
