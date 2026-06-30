@@ -1657,6 +1657,7 @@ async def test_playwright(account_id: int,
 
 
         async def on_response(response):
+                    pagination_counter = 0
                     req = response.request
                     if req.resource_type not in ('xhr', 'fetch'):
                         return
@@ -1696,6 +1697,16 @@ async def test_playwright(account_id: int,
                                     print("[mailbox-page] data keys:", list(sample.get('data', {}).keys()))
                             except Exception:
                                 pass
+                            
+                            if account_id == 8:
+                                pagination_counter += 1
+
+                                print(
+                                    "Pagination",
+                                    pagination_counter,
+                                    "pages stored:",
+                                    len(collected_data.setdefault("SlideMailboxPages", []))
+                                )
                             collected_data.setdefault('SlideMailboxPages', []).append(parsed)
 
                         else:
