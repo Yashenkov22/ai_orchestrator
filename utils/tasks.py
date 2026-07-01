@@ -1302,7 +1302,7 @@ async def process_threads(
                 print('SKIP THIS THREAD CAUSE LAST MESSAGE IN RESPONSE EQUAL WITH LAST MESSAGE FROM DB')
                 continue
             else:
-                current_thread.is_unread = True
+                # current_thread.is_unread = True
                 # add background task to queue
                 job = await redis_pool.enqueue_job(
                     'parse_thread',
@@ -1313,7 +1313,7 @@ async def process_threads(
                 # return {"status": "queued", "job_id": job.job_id}
         
         else:
-            current_thread.is_unread = True
+            # current_thread.is_unread = True
             # add background task to queue
             job = await redis_pool.enqueue_job(
                 'parse_thread',

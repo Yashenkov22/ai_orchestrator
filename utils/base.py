@@ -251,7 +251,8 @@ async def try_connect_to_main_instagram_page(profile_port: int):
             browser = await p.chromium.connect_over_cdp(f'http://{VISION_BROWSER_HOST}:{profile_port}')
             print(f"CONNECTED ON {profile_port} PORT")
 
-            context = await browser.new_context()
+            # context = await browser.new_context()
+            context = browser.contexts[0] if browser.contexts else await browser.new_context()
             page = await context.new_page()
 
             current_url = page.url

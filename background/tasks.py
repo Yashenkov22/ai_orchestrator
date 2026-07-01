@@ -165,7 +165,7 @@ async def parse_thread(cxt,
                                   thread_id)
 
     if not available_lock:
-        raise Retry(defer=5)
+        raise Retry(defer=15)
 
     actived_profile = await try_start_profile(account.folder_id,
                                               account.profile_id)
@@ -231,7 +231,7 @@ async def send_message_to_thread(cxt,
                                         message.thread_id)
 
         if not available_lock:
-            raise Retry(defer=5)
+            raise Retry(defer=15)
         
         _key = f'lock:send_message:acc:{account.id}:msg:{message_id}'
         task_lock = acquire_task_lock(_key)
@@ -313,9 +313,9 @@ async def try_start_stop_vision_profile_by_account_id(cxt,
 
             print('PORT', profile_port)
 
-            if warning_message:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                                    detail=warning_message)
+            # if warning_message:
+            #     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+            #                         detail=warning_message)
 
             if profile_port:
                 is_success = await try_connect_to_main_instagram_page(profile_port)
