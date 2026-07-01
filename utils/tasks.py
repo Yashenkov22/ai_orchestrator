@@ -1689,7 +1689,8 @@ async def test_playwright(account_id: int,
                             thread_received.set()
 
                         # пагинация списка чатов (бизнес-аккаунт) — накапливаем отдельно
-                        elif friendly_name == 'IGDThreadListProfessionalOffMsysPaginationQuery':
+                        elif friendly_name in ('IGDThreadListProfessionalOffMsysPaginationQuery',
+                                               'IGDThreadListOffMsysPaginationQuery'):
                             # разовая диагностика структуры
                             try:
                                 sample = parsed[0] if isinstance(parsed, list) and parsed else parsed
