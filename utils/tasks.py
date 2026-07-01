@@ -2146,7 +2146,7 @@ async def playwright_send_message(message: Message,
         
         # value for limit page count in one time
         if len(context.pages) >= 6:
-            raise Retry(defer=5)
+            raise Retry(defer=15)
         
         # context = await browser.new_context()
         thread_for_send_message_page = await context.new_page()
