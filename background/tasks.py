@@ -205,7 +205,7 @@ async def send_message_to_thread(cxt,
         .where(
             and_(
                 Account.folder_id.isnot(None),
-                Account.profile_id.isnot(None),
+                    Account.profile_id.isnot(None),
                 Account.is_active == True,
                 Account.id == account_id,
             )
@@ -224,12 +224,14 @@ async def send_message_to_thread(cxt,
                                         _session)
 
     if not account or not message:
+        print('error 1')
         return
     
     available_lock = acquire_lock(account.id,
                                     message.thread_id)
 
     if not available_lock:
+        print('error 2')
         raise Retry(defer=15)
     
     try:
@@ -275,7 +277,9 @@ async def send_message_to_thread(cxt,
                                                     folder_id,
                                                     profile_id,
                                                     _session,
-                                                    media_type)      
+                                                    media_type)  
+        else:
+            print('error 3')
 
     except Exception as ex:
         print('ERROR WITH TRY SEND MESSAGE', ex)
