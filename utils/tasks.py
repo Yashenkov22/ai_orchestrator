@@ -1724,39 +1724,40 @@ async def test_playwright(account_id: int,
                     except Exception as e:
                         print(f"[ERROR] {friendly_name}: {e}")
 
-        page.on("response", on_response)
+        try:
+            page.on("response", on_response)
 
-        # === 1. Inbox ===
+            # === 1. Inbox ===
 
-        await page.goto('https://www.instagram.com/direct/inbox/',
-                        wait_until='domcontentloaded')
+            await page.goto('https://www.instagram.com/direct/inbox/',
+                            wait_until='domcontentloaded')
+                
+            await dismiss_notifications_popup(page)
+
+            try:
+                await asyncio.wait_for(inbox_received.wait(), timeout=15)
+                print("Inbox received!")
+            except asyncio.TimeoutError:
+                print("Inbox timeout")
+
+            await page.wait_for_timeout(2000)
+
+            await iterate_inbox_folders(page, inbox_received, collected_data)
+
+            inbox_threads = collect_all_inbox_threads(collected_data)
+
+            print(f"Found {len(inbox_threads)} inbox threads")
+            await process_threads(inbox_threads, account_id, page,
+                                thread_responses, thread_received, redis_pool, _session)
             
-        await dismiss_notifications_popup(page)
-
-        try:
-            await asyncio.wait_for(inbox_received.wait(), timeout=15)
-            print("Inbox received!")
-        except asyncio.TimeoutError:
-            print("Inbox timeout")
-
-        await page.wait_for_timeout(2000)
-
-        await iterate_inbox_folders(page, inbox_received, collected_data)
-
-        inbox_threads = collect_all_inbox_threads(collected_data)
-
-        print(f"Found {len(inbox_threads)} inbox threads")
-        await process_threads(inbox_threads, account_id, page,
-                              thread_responses, thread_received, redis_pool, _session)
-        
-        await asyncio.sleep(2)
-        
-        try:
-            page.remove_listener("response", on_response)
-            await page.close()
-            await asyncio.sleep(1)
-        except Exception as ex:
-            print('ERROR WITH CLOSE PAGE',ex)
+            await asyncio.sleep(2)
+        finally:
+            try:
+                page.remove_listener("response", on_response)
+                await page.close()
+                await asyncio.sleep(1)
+            except Exception as ex:
+                print('ERROR WITH CLOSE PAGE',ex)
         # === 2. Message Requests + Spam ===
 
         # request_message_received.clear()
@@ -1888,48 +1889,50 @@ async def parse_thread_playwright(account: Account,
             except Exception as e:
                 print(f"[ERROR] {friendly_name}: {e}")
 
-        detail_thread_page.on("response", on_response)
-
-        # === 1. Inbox ===
-
-        # current_url = page.url
-        # if current_url.startswith(f'https://www.instagram.com/direct/t/{thread.thread_id}'):
-        #     await page.reload(wait_until='domcontentloaded')
-        # else:
-        # if len(context.pages) >= 6:
-        #     raise Retry(defer=5)
-
-        await detail_thread_page.goto(
-            f'https://www.instagram.com/direct/t/{thread.thread_id}/',
-            wait_until='domcontentloaded'
-        )
-
-        await asyncio.sleep(3)
-
-        await dismiss_notifications_popup(detail_thread_page)
-
         try:
-            await asyncio.wait_for(inbox_received.wait(), timeout=15)
-            print("Thread received!")
-        except asyncio.TimeoutError:
-            print("Thread timeout")
+            detail_thread_page.on("response", on_response)
 
-        await detail_thread_page.wait_for_timeout(2000)
+            # === 1. Inbox ===
 
-        # total = await scroll_inbox_until_loaded(page)
+            # current_url = page.url
+            # if current_url.startswith(f'https://www.instagram.com/direct/t/{thread.thread_id}'):
+            #     await page.reload(wait_until='domcontentloaded')
+            # else:
+            # if len(context.pages) >= 6:
+            #     raise Retry(defer=5)
 
-        # print(f"Scrolled inbox, {total} thread links in DOM")
+            await detail_thread_page.goto(
+                f'https://www.instagram.com/direct/t/{thread.thread_id}/',
+                wait_until='domcontentloaded'
+            )
 
-        # inbox_threads = extract_threads_from_inbox(
-        #     collected_data.get('PolarisDirectInboxQuery', [])
-        # )
-        # print(f"Found {len(inbox_threads)} inbox threads")
-        await process_thread(thread, account.id, detail_thread_page,
-                              thread_responses, thread_received, _session)
-        
-        detail_thread_page.remove_listener("response", on_response)
-        await detail_thread_page.close()
-        await asyncio.sleep(1)
+            await asyncio.sleep(3)
+
+            await dismiss_notifications_popup(detail_thread_page)
+
+            try:
+                await asyncio.wait_for(inbox_received.wait(), timeout=15)
+                print("Thread received!")
+            except asyncio.TimeoutError:
+                print("Thread timeout")
+
+            await detail_thread_page.wait_for_timeout(2000)
+
+            # total = await scroll_inbox_until_loaded(page)
+
+            # print(f"Scrolled inbox, {total} thread links in DOM")
+
+            # inbox_threads = extract_threads_from_inbox(
+            #     collected_data.get('PolarisDirectInboxQuery', [])
+            # )
+            # print(f"Found {len(inbox_threads)} inbox threads")
+            await process_thread(thread, account.id, detail_thread_page,
+                                thread_responses, thread_received, _session)
+            
+            detail_thread_page.remove_listener("response", on_response)
+        finally:
+            await detail_thread_page.close()
+            await asyncio.sleep(1)
 
         # # === 2. Message Requests + Spam ===
 
@@ -2009,21 +2012,6 @@ async def parse_thread_list_playwright(account_id: int,
                 if variables and 'folder' in variables:
                     key = f"{friendly_name}:{variables['folder']}"
 
-                # if friendly_name == 'IGDMessageListOffMsysQuery':
-                #     thread_responses.append(parsed)
-                #     thread_received.set()
-
-                # if friendly_name == 'IGDThreadDetailQuery':
-                #     thread_responses.append(parsed)
-                #     thread_received.set()
-                # else:
-                #     collected_data.setdefault(key, []).append(parsed)
-
-                # if friendly_name == 'PolarisDirectInboxQuery':
-                #     inbox_received.set()
-
-                # if friendly_name == 'PolarisDirectMessageRequestQuery':
-                #     request_message_received.set()
                 if friendly_name in ('IGDMessageListOffMsysQuery', 'IGDThreadDetailQuery'):
                     thread_responses.append(parsed)
                     thread_received.set()
@@ -2207,137 +2195,139 @@ async def playwright_send_message(message: Message,
             except Exception as e:
                 print(f"[ERROR] {friendly_name}: {e}")
 
-        thread_for_send_message_page.on("response", on_response)
+        try:
+            thread_for_send_message_page.on("response", on_response)
 
 
-        # # value for limit page count in one time
-        # if len(context.pages) >= 6:
-        #     raise Retry(defer=5)
+            # # value for limit page count in one time
+            # if len(context.pages) >= 6:
+            #     raise Retry(defer=5)
 
-        await thread_for_send_message_page.goto(
-            f'https://www.instagram.com/direct/t/{message.thread.thread_id}/',
-            wait_until='domcontentloaded'
-        )
+            await thread_for_send_message_page.goto(
+                f'https://www.instagram.com/direct/t/{message.thread.thread_id}/',
+                wait_until='domcontentloaded'
+            )
 
-        await asyncio.sleep(3)
+            await asyncio.sleep(3)
 
-        await dismiss_notifications_popup(thread_for_send_message_page)
+            await dismiss_notifications_popup(thread_for_send_message_page)
 
-        if not is_approved_thread:
-            is_approved = await approve_request_chat(thread_for_send_message_page,
-                                                     thread_for_send_message_page.url)
-            
-            await update_approve_thread(message.thread_id,
-                                        is_approved,
-                                        session)
-            
-            print('NEW APPROVE STATUS', is_approved)
-
-        
-        # check new messages in this thread
-
-        thread = await get_thread_by_id(message.thread_id,
-                                        session)
-        
-        has_new_messages = await process_thread(thread,
-                                                thread.account_id,
-                                                thread_for_send_message_page,
-                                                thread_responses,
-                                                thread_received,
-                                                session,
-                                                with_scroll=False)
-        
-        if has_new_messages:
-            msg = await get_message_only_by_id(message.id,
-                                               session)
-            
-            if msg:
-
-                msg.status = MessageStatusEnum.REJECTED
-
-                await execute_and_catch_db_error(session.commit(),
-                                                session,
-                                                with_rollback=True)
+            if not is_approved_thread:
+                is_approved = await approve_request_chat(thread_for_send_message_page,
+                                                        thread_for_send_message_page.url)
                 
-                thread_for_send_message_page.remove_listener("response", on_response)
-                await thread_for_send_message_page.close()
-                await asyncio.sleep(1)
+                await update_approve_thread(message.thread_id,
+                                            is_approved,
+                                            session)
+                
+                print('NEW APPROVE STATUS', is_approved)
 
-                return
+            
+            # check new messages in this thread
 
-        if media:
-            match media:
-                case 'photo':
-                    _attachments = message.attachments
-                    _attachment = _attachments[0]
-                    media_url = _attachment.media_url
+            thread = await get_thread_by_id(message.thread_id,
+                                            session)
+            
+            has_new_messages = await process_thread(thread,
+                                                    thread.account_id,
+                                                    thread_for_send_message_page,
+                                                    thread_responses,
+                                                    thread_received,
+                                                    session,
+                                                    with_scroll=False)
+            
+            if has_new_messages:
+                msg = await get_message_only_by_id(message.id,
+                                                session)
+                
+                if msg:
 
-                    # media_url = generate_valid_media_url(media_url)
+                    msg.status = MessageStatusEnum.REJECTED
 
-                    if media_url.startswith('./'):
-                        media_url = media_url[2:]
-                    if media_url.startswith('media/'):
-                        media_url = media_url[len('media/'):]
+                    await execute_and_catch_db_error(session.commit(),
+                                                    session,
+                                                    with_rollback=True)
+                    
+                    thread_for_send_message_page.remove_listener("response", on_response)
+                    await thread_for_send_message_page.close()
+                    await asyncio.sleep(1)
 
-                    media_url_for_send = f'{MEDIA_PATH}/{media_url}'
+                    return
 
-                    try:
-                        inp = thread_for_send_message_page.locator('input[type="file"]')
+            if media:
+                match media:
+                    case 'photo':
+                        _attachments = message.attachments
+                        _attachment = _attachments[0]
+                        media_url = _attachment.media_url
 
-                        await inp.set_input_files(media_url_for_send)   # абсолютный путь
-                        await asyncio.sleep(2.5)
+                        # media_url = generate_valid_media_url(media_url)
 
-                        # ждём появления превью вложения (кнопка "Remove")
-                        await thread_for_send_message_page.wait_for_selector(
-                            'button[aria-label^="Remove"], [aria-label^="Remove"]',
-                            timeout=20000)
+                        if media_url.startswith('./'):
+                            media_url = media_url[2:]
+                        if media_url.startswith('media/'):
+                            media_url = media_url[len('media/'):]
 
-                        # Отправка через Enter в композере
-                        box = thread_for_send_message_page.locator('div[role="textbox"]').last
-                        await box.click()
-                        await thread_for_send_message_page.keyboard.press("Enter")
+                        media_url_for_send = f'{MEDIA_PATH}/{media_url}'
 
-                        # Подтверждение: кнопка удаления вложения исчезла = ушло
-                        await thread_for_send_message_page.wait_for_selector(
-                            'button[aria-label^="Remove"]',
-                            state="detached", timeout=20000)
-                        print("фото отправлено")
-                        send_success = True
-                    except Exception as ex:
-                        print('ERROR WITH TRY SEND MESSAGE', ex)
+                        try:
+                            inp = thread_for_send_message_page.locator('input[type="file"]')
 
-                case _:
+                            await inp.set_input_files(media_url_for_send)   # абсолютный путь
+                            await asyncio.sleep(2.5)
+
+                            # ждём появления превью вложения (кнопка "Remove")
+                            await thread_for_send_message_page.wait_for_selector(
+                                'button[aria-label^="Remove"], [aria-label^="Remove"]',
+                                timeout=20000)
+
+                            # Отправка через Enter в композере
+                            box = thread_for_send_message_page.locator('div[role="textbox"]').last
+                            await box.click()
+                            await thread_for_send_message_page.keyboard.press("Enter")
+
+                            # Подтверждение: кнопка удаления вложения исчезла = ушло
+                            await thread_for_send_message_page.wait_for_selector(
+                                'button[aria-label^="Remove"]',
+                                state="detached", timeout=20000)
+                            print("фото отправлено")
+                            send_success = True
+                        except Exception as ex:
+                            print('ERROR WITH TRY SEND MESSAGE', ex)
+
+                    case _:
+                        pass
+            else:
+                try:
+                    message_text = message.text
+                    box = thread_for_send_message_page.locator('div[role="textbox"]').last
+                    await box.click()                  # фокус — обязательно для Lexical
+                    await human_pause(0.3, 0.7)
+
+                    await box.type(message_text, delay=random.uniform(30, 90))   # человеческий ввод
+                    await human_pause(0.4, 1.0)
+
+                    await thread_for_send_message_page.keyboard.press("Enter")
+
+                    # подтверждение: композер очистился = сообщение ушло
+                    await thread_for_send_message_page.wait_for_function(
+                        """() => {
+                            const el = document.querySelectorAll('div[role="textbox"]');
+                            const last = el[el.length - 1];
+                            return last && last.innerText.trim() === '';
+                        }""",
+                        timeout=15000)
+                    await human_pause(0.8, 1.5)
+                    print("текст отправлен")
+                    send_success = True
+                except Exception as ex:
+                    print(ex)
                     pass
-        else:
-            try:
-                message_text = message.text
-                box = thread_for_send_message_page.locator('div[role="textbox"]').last
-                await box.click()                  # фокус — обязательно для Lexical
-                await human_pause(0.3, 0.7)
-
-                await box.type(message_text, delay=random.uniform(30, 90))   # человеческий ввод
-                await human_pause(0.4, 1.0)
-
-                await thread_for_send_message_page.keyboard.press("Enter")
-
-                # подтверждение: композер очистился = сообщение ушло
-                await thread_for_send_message_page.wait_for_function(
-                    """() => {
-                        const el = document.querySelectorAll('div[role="textbox"]');
-                        const last = el[el.length - 1];
-                        return last && last.innerText.trim() === '';
-                    }""",
-                    timeout=15000)
-                await human_pause(0.8, 1.5)
-                print("текст отправлен")
-                send_success = True
-            except Exception as ex:
-                print(ex)
-                pass
- 
-        thread_for_send_message_page.remove_listener("response", on_response)
-        await thread_for_send_message_page.close()
-        await asyncio.sleep(1)
+    
+            thread_for_send_message_page.remove_listener("response", on_response)
+        finally:
+            await thread_for_send_message_page.close()
+            await asyncio.sleep(1)
         
         if send_success:
             msg = await get_message_only_by_id(message.id,
