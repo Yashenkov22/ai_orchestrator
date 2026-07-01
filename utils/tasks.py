@@ -2326,6 +2326,7 @@ async def playwright_send_message(message: Message,
     
             thread_for_send_message_page.remove_listener("response", on_response)
         finally:
+            await asyncio.sleep(1)
             await thread_for_send_message_page.close()
             await asyncio.sleep(1)
         
