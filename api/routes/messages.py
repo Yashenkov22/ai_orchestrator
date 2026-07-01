@@ -218,12 +218,14 @@ async def create_new_message(data: CreateMessageSchema,
         raise HTTPException(status_code=400,
                             detail='not found thread or account by thread')
     
+    _text = data.text if not data.attachment else ''
+    
     insert_data = {
         'sender': 'assistant',
         'created_at': datetime.now(tz=timezone.utc),
         'updated_at': datetime.now(tz=timezone.utc),
         'thread_id': thread.id,
-        'text': data.text,
+        'text': _text,
         'status': MessageStatusEnum.PENDING,
     }
 
@@ -242,7 +244,7 @@ async def create_new_message(data: CreateMessageSchema,
             'message_id': message_id,
         }
 
-        insert_data['text'] = None
+        # insert_data['text'] = None
 
         new_attachment = Attachment(**insert_data)
         session.add(new_attachment)
