@@ -7,7 +7,7 @@ from fastapi import (APIRouter,
 from sqlalchemy import select, delete
 from sqlalchemy.orm import joinedload, selectinload
 
-from db.queries import (get_thread_by_id,
+from db.queries import (get_message_only_by_id, get_thread_by_id,
                         execute_and_catch_db_error)
 
 from db.base import (Message,
@@ -16,8 +16,9 @@ from db.base import (Message,
 
 from utils.schemas import (CreateMessageSchema)
 from utils.dependencies import (admin_dependency,
-                                session_dependency)
-
+                                session_dependency,
+                                arq_dependency)
+from utils.enums import MessageStatusEnum
 from utils.base import generate_valid_media_url
 
 
@@ -198,11 +199,17 @@ async def new_get_messages(admin: admin_dependency,
 @message_router.post("/create")
 async def create_new_message(data: CreateMessageSchema,
                              admin: admin_dependency,
+                             arq_pool: arq_dependency,
                              session: session_dependency):
     thread = await get_thread_by_id(data.thread_id,
                                     session)
     
-    print(data)
+    account_id = thread.account_id
+    
+    if not account_id:
+        print('Account_id not found')
+        return
+    # print(data)
     
     if not thread or thread.account.id != data.account_id:
         print('here')
@@ -215,6 +222,7 @@ async def create_new_message(data: CreateMessageSchema,
         'updated_at': datetime.now(tz=timezone.utc),
         'thread_id': thread.id,
         'text': data.text,
+        'status': MessageStatusEnum.PENDING,
     }
 
     new_message = Message(**insert_data)
@@ -232,12 +240,33 @@ async def create_new_message(data: CreateMessageSchema,
             'message_id': message_id,
         }
 
+        insert_data['text'] = None
+
         new_attachment = Attachment(**insert_data)
         session.add(new_attachment)
         
     await execute_and_catch_db_error(session.commit(),
                                      session,
                                      with_rollback=True)
+    
+    # if success:
+    job = await arq_pool.enqueue_job(
+            'send_message_to_thread',
+            account_id,
+            message_id,
+            _queue_name='arq:messages',
+        )
+    
+    msg = await get_message_only_by_id(new_message.id,
+                                       session)
+    
+    msg.status = MessageStatusEnum.MODERATED
+
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)
+        # return {"status": "queued", "job_id": job.job_id}
+
     return {
         'status': 'success',
     }

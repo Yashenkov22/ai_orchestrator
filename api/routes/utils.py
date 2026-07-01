@@ -22,7 +22,7 @@ from utils.ai import ai_translate_message
 from utils.dependencies import (admin_dependency,
                                 session_dependency,
                                 arq_dependency)
-
+from utils.enums import MessageStatusEnum
 
 from utils.base import (generate_valid_media_url,
                         get_folder_profiles,
@@ -144,6 +144,15 @@ async def test_hander(admin: admin_dependency,
             message_id,
             _queue_name='arq:messages',
         )
+        
+        if job:
+            msg = await get_message_only_by_id(message_id,
+                                               session)
+            msg.status = MessageStatusEnum.MODERATED
+            await execute_and_catch_db_error(session.commit(),
+                                             session,
+                                             with_rollback=True)
+        
         return {"status": "queued", "job_id": job.job_id}
     
 
