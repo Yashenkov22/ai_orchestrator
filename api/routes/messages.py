@@ -253,7 +253,7 @@ async def create_new_message(data: CreateMessageSchema,
     job = await arq_pool.enqueue_job(
             'send_message_to_thread',
             account_id,
-            message_id,
+            new_message.id,
             _queue_name='arq:messages',
         )
     
