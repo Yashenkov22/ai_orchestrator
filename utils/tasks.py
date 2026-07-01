@@ -46,6 +46,7 @@ TARGET_QUERIES = {
     'PolarisDirectMessageRequestQuery',
     'IGDMessageListOffMsysQuery',
     'IGDThreadListProfessionalOffMsysPaginationQuery',
+    'IGDThreadListOffMsysPaginationQuery',
 }
 
 # === Утилиты ===
