@@ -226,12 +226,13 @@ async def send_message_to_thread(cxt,
     if not account or not message:
         return
     
-    try:  
-        available_lock = acquire_lock(account.id,
-                                        message.thread_id)
+    available_lock = acquire_lock(account.id,
+                                    message.thread_id)
 
-        if not available_lock:
-            raise Retry(defer=15)
+    if not available_lock:
+        raise Retry(defer=15)
+    
+    try:
         
         _key = f'lock:send_message:acc:{account.id}:msg:{message_id}'
         task_lock = acquire_task_lock(_key)

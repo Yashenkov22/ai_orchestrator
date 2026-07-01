@@ -21,6 +21,8 @@ from utils.dependencies import (admin_dependency,
 from utils.enums import MessageStatusEnum
 from utils.base import generate_valid_media_url
 
+from websocket.base import manager
+
 
 
 message_router = APIRouter(tags=['Messages'],
@@ -248,6 +250,37 @@ async def create_new_message(data: CreateMessageSchema,
     await execute_and_catch_db_error(session.commit(),
                                      session,
                                      with_rollback=True)
+    
+    # publish redis update to websocket
+    # payload_attachment = None
+
+    # ws_content = new_message.text or ''
+
+    # if data.attachment:
+    #     payload_attachment = {
+    #         'media_type': data.attachment['media_type'],
+    #         'media_url': generate_valid_media_url(f"{data.attachment['media_url']}"),
+    #         # 'media_type': _attachment.media_type,
+    #         # 'media_url': generate_valid_media_url(_attachment.media_url),
+    #     }
+    #     ws_content = ''
+    # payload = {
+    #     'id': str(new_message.id),
+    #     'role': new_message.sender,
+    #     'content': ws_content,
+    #     'translated_content': new_message.translated_text or '',
+    #     'ts': new_message.created_at.strftime("%Y-%d-%m %H:%M") if new_message.created_at else "",
+    #     "modStatus": new_message.status,
+    #     'attachment': payload_attachment,
+
+    # }
+    # ws_msg_data = {
+    #     'type': 'message created',
+    #     'user_id': admin,
+    #     'payload': payload,
+    # }
+
+    # await manager.send_to_user(admin, ws_msg_data)
     
     # if success:
     job = await arq_pool.enqueue_job(
