@@ -1695,7 +1695,8 @@ async def test_playwright(account_id: int,
                                 sample = parsed[0] if isinstance(parsed, list) and parsed else parsed
                                 if isinstance(sample, dict):
                                     print("[mailbox-page] data keys:", list(sample.get('data', {}).keys()))
-                            except Exception:
+                            except Exception as ex:
+                                print('.  ERROR WITH PARSE THREAD LIST')
                                 pass
                             
                             if account_id == 8:
