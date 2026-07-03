@@ -12,11 +12,14 @@ from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
 
+from arq import ArqRedis
+
 from db.base import Account, Admin, Message, Thread, InstaUser, Attachment
 
 from utils.ai import ai_generate_text, ai_translate_message
-from utils.base import RATIO_LEN_LIMIT, RATIO_LIMIT, moscow_tz, russian_ratio, try_translate_text
+from utils.base import RATIO_LEN_LIMIT, RATIO_LIMIT, generate_valid_media_url, moscow_tz, russian_ratio, try_translate_text
 from utils.exc import DB_ERROR_EXCEPTION, ChatNotFound, NotAccessToChat
+from websocket.redis_listener import publish_event
 
 
 async def execute_and_catch_db_error(coro,
@@ -498,7 +501,7 @@ async def update_approve_thread(thread_id: int,
     await execute_and_catch_db_error(session.commit(),
                                      session,
                                      with_rollback=True)
-    
+
 
 async def update_thread_is_unread_by_id(thread_id: int,
                                         session: AsyncSession):
@@ -522,7 +525,8 @@ async def update_thread_is_unread_by_id(thread_id: int,
 
 async def try_add_messages(message_data: dict,
                            thread: Thread,
-                           session: AsyncSession):
+                           session: AsyncSession,
+                           redis_pool: ArqRedis):
     thread_id = message_data.get('thread_id')
     messages = message_data.get('messages')
     mark_as_unread = message_data.get('mark_as_unread')
@@ -580,6 +584,62 @@ async def try_add_messages(message_data: dict,
             await execute_and_catch_db_error(session.commit(),
                                             session,
                                             with_rollback=True)
+            # publish update to redis
+            # thread updated
+            # publish new messages to thread page
+            # new messages(create message [many])
+
+            payload = {
+                'account_id': thread.account_id,
+            }
+
+            thread_payload = {
+                'id': thread.id,
+                'context': thread.context,
+                'is_unread': thread.is_unread,
+                "last_activity": thread.timestamp_last_seen_message.strftime("%Y-%d-%m %H:%M")\
+                                if thread.timestamp_last_seen_message else "",
+                        }
+
+            message_list = []
+
+            for message in insert_messages:
+                attachments = message.attachments
+                attachment_list = []
+                content = message.text or ""
+                translated_content = message.translated_text or ""
+
+                for _attachment in attachments:
+                    
+                    if _attachment:
+                        _attachment = {
+                            'media_type': _attachment.media_type,
+                            'media_url': generate_valid_media_url(_attachment.media_url),
+                        }
+                        attachment_list.append(_attachment)
+                    
+                message_dict = {
+                    "id": str(message.id),
+                    "role": message.sender,
+                    "content": content,
+                    "translated_content": translated_content,
+                    "ts": (
+                        message.created_at.strftime("%Y-%d-%m %H:%M")
+                        if message.created_at else ""
+                    ),
+                    "modStatus": message.status,  # pending / approved / moderated
+                    'attachments': attachment_list
+                }
+                message_list.append(message_dict)
+
+            thread_payload['messages'] = message_list
+
+            payload['thread'] = thread_payload
+            
+            await publish_event(redis_pool,
+                    type='Thread detail updated',
+                    payload=payload)
+
             return True
     
 

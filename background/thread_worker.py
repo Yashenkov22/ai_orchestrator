@@ -27,6 +27,7 @@ async def startup(ctx):
     #
     # ctx['scheduler'] = scheduler
     ctx['sessionmaker'] = session
+    ctx['redis_pool'] = _redis_pool    
     #
     print("Worker for parse threads is starting up...")
 

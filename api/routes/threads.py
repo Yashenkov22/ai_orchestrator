@@ -49,7 +49,7 @@ async def get_threads(admin: admin_dependency,
         thread_list.append({
             "id": t.id,
             "account_name": t.account.username,
-            "guest_name": t.insta_user.username,
+            "user_name": t.insta_user.username,
             'has_unread': t.is_unread,
             'color_level': t.color_level,
             "last_activity": (
