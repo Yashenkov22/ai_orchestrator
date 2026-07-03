@@ -224,7 +224,9 @@ async def send_message_to_thread(cxt,
                                         _session)
 
     if not account or not message:
-        print('error 1')
+        print('Account or Message Not found')
+        print(' ### account', account_id, account)
+        print(' ### message', message_id, message)
         return
     
     available_lock = acquire_lock(account.id,
@@ -280,6 +282,10 @@ async def send_message_to_thread(cxt,
                                                     media_type)  
         else:
             print('error 3')
+
+    except Retry as ex:
+        print(f'CATCH RETRY FOR ACC_ID {account_id} MSG_ID {message_id}')
+        raise
 
     except Exception as ex:
         print('ERROR WITH TRY SEND MESSAGE', ex)
