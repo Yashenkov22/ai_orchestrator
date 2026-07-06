@@ -596,7 +596,7 @@ async def try_add_messages(message_data: dict,
             thread_payload = {
                 'id': thread.id,
                 'context': thread.context,
-                'is_unread': thread.is_unread,
+                'has_unread': thread.is_unread,
                 "last_activity": thread.timestamp_last_seen_message.strftime("%Y-%d-%m %H:%M")\
                                 if thread.timestamp_last_seen_message else "",
                         }

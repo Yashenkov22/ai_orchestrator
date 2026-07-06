@@ -16,7 +16,7 @@ from db.base import (Thread,
 from utils.schemas import (PatchAccountSchema,
                            NewAccountSchema,
                            PatchInformationAccountSchema,
-                           PatchPhotoAccountSchema,
+                           PatchPhotoAccountSchema, PatchViewNameAccountSchema,
                            UpdateProfileDataSchema,
                            CreateAccountSchema)
 from utils.dependencies import (admin_dependency,
@@ -96,7 +96,7 @@ async def get_accounts(admin: admin_dependency,
     accounts = [
         {
             "id": u.id,
-            "username": u.username,
+            "username": u.view_name or u.username,
             "insta_id": u.insta_id,
             'has_error': -(u.has_error),
             'created_at': u.created_at,
@@ -149,6 +149,7 @@ async def get_account_by_id(account_id: int,
         account_data =  {
             "id": account.id,
             "username": account.username,
+            # 'view_name': account.view_name,
             "fullname": account.full_name,
             'created_at': account.created_at,
             'updated_at': account.updated_at,
@@ -327,6 +328,38 @@ async def set_photo_information(data: PatchPhotoAccountSchema,
                             detail='Account not found')
     
     account.photo_url = data.media_url
+
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)
+    return {
+        'status': 'success',
+    }
+
+
+@account_router.patch("/set_view_name")
+async def set_view_name(data: PatchViewNameAccountSchema,
+                        admin: admin_dependency,
+                        session: session_dependency):
+    query = (
+        select(
+            Account
+        )\
+        .where(
+            Account.id == data.account_id
+        )
+    )
+
+    res = await execute_and_catch_db_error(session.execute(query),
+                                           session)
+    
+    account: Account = res.scalar_one_or_none()
+
+    if not account:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Account not found')
+    
+    account.view_name = data.view_name
 
     await execute_and_catch_db_error(session.commit(),
                                      session,

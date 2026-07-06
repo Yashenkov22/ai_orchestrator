@@ -63,18 +63,20 @@ async def new_get_messages(admin: admin_dependency,
                 }
                 attachment_list.append(_attachment)
 
+        _acc_name = message.thread.account.view_name or message.thread.account.username
         message_list.append({
             "id": message.id,
             "role": message.sender,
             "content": content,
             "translated_content": translated_content,
-            'account_name': message.thread.account.username,
-            'thread_name': f'{message.thread.account.username} - {message.thread.insta_user.username}',
+            'account_name': _acc_name,
+            'thread_name': f'{_acc_name} - {message.thread.insta_user.username}',
             "ts": (
                 message.created_at.strftime("%Y-%d-%m %H:%M")
                 if message.created_at else ""
             ),
             "modStatus": message.status,  # pending / approved / moderated
+            'retry_send_count': message.retry_send_count,
             'attachment': attachment_list,
         })
 
@@ -133,6 +135,7 @@ async def get_thread_messages(thread_id: str, session: session_dependency):
                 if m.created_at else ""
             ),
             "modStatus": m.status,
+            'retry_send_count': m.retry_send_count,
             "attachment": attachment_list,
         })
 
@@ -173,19 +176,21 @@ async def new_get_messages(admin: admin_dependency,
             }
             attachment_list.append(_attachment)
 
+    _acc_name = message.thread.account.view_name or message.thread.account.username
     result = {
         "id": message.id,
         "role": message.sender,
         "content": content,
         "translated_content": translated_content,
-        'account_name': message.thread.account.username,
-        'thread_name': f'{message.thread.account.username} - {message.thread.insta_user.username}',
+        'account_name': _acc_name,
+        'thread_name': f'{_acc_name} - {message.thread.insta_user.username}',
         "ts": (
             message.created_at.strftime("%Y-%d-%m %H:%M")
             if message.created_at else ""
         ),
         "modStatus": message.status,  # pending / approved / moderated
         'attachment': attachment_list,
+        'retry_send_count': message.retry_send_count,
         'thread_id': message.thread_id,
     }
 

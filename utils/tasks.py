@@ -1309,6 +1309,20 @@ async def playwright_send_message(message: Message,
         
         # value for limit page count in one time
         if len(context.pages) >= 6:
+            payload = {
+                'thread_id': message.thread_id,
+            }
+            msg_payload = {
+                'id': str(message.id),
+                "retry_send_count": message.retry_send_count,
+            }
+
+            payload['message'] = msg_payload
+
+            await publish_event(redis,
+                                type='Message send count updated',
+                                payload=payload)
+            
             raise Retry(defer=15)
         
         # context = await browser.new_context()
@@ -1393,6 +1407,7 @@ async def playwright_send_message(message: Message,
                                                     thread_responses,
                                                     thread_received,
                                                     session,
+                                                    redis,
                                                     with_scroll=False)
             
             if has_new_messages:
@@ -1461,7 +1476,7 @@ async def playwright_send_message(message: Message,
                             await thread_for_send_message_page.wait_for_selector(
                                 'button[aria-label^="Remove"]',
                                 state="detached", timeout=20000)
-                            print("фото отправлено")
+                            print(" + фото отправлено")
                             send_success = True
                         except Exception as ex:
                             print('ERROR WITH TRY SEND MESSAGE', ex)
@@ -1489,7 +1504,7 @@ async def playwright_send_message(message: Message,
                         }""",
                         timeout=15000)
                     await human_pause(0.8, 1.5)
-                    print("текст отправлен")
+                    print(" + текст отправлен")
                     send_success = True
                 except Exception as ex:
                     print(ex)

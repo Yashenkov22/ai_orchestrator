@@ -205,7 +205,7 @@ async def send_message_to_thread(cxt,
 
         account = res.scalar_one_or_none()
         message = await get_message_by_id(message_id,
-                                        _session)
+                                          _session)
 
     if not account or not message:
         print('error 1')
@@ -216,6 +216,29 @@ async def send_message_to_thread(cxt,
 
     if not available_lock:
         print('error 2')
+        async with sessionmaker() as _session:
+            _session: AsyncSession
+            _message = await _session.merge(message)
+            _message.retry_send_count += 1
+            await execute_and_catch_db_error(_session.commit(),
+                                             _session,
+                                             with_rollback=True)
+        
+        # ws событие об изменении message
+        payload = {
+            'thread_id': message.thread_id,
+        }
+        msg_payload = {
+            'id': str(message.id),
+            "retry_send_count": _message.retry_send_count,
+        }
+
+        payload['message'] = msg_payload
+
+        await publish_event(redis,
+                            type='Message send count updated',
+                            payload=payload)
+
         raise Retry(defer=15)
     
     try:
@@ -285,6 +308,31 @@ async def send_message_to_thread(cxt,
                                                     media_type)  
         else:
             print('error 3')
+
+    except Retry as ex:
+        async with sessionmaker() as _session:
+            _session: AsyncSession
+            _message = await _session.merge(message)
+            _message.retry_send_count += 1
+            await execute_and_catch_db_error(_session.commit(),
+                                             _session,
+                                             with_rollback=True)
+        
+        # ws событие об изменении message
+        payload = {
+            'thread_id': message.thread_id,
+        }
+        msg_payload = {
+            'id': str(message.id),
+            "retry_send_count": _message.retry_send_count,
+        }
+
+        payload['message'] = msg_payload
+
+        await publish_event(redis,
+                            type='Message send count updated',
+                            payload=payload)
+        raise
 
     except Exception as ex:
         print('ERROR WITH TRY SEND MESSAGE', ex)

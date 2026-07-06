@@ -46,7 +46,7 @@ class WorkerSettings:
     keep_result = 0
     job_timeout = 900
     job_defaults = {
-        'max_tries': 1, 
+        'max_tries': 3,
     }
 
 
