@@ -27,6 +27,7 @@ async def startup(ctx):
     #
     # ctx['scheduler'] = scheduler
     ctx['sessionmaker'] = session
+    ctx['redis_pool'] = _redis_pool    
     #
     print("Worker for parse threads is starting up...")
 
@@ -45,7 +46,7 @@ class WorkerSettings:
     keep_result = 0
     job_timeout = 900
     job_defaults = {
-        'max_tries': 1, 
+        'max_tries': 3,
     }
 
 

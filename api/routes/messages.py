@@ -21,15 +21,13 @@ from utils.dependencies import (admin_dependency,
 from utils.enums import MessageStatusEnum
 from utils.base import generate_valid_media_url
 
-# from websocket.base import manager
-
+from websocket.base import manager
 
 
 message_router = APIRouter(tags=['Messages'],
                            prefix='/messages')
 
 
-# @user_router.get("/messages")
 @message_router.get("/list")
 async def new_get_messages(admin: admin_dependency,
                        session: session_dependency):
@@ -65,24 +63,26 @@ async def new_get_messages(admin: admin_dependency,
                 }
                 attachment_list.append(_attachment)
 
+        _acc_name = message.thread.account.view_name or message.thread.account.username
         message_list.append({
             "id": message.id,
             "role": message.sender,
             "content": content,
             "translated_content": translated_content,
-            'account_name': message.thread.account.username,
-            'thread_name': f'{message.thread.account.username} - {message.thread.insta_user.username}',
+            'account_name': _acc_name,
+            'thread_name': f'{_acc_name} - {message.thread.insta_user.username}',
             "ts": (
                 message.created_at.strftime("%Y-%d-%m %H:%M")
                 if message.created_at else ""
             ),
             "modStatus": message.status,  # pending / approved / moderated
+            'retry_send_count': message.retry_send_count,
             'attachment': attachment_list,
         })
 
     return message_list
 
-# @user_router.get("threads/{thread_id}/messages")
+
 @message_router.get("/{thread_id}/messages")
 async def get_thread_messages(thread_id: str, session: session_dependency):
     thread_result = await session.execute(
@@ -135,13 +135,13 @@ async def get_thread_messages(thread_id: str, session: session_dependency):
                 if m.created_at else ""
             ),
             "modStatus": m.status,
+            'retry_send_count': m.retry_send_count,
             "attachment": attachment_list,
         })
 
     return result
 
 
-# @user_router.get("/messages/{message_id}")
 @message_router.get("/{message_id}")
 async def new_get_messages(admin: admin_dependency,
                            session: session_dependency,
@@ -176,28 +176,27 @@ async def new_get_messages(admin: admin_dependency,
             }
             attachment_list.append(_attachment)
 
-        # content = ''
-
+    _acc_name = message.thread.account.view_name or message.thread.account.username
     result = {
         "id": message.id,
         "role": message.sender,
         "content": content,
         "translated_content": translated_content,
-        'account_name': message.thread.account.username,
-        'thread_name': f'{message.thread.account.username} - {message.thread.insta_user.username}',
+        'account_name': _acc_name,
+        'thread_name': f'{_acc_name} - {message.thread.insta_user.username}',
         "ts": (
             message.created_at.strftime("%Y-%d-%m %H:%M")
             if message.created_at else ""
         ),
         "modStatus": message.status,  # pending / approved / moderated
         'attachment': attachment_list,
+        'retry_send_count': message.retry_send_count,
         'thread_id': message.thread_id,
     }
 
     return result
 
 
-# @user_router.post("/create_message")
 @message_router.post("/create")
 async def create_new_message(data: CreateMessageSchema,
                              admin: admin_dependency,
@@ -210,8 +209,8 @@ async def create_new_message(data: CreateMessageSchema,
     
     if not account_id:
         print('Account_id not found')
-        return
-    # print(data)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Account_id in thread not found')
     
     if not thread or thread.account.id != data.account_id:
         print('here')
@@ -244,8 +243,6 @@ async def create_new_message(data: CreateMessageSchema,
             'message_id': message_id,
         }
 
-        # insert_data['text'] = None
-
         new_attachment = Attachment(**insert_data)
         session.add(new_attachment)
         
@@ -254,78 +251,69 @@ async def create_new_message(data: CreateMessageSchema,
                                      with_rollback=True)
     
     # publish redis update to websocket
-    # payload_attachment = None
+    payload_attachment = None
 
-    # ws_content = new_message.text or ''
+    ws_content = new_message.text or ''
 
-    # if data.attachment:
-    #     payload_attachment = {
-    #         'media_type': data.attachment['media_type'],
-    #         'media_url': generate_valid_media_url(f"{data.attachment['media_url']}"),
-    #         # 'media_type': _attachment.media_type,
-    #         # 'media_url': generate_valid_media_url(_attachment.media_url),
-    #     }
-    #     ws_content = ''
-    # payload = {
-    #     'id': str(new_message.id),
-    #     'role': new_message.sender,
-    #     'content': ws_content,
-    #     'translated_content': new_message.translated_text or '',
-    #     'ts': new_message.created_at.strftime("%Y-%d-%m %H:%M") if new_message.created_at else "",
-    #     "modStatus": new_message.status,
-    #     'attachment': payload_attachment,
-
-    # }
-    # ws_msg_data = {
-    #     'type': 'message created',
-    #     'user_id': admin,
-    #     'payload': payload,
-    # }
-
-    # await manager.send_to_user(admin, ws_msg_data)
+    if data.attachment:
+        payload_attachment = {
+            'media_type': data.attachment['media_type'],
+            'media_url': generate_valid_media_url(f"{data.attachment['media_url']}"),
+        }
+        ws_content = ''
     
-    # if success:
+    payload = {
+        'thread_id': new_message.thread_id,
+    }
+    message_payload = {
+        'id': str(new_message.id),
+        'role': new_message.sender,
+        'content': ws_content,
+        'translated_content': new_message.translated_text or '',
+        'ts': new_message.created_at.strftime("%Y-%d-%m %H:%M") if new_message.created_at else "",
+        "modStatus": new_message.status,
+        'attachment': payload_attachment,
+
+    }
+    payload['message'] = message_payload
+    ws_msg_data = {
+        'type': 'message created',
+        'user_id': admin,
+        'payload': payload,
+    }
+
+    await manager.send_to_user(admin, ws_msg_data)
+    
     job = await arq_pool.enqueue_job(
             'send_message_to_thread',
             account_id,
             new_message.id,
             _queue_name='arq:messages',
         )
-    
-    msg = await get_message_only_by_id(new_message.id,
-                                       session)
-    
-    msg.status = MessageStatusEnum.MODERATED
-
-    await execute_and_catch_db_error(session.commit(),
-                                     session,
-                                     with_rollback=True)
-        # return {"status": "queued", "job_id": job.job_id}
 
     return {
         'status': 'success',
     }
 
 
-# @user_router.delete("/delete_message")
 @message_router.delete("/delete")
 async def delete_message_from_thread(message_id: int,
                                      admin: admin_dependency,
+                                     arq_pool: arq_dependency,
                                      session: session_dependency):
     check_query = (
-        select(1)\
-        .select_from(Message)\
+        select(Message)\
         .where(
             Message.id == message_id
         )
     )
 
-    check_message = await execute_and_catch_db_error(session.execute(check_query),
+    _message = await execute_and_catch_db_error(session.execute(check_query),
                                                      session)
 
-    check_message = check_message.scalar_one_or_none()
+    _message = _message.scalar_one_or_none()
 
-    if not check_message:
+    if not _message:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail='Message not found')
     
@@ -345,6 +333,22 @@ async def delete_message_from_thread(message_id: int,
                                      session,
                                      with_rollback=True)
     
+    payload = {
+        'thread_id': _message.thread_id,
+    }
+    message_payload = {
+        'id': str(_message.id),
+    }
+    payload['message'] = message_payload
+
+    ws_msg_data = {
+        'type': 'message deleted',
+        'user_id': admin,
+        'payload': payload,
+    }
+
+    await manager.send_to_user(admin, ws_msg_data)
+
     return {
         'status': 'success'
     }

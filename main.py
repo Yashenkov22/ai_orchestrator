@@ -11,7 +11,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from contextlib import asynccontextmanager
 
-# from auth.utils import get_current_user_for_websocket
+from auth.utils import get_current_user_for_websocket
 from db.base import init_models
 
 from api.base import main_router
@@ -22,8 +22,8 @@ from utils.scheduler import scheduler
 
 from background.base import get_redis_background_pool
 
-# from websocket.base import manager
-# from websocket.redis_listener import redis_listener
+from websocket.base import manager
+from websocket.redis_listener import redis_listener
 
 
 @asynccontextmanager
@@ -33,11 +33,19 @@ async def lifespan(app: FastAPI):
     scheduler.start()
     app.state.arq_pool = await get_redis_background_pool()
     # asyncio.create_task(redis_listener())
+    app.state.redis_listener_task = asyncio.create_task(redis_listener())
     # Инициализация БД
     # await init_models()
     yield  # Это место, где приложение будет работать
 
     await app.state.arq_pool.close()
+
+    app.state.redis_listener_task.cancel()
+
+    try:
+        await app.state.redis_listener_task
+    except asyncio.CancelledError:
+        pass
 
     try:
         scheduler.shutdown()
@@ -71,51 +79,29 @@ async def validation_exception_handler(request, exc: RequestValidationError):
         },
     )
 
-# @app.websocket("/ws")
-# async def websocket_endpoint(websocket: WebSocket): # jwt_dependency:
-#     await websocket.accept()
-#     print("WebSocket клиент подключился✅")
 
-#     # получаю все непрочитанные(неотправленные) сообщения
-#     # если есть отправляю сообщения и отчищаю хранилище
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    token = websocket.query_params.get("token")
 
-#     try:
-#         while True:
-#             data = await websocket.receive_text()
-#             print(f"Получено: {data}")
-#             await websocket.send_text(f"Echo: {data}")
-#             #.          !  
-#             # сохраняю в БД
-#             # формирую промпт для получения ответа (мб в фоновой задаче)
-#             # нужно вернуться сюда же и отправить ответ через await websocket.send_text()
-#     except WebSocketDisconnect:
-#         print("WebSocket клиент отключился❌")
+    if token is None:
+        await websocket.close(code=1008)
+        return
 
-# @app.websocket("/ws")
-# async def websocket_endpoint(websocket: WebSocket):
-#     token = websocket.query_params.get("token")
+    try:
+        user_id = await get_current_user_for_websocket(token)
+        print('user id ->', user_id)
+    except Exception:
+        await websocket.close(code=1008)
+        return
 
-#     if token is None:
-#         await websocket.close(code=1008)
-#         return
+    await manager.connect(user_id, websocket)
+    print('New ws connection ~')
+    try:
+        while True:
+            message = await websocket.receive_text()
 
-#     try:
-#         user_id = await get_current_user_for_websocket(token)
-#         print('user id ->', user_id)
-#     except Exception:
-#         await websocket.close(code=1008)
-#         return
+            await websocket.send_text(f"Received: {message}")
 
-#     await manager.connect(user_id, websocket)
-#     print('New ws connection ~')
-#     try:
-#         while True:
-#             # Можно ничего не получать,
-#             # просто держать соединение открытым
-#             # await websocket.receive_text()
-#             message = await websocket.receive_text()
-
-#             await websocket.send_text(f"Received: {message}")
-
-#     except WebSocketDisconnect:
-#         manager.disconnect(user_id, websocket)
+    except WebSocketDisconnect:
+        manager.disconnect(user_id, websocket)

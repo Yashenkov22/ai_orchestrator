@@ -48,8 +48,8 @@ async def get_threads(admin: admin_dependency,
     for t in threads:
         thread_list.append({
             "id": t.id,
-            "account_name": t.account.username,
-            "guest_name": t.insta_user.username,
+            "account_name": t.account.view_name or t.account.username,
+            "user_name": t.insta_user.username,
             'has_unread': t.is_unread,
             'color_level': t.color_level,
             "last_activity": (
@@ -87,7 +87,7 @@ async def get_threads_by_account_id(account_id: int,
     for t in threads:
         thread_list.append(ThreadSchema(**{
             "id": t.id,
-            "account_name": t.account.username,
+            "account_name": t.account.view_name or t.account.username,
             "user_name": t.insta_user.username,
             'has_unread': t.is_unread,
             'color_level': t.color_level,
@@ -152,7 +152,7 @@ async def get_threads(admin: admin_dependency,
         'account_information': {
             'photo_url': generate_valid_media_url(thread.account.photo_url),
             'information': thread.account.information,
-            'username': thread.account.username,
+            'username': thread.account.view_name or thread.account.username,
             'full_name': thread.account.full_name,
             'account_id': thread.account_id,
         },

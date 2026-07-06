@@ -188,6 +188,7 @@ class AccountSchema(BaseModel):
 class NewAccountSchema(BaseModel):
     id: int
     username: str
+    # view_name: str | None
     fullname: str | None = Field(default=None)
     # insta_id: str
     created_at: datetime
@@ -215,6 +216,11 @@ class PatchInformationAccountSchema(BaseModel):
 class PatchPhotoAccountSchema(BaseModel):
     account_id: int
     media_url: str
+
+
+class PatchViewNameAccountSchema(BaseModel):
+    account_id: int
+    view_name: str
 
 
 class ThreadSchema(BaseModel):

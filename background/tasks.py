@@ -4,19 +4,32 @@ from asyncio import sleep
 
 from arq import Retry
 
-from fastapi import HTTPException, status
-
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 
-from db.base import Account, get_session
-from db.queries import execute_and_catch_db_error, get_message_by_id, get_account_by_id, get_thread_by_id, get_threads_by_id
+from db.base import Account
+from db.queries import (execute_and_catch_db_error,
+                        get_message_by_id,
+                        get_account_by_id,
+                        get_thread_by_id)
 
-from utils.base import get_active_profiles, try_get_profile_port, try_start_profile, try_stop_profile, try_connect_to_main_instagram_page
-from utils.tasks import parse_thread_list_playwright, parse_thread_playwright, playwright_send_message, test_playwright
+from utils.base import (generate_valid_media_url, try_get_profile_port,
+                        try_start_profile,
+                        try_stop_profile,
+                        try_connect_to_main_instagram_page)
+from utils.tasks import (parse_thread_playwright,
+                         playwright_send_message,
+                         test_playwright)
+from utils.enums import MessageStatusEnum
 
-from .base import acquire_task_lock, get_redis_pool, acquire_lock, release_lock, release_task_lock
+from websocket.redis_listener import publish_event
+
+from .base import (acquire_task_lock,
+                   get_redis_pool,
+                   acquire_lock,
+                   release_lock,
+                   release_task_lock)
 
 
 
@@ -67,42 +80,6 @@ async def start_polling_for_accounts(cxt):
                 print('ACCOUNT PARSE JOB RUNNING...', job)
 
 
-# async def parse_account(cxt,
-#                         account_id: int,
-#                         folder_id: str,
-#                         profile_id: str,
-#                         lock_value: str):
-#     print(f'TASK PARSE ACCOUNT WITH ID {account_id} ✅')
-    
-#     actived_profile = await try_start_profile(folder_id,
-#                                               profile_id)
-    
-#     sessionmaker = cxt["sessionmaker"]
-    
-#     print(actived_profile)
-    
-#     profile_port = actived_profile.get('port')
-
-#     print('PORT', profile_port)
-
-#     try:
-#         if profile_port:
-
-#             await sleep(5)
-            
-#             async with sessionmaker() as _session:
-#                 await test_playwright(account_id,
-#                                     profile_port,
-#                                     _session)
-
-#             await sleep(5)
-
-#             stopped_profile = await try_stop_profile(folder_id,
-#                                                     profile_id)
-#     finally:
-#         release_lock(account_id, lock_value)
-
-
 async def parse_account(cxt,
                         account_id: int,
                         folder_id: str,
@@ -117,6 +94,14 @@ async def parse_account(cxt,
         actived_profile = await try_start_profile(folder_id,
                                                   profile_id)
         
+        async with sessionmaker() as _session:
+            account = await get_account_by_id(account_id,
+                                              _session)
+        
+        if not account:
+            print(f'not account with {account_id}')
+            return
+        
         print(actived_profile)
         
         profile_port = actived_profile.get('port')
@@ -130,7 +115,7 @@ async def parse_account(cxt,
         await sleep(5)
         
         async with sessionmaker() as _session:
-            await test_playwright(account_id,
+            await test_playwright(account,
                                 profile_port,
                                 folder_id,
                                 profile_id,
@@ -144,13 +129,13 @@ async def parse_account(cxt,
                           task_lock)
 
 
-
 async def parse_thread(cxt,
                        account_id: int,
                        thread_id: int):
     print(f'TASK PARSE THREAD WITH ID {thread_id} ✅')
 
     sessionmaker = cxt["sessionmaker"]
+    redis = cxt['redis_pool']
 
     async with sessionmaker() as _session:
         account = await get_account_by_id(account_id,
@@ -187,10 +172,8 @@ async def parse_thread(cxt,
                 await parse_thread_playwright(account,
                                               thread,
                                               profile_port,
-                                              _session)
-
-            # await sleep(5)
-
+                                              _session,
+                                              redis)
     finally:
         release_lock(account_id, thread_id, available_lock)
 
@@ -213,6 +196,7 @@ async def send_message_to_thread(cxt,
     )
 
     sessionmaker= cxt['sessionmaker']
+    redis = cxt['redis_pool']
 
     async with sessionmaker() as _session:
         _session: AsyncSession
@@ -221,7 +205,7 @@ async def send_message_to_thread(cxt,
 
         account = res.scalar_one_or_none()
         message = await get_message_by_id(message_id,
-                                        _session)
+                                          _session)
 
     if not account or not message:
         print('Account or Message Not found')
@@ -230,14 +214,36 @@ async def send_message_to_thread(cxt,
         return
     
     available_lock = acquire_lock(account.id,
-                                    message.thread_id)
+                                  message.thread_id)
 
     if not available_lock:
         print('error 2')
+        async with sessionmaker() as _session:
+            _session: AsyncSession
+            _message = await _session.merge(message)
+            _message.retry_send_count += 1
+            await execute_and_catch_db_error(_session.commit(),
+                                             _session,
+                                             with_rollback=True)
+        
+        # ws событие об изменении message
+        payload = {
+            'thread_id': message.thread_id,
+        }
+        msg_payload = {
+            'id': str(message.id),
+            "retry_send_count": _message.retry_send_count,
+        }
+
+        payload['message'] = msg_payload
+
+        await publish_event(redis,
+                            type='Message send count updated',
+                            payload=payload)
+
         raise Retry(defer=15)
     
     try:
-        
         _key = f'lock:send_message:acc:{account.id}:msg:{message_id}'
         task_lock = acquire_task_lock(_key)
 
@@ -261,6 +267,27 @@ async def send_message_to_thread(cxt,
                 print('PORT', profile_port)
 
                 if profile_port:
+
+                    # update message status
+                    async with sessionmaker() as _session:
+                        _session: AsyncSession
+                        message.status = MessageStatusEnum.MODERATED
+                        await _session.merge(message)
+                        await execute_and_catch_db_error(_session.commit(),
+                                                        _session,
+                                                        with_rollback=True)
+                    payload = {
+                        'thread_id': message.thread_id,
+                    }
+                    message_payload = {
+                        'id': str(message.id),
+                        "modStatus": message.status,
+                    }
+                    payload['message'] = message_payload
+ 
+                    await publish_event(redis,
+                                        type='Message updated',
+                                        payload=payload)
                     
                     await sleep(5)
 
@@ -279,12 +306,36 @@ async def send_message_to_thread(cxt,
                                                     folder_id,
                                                     profile_id,
                                                     _session,
+                                                    redis,
                                                     media_type)  
         else:
             print('error 3')
 
     except Retry as ex:
         print(f'CATCH RETRY FOR ACC_ID {account_id} MSG_ID {message_id}')
+
+        async with sessionmaker() as _session:
+            _session: AsyncSession
+            _message = await _session.merge(message)
+            _message.retry_send_count += 1
+            await execute_and_catch_db_error(_session.commit(),
+                                             _session,
+                                             with_rollback=True)
+        
+        # ws событие об изменении message
+        payload = {
+            'thread_id': message.thread_id,
+        }
+        msg_payload = {
+            'id': str(message.id),
+            "retry_send_count": _message.retry_send_count,
+        }
+
+        payload['message'] = msg_payload
+
+        await publish_event(redis,
+                            type='Message send count updated',
+                            payload=payload)
         raise
 
     except Exception as ex:
@@ -323,10 +374,6 @@ async def try_start_stop_vision_profile_by_account_id(cxt,
             warning_message = actived_profile.get('message')
 
             print('PORT', profile_port)
-
-            # if warning_message:
-            #     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-            #                         detail=warning_message)
 
             if profile_port:
                 is_success = await try_connect_to_main_instagram_page(profile_port)

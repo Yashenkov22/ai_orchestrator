@@ -79,6 +79,9 @@ class Account(Base):
     username = Column(String,
                       nullable=False,
                       unique=True)
+    view_name = Column(String,
+                      nullable=True,
+                      default=None)
     password = Column(String)
     # session = Column(JSONB,
     #                  nullable=True,
@@ -179,20 +182,15 @@ class Message(Base):
                   nullable=True,
                   default=None,
                   server_default=None)
-    # is_read = Column(Boolean,
-    #                  default=False)
-#     sender_id = Column(
-#         BigInteger,
-#         ForeignKey("users.id",
-#         ondelete="CASCADE"),
-#         nullable=False
-#     )
+    retry_send_count = Column(Integer,
+                              default=0,
+                              server_default='0')
+
     thread_id = Column(
         BigInteger,
         ForeignKey(
             "threads.id",
             ondelete="CASCADE",
-            # name="fk_messages_chat_id"
         ),
         nullable=False
     )

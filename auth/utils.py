@@ -175,17 +175,17 @@ async def add_refresh_token_to_db(admin: Admin,
                                       session)
 
 
-# async def get_current_user_for_websocket(
-#     token: str | None
-# ):
-#     if token is None:
-#         return None
+async def get_current_user_for_websocket(
+    token: str | None
+):
+    if token is None:
+        return None
 
-#     try:
-#         payload = jwt.decode(token,
-#                              JWT_SECRET_KEY,
-#                              algorithms=[JWT_ALGORITHM])
-#         user_id = payload.get('userId')
-#         return user_id
-#     except Exception:
-#         return None  # или можно кинуть 401, если токен битый
+    try:
+        payload = jwt.decode(token,
+                             JWT_SECRET_KEY,
+                             algorithms=[JWT_ALGORITHM])
+        user_id = payload.get('userId')
+        return user_id
+    except Exception:
+        return None  # или можно кинуть 401, если токен битый
