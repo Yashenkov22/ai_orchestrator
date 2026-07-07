@@ -46,7 +46,7 @@ class WorkerSettings:
     on_shutdown = shutdown
     queue_name = "arq:polling"
     redis_settings = redis_settings
-    max_jobs = 5
+    max_jobs = 10
     keep_result = 0
     job_timeout = 900
     job_defaults = {

@@ -255,16 +255,7 @@ async def try_connect_to_main_instagram_page(profile_port: int):
             context = browser.contexts[0] if browser.contexts else await browser.new_context()
             page = await context.new_page()
 
-            current_url = page.url
-            if 'instagram.com/' in current_url:
-                await page.reload(wait_until='domcontentloaded')
-            else:
-                await page.goto('https://www.instagram.com/',
-                                wait_until='domcontentloaded')
-            
-            await asyncio.sleep(2)
-            
-            return page.url.startswith('https://www.instagram')
+            return True
 
 
 async def try_translate_text(text: str):

@@ -188,7 +188,7 @@ class AccountSchema(BaseModel):
 class NewAccountSchema(BaseModel):
     id: int
     username: str
-    # view_name: str | None
+    view_name: str | None
     fullname: str | None = Field(default=None)
     # insta_id: str
     created_at: datetime

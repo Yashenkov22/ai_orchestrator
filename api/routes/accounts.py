@@ -149,7 +149,7 @@ async def get_account_by_id(account_id: int,
         account_data =  {
             "id": account.id,
             "username": account.username,
-            # 'view_name': account.view_name,
+            'view_name': account.view_name,
             "fullname": account.full_name,
             'created_at': account.created_at,
             'updated_at': account.updated_at,

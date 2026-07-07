@@ -155,7 +155,8 @@ async def enter_thread(page, thread_key, thread_received, timeout=15):
 
 
 def extract_media_urls(node: dict) -> list[dict]:
-    content = node.get('content', {})
+    # content = node.get('content', {})
+    content = node.get('content') or {}
     typename = content.get('__typename', '')
     urls = []
 
