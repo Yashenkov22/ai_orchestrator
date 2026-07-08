@@ -914,6 +914,10 @@ async def test_playwright(account: Account,
             print(f"CONNECTED ON {profile_port} PORT")
         
         context = browser.contexts[0] if browser.contexts else await browser.new_context()
+
+        if len(context.pages) >= 6:
+            raise Retry(defer=5)
+
         page = await context.new_page()
 
         async def on_response(response):
