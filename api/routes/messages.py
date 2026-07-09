@@ -256,10 +256,10 @@ async def create_new_message(data: CreateMessageSchema,
     ws_content = new_message.text or ''
 
     if data.attachment:
-        payload_attachment = {
+        payload_attachment = [{
             'media_type': data.attachment['media_type'],
             'media_url': generate_valid_media_url(f"{data.attachment['media_url']}"),
-        }
+        }]
         ws_content = ''
     
     payload = {
