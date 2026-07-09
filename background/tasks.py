@@ -14,7 +14,7 @@ from db.queries import (execute_and_catch_db_error,
                         get_account_by_id,
                         get_thread_by_id)
 
-from utils.base import (generate_valid_media_url, try_get_profile_port,
+from utils.base import (try_get_profile_port,
                         try_start_profile,
                         try_stop_profile,
                         try_connect_to_main_instagram_page)
@@ -74,6 +74,7 @@ async def start_polling_for_accounts(cxt):
                     folder_id,
                     profile_id,
                     task_lock,
+                    _job_id=_key,
                     _queue_name='arq:polling',
                 )
 

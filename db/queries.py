@@ -450,6 +450,20 @@ async def check_thread_in_db(thread_id: str,
     
     return res.scalar_one_or_none()
 
+async def get_all_threads_by_account(account_id: int,
+                                     session: AsyncSession):
+    query = (
+        select(
+            Thread
+        )\
+        .where(Thread.account_id == account_id)
+    )
+
+    res = await execute_and_catch_db_error(session.execute(query),
+                                     session)
+    
+    return res.scalars().all()
+
 
 async def try_add_new_thread(thread_data: dict,
                              session: AsyncSession):
