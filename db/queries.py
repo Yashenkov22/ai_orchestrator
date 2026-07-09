@@ -641,7 +641,6 @@ async def try_add_messages(message_data: dict,
                         message.created_at.strftime("%Y-%d-%m %H:%M")
                         if message.created_at else ""
                     ),
-                    "retry_send_count": 0,
                     "modStatus": message.status,  # pending / approved / moderated
                     'attachments': attachment_list
                 }
