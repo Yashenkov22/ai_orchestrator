@@ -1617,7 +1617,7 @@ async def playwright_send_message(message: Message,
                         timeout=15000)
                     await human_pause(0.8, 1.5)
                     print(" + текст отправлен")
-                    await asyncio.sleep(1.5)
+                    # await asyncio.sleep(1.5)
                     send_success = True
                 except Exception as ex:
                     print(ex)
@@ -1625,7 +1625,7 @@ async def playwright_send_message(message: Message,
     
             thread_for_send_message_page.remove_listener("response", on_response)
         finally:
-            # await asyncio.sleep(2)
+            await asyncio.sleep(2)
             await thread_for_send_message_page.close()
             await asyncio.sleep(1)
         
