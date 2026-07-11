@@ -6,15 +6,15 @@ from arq import Retry
 
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, delete
 
-from db.base import Account
+from db.base import Account, Thread
 from db.queries import (execute_and_catch_db_error,
                         get_message_by_id,
                         get_account_by_id,
-                        get_thread_by_id)
+                        get_thread_by_id, get_thread_only_by_id)
 
-from utils.base import (try_get_profile_port,
+from utils.base import (reject_request_chat, try_block_thread, try_get_profile_port,
                         try_start_profile,
                         try_stop_profile,
                         try_connect_to_main_instagram_page)
@@ -383,3 +383,107 @@ async def try_start_stop_vision_profile_by_account_id(cxt,
         case 'stop':
             await try_stop_profile(account.folder_id,
                                    account.profile_id)
+
+
+async def try_block_thread_by_account_id(cxt,
+                                        account_id: int,
+                                        thread_id: int):
+    sessionmaker= cxt['sessionmaker']
+    redis_pool = cxt['redis_pool']
+
+    async with sessionmaker() as _session:
+        _session: AsyncSession
+        account = await get_account_by_id(account_id,
+                                        _session)
+        thread = await get_thread_only_by_id(thread_id,
+                                             _session)
+        
+        if not account or\
+            not (account.folder_id and account.profile_id):
+            raise
+
+        if not thread:
+            raise
+
+        thread.proccess_block = True
+
+        await execute_and_catch_db_error(_session.commit(),
+                                         _session,
+                                         with_rollback=True)
+        
+
+    payload = {
+        'account_id': thread.account_id,
+    }
+
+    thread_payload = {
+        'id': thread.id,
+        'context': thread.context,
+        'has_unread': thread.is_unread,
+        "last_activity": thread.timestamp_last_seen_message.strftime("%Y-%d-%m %H:%M")\
+                        if thread.timestamp_last_seen_message else "",
+        'is_approved': thread.is_approved,
+        'is_pinned': thread.is_pinned,
+        'is_blocked': thread.is_blocked,
+        'proccess_block': thread.proccess_block}
+
+    payload['thread'] = thread_payload
+    
+    await publish_event(redis_pool,
+            type='Thread process block',
+            payload=payload)
+        
+
+    actived_profile = await try_start_profile(account.folder_id,
+                                            account.profile_id)
+    print(actived_profile)
+
+    profile_port = actived_profile.get('port')
+
+    warning_message = actived_profile.get('message')
+
+    print('PORT', profile_port)
+
+    thread_url = f'https://www.instagram.com/direct/t/{thread.thread_id}/'
+
+    if profile_port:
+        await sleep(1)
+        res = await try_block_thread(profile_port,
+                               thread_url)
+
+        if res:
+            async with sessionmaker() as _session:
+                _session: AsyncSession
+                thread = await _session.merge(thread)
+                thread.is_blocked = True
+                thread.proccess_block = False
+                
+                await execute_and_catch_db_error(_session.commit(),
+                                                _session,
+                                                with_rollback=True)
+                
+                print(' + Thread has blocked!!!')
+                
+                payload = {
+                    'account_id': thread.account_id,
+                }
+
+                thread_payload = {
+                    'id': thread.id,
+                    'context': thread.context,
+                    'has_unread': thread.is_unread,
+                    "last_activity": thread.timestamp_last_seen_message.strftime("%Y-%d-%m %H:%M")\
+                                    if thread.timestamp_last_seen_message else "",
+                    'is_approved': thread.is_approved,
+                    'is_pinned': thread.is_pinned,
+                    'is_blocked': thread.is_blocked,
+                    'proccess_block': thread.proccess_block}
+
+                payload['thread'] = thread_payload
+                
+                await publish_event(redis_pool,
+                        type='Thread has blocked',
+                        payload=payload)
+        else:
+            print('not change')
+

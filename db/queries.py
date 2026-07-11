@@ -205,20 +205,18 @@ async def get_message_only_by_id(_id: int,
     return message.scalar_one_or_none()
 
 
-async def get_thread_by_id(_id: int,
-                            _session: AsyncSession) -> Message | None:
+async def get_thread_only_by_id(_id: int,
+                            _session: AsyncSession) -> Thread | None:
 
     query = (
         select(Thread)\
-        .options(selectinload(Thread.insta_user),
-                 selectinload(Thread.account))
         .where(Thread.id == _id)
     )
     
-    message = await execute_and_catch_db_error(_session.execute(query),
+    thread = await execute_and_catch_db_error(_session.execute(query),
                                                _session)
     
-    return message.scalar_one_or_none()
+    return thread.scalar_one_or_none()
 
 
 async def get_threads_by_id(ids: list[int],
@@ -473,7 +471,7 @@ async def try_add_new_thread(thread_data: dict,
         'timestamp_last_seen_message': thread_data.get('timestamp_last_seen_message'),
         'last_message_id': '',
         'context': '',
-        'is_approved': True,
+        'is_approved': thread_data.get('is_approved'),
         'is_unread':  thread_data.get('is_unread'),
         'color_level': 'grey',
         'user_information': None,
@@ -613,6 +611,9 @@ async def try_add_messages(message_data: dict,
                 'has_unread': thread.is_unread,
                 "last_activity": thread.timestamp_last_seen_message.strftime("%Y-%d-%m %H:%M")\
                                 if thread.timestamp_last_seen_message else "",
+                'is_approved': thread.is_approved,
+                'is_pinned': thread.is_pinned,
+                'is_blocked': thread.is_blocked,
                         }
 
             message_list = []

@@ -84,113 +84,101 @@ def batch_has_new_messages(batch_threads: list, known_map: dict) -> bool:
     return False
 
 
-async def scroll_inbox_until_loaded(page, max_rounds=40,
-                                    wait_after_scroll=6.0, poll_interval=0.3):
-    item_sel = 'div[role="button"]'   # чаты = div role=button (по твоим probe)
-
-    scroll_js = """() => {
-        // находим самый "длинный" скроллируемый контейнер на странице
-        let best = null, max = 50;
-        for (const c of document.querySelectorAll('*')) {
-            const s = getComputedStyle(c);
-            if (s.overflowY === 'auto' || s.overflowY === 'scroll') {
-                const d = c.scrollHeight - c.clientHeight;
-                if (d > max) { max = d; best = c; }
-            }
-        }
-        if (!best) return {found: false};
-        const before = best.scrollTop;
-        best.scrollTop = best.scrollHeight;   // прыжок в самый низ
-        return {found: true, before: before, after: best.scrollTop,
-                sh: best.scrollHeight, ch: best.clientHeight};
-    }"""
-
-    prev = -1
-    stable = 0
-    for i in range(max_rounds):
-        count = await page.locator(item_sel).count()
-        if count == prev:
-            stable += 1
-            if stable >= 2:
-                print(f"[scroll-inbox] stable at {count}, stop #{i}")
-                break
-        else:
-            stable = 0
-        prev = count
-
-        res = await page.evaluate(scroll_js)
-        print(f"[scroll-inbox #{i}] count={count} scroll={res}")
-
-        # ждём прироста чатов
-        waited = 0.0
-        while waited < wait_after_scroll:
-            await page.wait_for_timeout(int(poll_interval * 1000))
-            waited += poll_interval
-            if await page.locator(item_sel).count() > count:
-                break
-
-    return prev
-
-
-# async def scroll_inbox_until_loaded(page, collected_data, known_map,
-#                                     max_rounds=80,
-#                                     wait_after_scroll=8.0, poll_interval=0.3):
-#     item_sel = 'div[role="button"]'
+# async def scroll_inbox_until_loaded(page, max_rounds=40,
+#                                     wait_after_scroll=6.0, poll_interval=0.3):
+#     item_sel = 'div[role="button"]'   # чаты = div role=button (по твоим probe)
 
 #     scroll_js = """() => {
+#         // находим самый "длинный" скроллируемый контейнер на странице
 #         let best = null, max = 50;
 #         for (const c of document.querySelectorAll('*')) {
 #             const s = getComputedStyle(c);
 #             if (s.overflowY === 'auto' || s.overflowY === 'scroll') {
 #                 const d = c.scrollHeight - c.clientHeight;
-#                 if (d > max) { best = c; max = d; }
+#                 if (d > max) { max = d; best = c; }
 #             }
 #         }
 #         if (!best) return {found: false};
 #         const before = best.scrollTop;
-#         best.scrollTop = best.scrollHeight;
+#         best.scrollTop = best.scrollHeight;   // прыжок в самый низ
 #         return {found: true, before: before, after: best.scrollTop,
 #                 sh: best.scrollHeight, ch: best.clientHeight};
 #     }"""
 
-#     empty_rounds = 0
-
+#     prev = -1
+#     stable = 0
 #     for i in range(max_rounds):
-#         pages_before = len(collected_data.get('SlideMailboxPages', []))
+#         count = await page.locator(item_sel).count()
+#         if count == prev:
+#             stable += 1
+#             if stable >= 2:
+#                 print(f"[scroll-inbox] stable at {count}, stop #{i}")
+#                 break
+#         else:
+#             stable = 0
+#         prev = count
 
 #         res = await page.evaluate(scroll_js)
-#         count = await page.locator(item_sel).count()
-#         print(f"[scroll-inbox #{i}] count={count} pages_before={pages_before} scroll={res}")
+#         print(f"[scroll-inbox #{i}] count={count} scroll={res}")
 
-#         # ждём именно новую страницу сети
+#         # ждём прироста чатов
 #         waited = 0.0
 #         while waited < wait_after_scroll:
 #             await page.wait_for_timeout(int(poll_interval * 1000))
 #             waited += poll_interval
-#             if len(collected_data.get('SlideMailboxPages', [])) > pages_before:
+#             if await page.locator(item_sel).count() > count:
 #                 break
 
-#         pages = collected_data.get('SlideMailboxPages', [])
-#         if len(pages) == pages_before:
-#             empty_rounds += 1
-#             print(f"[scroll-inbox] no new page at #{i}, empty={empty_rounds}")
-#             if empty_rounds >= 3:
-#                 print(f"[scroll-inbox] stop, no more pages arriving")
-#                 break
-#             continue
-#         empty_rounds = 0
+#     return prev
 
-#         # === ключевая проверка: разбираем ТОЛЬКО свежепришедшую порцию ===
-#         last_page = pages[-1]
-#         batch_threads = extract_threads_from_inbox([last_page])   # твой существующий экстрактор
+async def scroll_inbox_until_loaded(page, collected_data, max_rounds=80,
+                                    wait_after_scroll=8.0, poll_interval=0.3):
+    item_sel = 'div[role="button"]'
 
-#         if not batch_has_new_messages(batch_threads, known_map):
-#             print(f"[scroll-inbox] batch at #{i} has NO new messages for any thread — stop scrolling")
-#             break
-#         else:
-#             print(f"[scroll-inbox] batch at #{i} has new messages — continue")
+    scroll_js = """() => {
+        let best = null, max = 50;
+        for (const c of document.querySelectorAll('*')) {
+            const s = getComputedStyle(c);
+            if (s.overflowY === 'auto' || s.overflowY === 'scroll') {
+                const d = c.scrollHeight - c.clientHeight;
+                if (d > max) { best = c; max = d; }
+            }
+        }
+        if (!best) return {found: false};
+        const before = best.scrollTop;
+        best.scrollTop = best.scrollHeight;
+        return {found: true, before: before, after: best.scrollTop,
+                sh: best.scrollHeight, ch: best.clientHeight};
+    }"""
 
-#     return await page.locator(item_sel).count()
+    empty_rounds = 0
+
+    for i in range(max_rounds):
+        pages_before = len(collected_data.get('SlideMailboxPages', []))
+
+        res = await page.evaluate(scroll_js)
+        count = await page.locator(item_sel).count()
+        print(f"[scroll-inbox #{i}] count={count} pages_before={pages_before} scroll={res}")
+
+        waited = 0.0
+        while waited < wait_after_scroll:
+            await page.wait_for_timeout(int(poll_interval * 1000))
+            waited += poll_interval
+            if len(collected_data.get('SlideMailboxPages', [])) > pages_before:
+                break
+
+        pages_after = len(collected_data.get('SlideMailboxPages', []))
+
+        if pages_after == pages_before:
+            empty_rounds += 1
+            print(f"[scroll-inbox] no new page at #{i}, empty={empty_rounds}")
+            if empty_rounds >= 2:
+                print(f"[scroll-inbox] stop after {empty_rounds} empty rounds")
+                break
+        else:
+            empty_rounds = 0
+
+    return await page.locator(item_sel).count()
 
 
 def extract_friendly_name(payload: str) -> str | None:
@@ -246,8 +234,47 @@ async def enter_thread(page, thread_key, thread_received, timeout=15):
     await page.wait_for_timeout(2000)
 
 
+# def extract_media_urls(node: dict) -> list[dict]:
+#     # content = node.get('content', {})
+#     content = node.get('content') or {}
+#     typename = content.get('__typename', '')
+#     urls = []
+
+#     if typename == 'SlideMessageImageContent':
+#         for att in content.get('attachments', []):
+#             url = att.get('attachment_cdn_url') or att.get('preview_cdn_url')
+#             if url:
+#                 urls.append({'url': url, 'type': 'image', 'ext': '.jpg'})
+
+#     elif typename == 'SlideMessageMultiMediaContent':
+#         for att in content.get('ordered_photo_video_attachments', []):
+#             url = att.get('attachment_cdn_url') or att.get('preview_cdn_url')
+#             if url:
+#                 att_type = att.get('attachment_type', 2)
+#                 if att_type == 4:
+#                     urls.append({'url': url, 'type': 'video', 'ext': '.mp4'})
+#                 else:
+#                     urls.append({'url': url, 'type': 'image', 'ext': '.jpg'})
+
+#     elif typename == 'SlideMessageVideosContent':
+#         for vid in content.get('videos', []):
+#             video_url = vid.get('attachment_cdn_url')
+#             if video_url:
+#                 urls.append({'url': video_url, 'type': 'video', 'ext': '.mp4'})
+#             preview = vid.get('preview_cdn_url')
+#             if preview:
+#                 urls.append({'url': preview, 'type': 'video_preview', 'ext': '.jpg'})
+
+#     elif typename == 'SlideMessageAudiosContent':
+#         for audio in content.get('audio_attachments', []):
+#             audio_url = audio.get('attachment_cdn_url')
+#             if audio_url:
+#                 urls.append({'url': audio_url, 'type': 'audio', 'ext': '.mp4'})
+
+#     return urls
+
+
 def extract_media_urls(node: dict) -> list[dict]:
-    # content = node.get('content', {})
     content = node.get('content') or {}
     typename = content.get('__typename', '')
     urls = []
@@ -283,6 +310,14 @@ def extract_media_urls(node: dict) -> list[dict]:
             if audio_url:
                 urls.append({'url': audio_url, 'type': 'audio', 'ext': '.mp4'})
 
+    elif typename == 'SlideMessageXMAContent':
+        # репост чужого контента (сторис/рилс/пост) — MESSAGE_INLINE_SHARE, MONTAGE_SHARE_XMA
+        xma = content.get('xma') or {}
+        preview = xma.get('preview_image') or {}
+        preview_url = preview.get('url')
+        if preview_url:
+            urls.append({'url': preview_url, 'type': 'xma_preview', 'ext': '.jpg'})
+
     return urls
 
 
@@ -304,7 +339,7 @@ async def download_media(urls: list[dict], save_dir: str, thread_key: str, msg_i
                         
                         size_kb = len(data) / 1024
                         print(f"      Downloaded: {filename} ({size_kb:.1f} KB)")
-                        if media_type in ('image', 'video_preview'):
+                        if media_type in ('image', 'video_preview', 'xma_preview'):
                             media_type = 'photo'
                         downloaded.append((media_type, filepath))
                     else:
@@ -391,9 +426,29 @@ async def process_thread_messages(messages: list,
         elif ctype.startswith('REACTION'):
             # temporarily
             pass
+        elif ctype in ('MESSAGE_INLINE_SHARE', 'MONTAGE_SHARE_XMA'):
+            content = node.get('content') or {}
+            xma = content.get('xma') or {}
+            
+            comment_text = content.get('xma_text_body') or node.get('text_body') or ''
+            shared_author = xma.get('header_title_text', '')
+            eyebrow = xma.get('eyebrow_text')  # напр. "Replied to @X's story"
 
+            # текст для сохранения: комментарий отправителя + пометка о репосте
+            if eyebrow:
+                msg_data['text'] = f"{comment_text} [{eyebrow}]" if comment_text else f"[{eyebrow}]"
+            elif shared_author:
+                msg_data['text'] = f"{comment_text} [shared post by {shared_author}]" if comment_text else f"[shared post by {shared_author}]"
+            else:
+                msg_data['text'] = comment_text
+
+            media_urls = extract_media_urls(node)
+            if media_urls:
+                files = await download_media(media_urls, thread_dir, str(thread_key), msg_id)
+                msg_data['media_files'] = files
         else:
-            print('TYPE MESSAGE ->. ',ctype)
+            # print('TYPE MESSAGE ->. ',ctype)
+            # print(node)
             media_urls = extract_media_urls(node)
             if media_urls:
                 files = await download_media(media_urls, thread_dir, str(thread_key), msg_id)
@@ -524,12 +579,19 @@ def extract_threads_from_inbox(data_list: list) -> list:
     return threads
 
 
+def collect_all_request_pages(collected_data):
+    """Собирает все страницы: первый экран запросов + пагинация."""
+    pages = []
+    pages.extend(collected_data.get('PolarisDirectMessageRequestQuery', []))
+    pages.extend(collected_data.get('SlideMailboxPages', []))
+    return pages
+
+
 def extract_threads_from_requests(data_list: list) -> tuple[list, list]:
     """Возвращает (request_threads, spam_threads)"""
     request_threads = []
     spam_threads = []
 
-    # нормализуем: разворачиваем вложенные списки страниц в плоский список объектов
     flat = []
     for item in data_list:
         if isinstance(item, list):
@@ -553,24 +615,46 @@ def extract_threads_from_requests(data_list: list) -> tuple[list, list]:
             'last_message_ts': last_message_ts,
         }
 
+    seen_request_keys = set()
+    seen_spam_keys = set()
+
     for obj in data_list:
         if not isinstance(obj, dict):
             continue
         data = obj.get('data', {})
 
-        # Обычные requests
+        # Обычные requests — первый экран
         for edge in (data.get('get_slide_mailbox_for_iris_subscription', {})
                          .get('threads_by_folder', {})
                          .get('edges', [])):
             node = edge['node'].get('as_ig_direct_thread', edge.get('node', {}))
+            tk = node.get('thread_key')
+            if tk and tk in seen_request_keys:
+                continue
+            seen_request_keys.add(tk)
             request_threads.append(build_thread(node))
 
-        # Spam
+        # Spam — первый экран
         for edge in (data.get('spamMailbox', {})
                          .get('threads_by_folder', {})
                          .get('edges', [])):
             node = edge['node'].get('as_ig_direct_thread', edge.get('node', {}))
+            tk = node.get('thread_key')
+            if tk and tk in seen_spam_keys:
+                continue
+            seen_spam_keys.add(tk)
             spam_threads.append(build_thread(node))
+
+        # Пагинация requests — fetch__SlideMailbox.threads_by_folder (тот же путь!)
+        for edge in (data.get('fetch__SlideMailbox', {})
+                         .get('threads_by_folder', {})
+                         .get('edges', [])):
+            node = edge['node'].get('as_ig_direct_thread', edge.get('node', {}))
+            tk = node.get('thread_key')
+            if tk and tk in seen_request_keys:
+                continue
+            seen_request_keys.add(tk)
+            request_threads.append(build_thread(node))
 
     return request_threads, spam_threads
 
@@ -624,6 +708,9 @@ async def process_threads(
                 'thread_id': thread_key,
                 'timestamp_last_seen_message': None,
                 'is_unread': thread.get('unread'),
+                'is_approved': True,
+                'is_spam': False,
+                'is_blocked': False,
             }
             if is_request:
                 thread_data['is_approved'] = False
@@ -651,6 +738,7 @@ async def process_threads(
                     _job_id=f'parse_thread:acoount:{account.id}:thread:{current_thread.id}',
                     _queue_name='arq:threads',
                 )
+                await asyncio.sleep(0.5)
                 # return {"status": "queued", "job_id": job.job_id}
         
         else:
@@ -663,6 +751,7 @@ async def process_threads(
                 _job_id=f'parse_thread:acoount:{account.id}:thread:{current_thread.id}',
                 _queue_name='arq:threads',
             )
+            await asyncio.sleep(0.5)
             # return {"status": "polling", "job_id": job.job_id}
 
         await execute_and_catch_db_error(_session.commit(),
@@ -681,6 +770,9 @@ async def process_threads(
             "last_activity": current_thread.timestamp_last_seen_message.strftime("%Y-%d-%m %H:%M")\
                 if current_thread.timestamp_last_seen_message else "",
             "color_level": current_thread.color_level,
+            'is_approved': current_thread.is_approved,
+            'is_pinned': current_thread.is_pinned,
+            'is_blocked': current_thread.is_blocked,
         }
 
         payload['thread'] = payload_thread
@@ -937,7 +1029,7 @@ async def iterate_inbox_folders(page, inbox_received, collected_data, account_id
     # нет разделения на вкладки — обычный единый инбокс
     if not tabs:
         print("[inbox] вкладок нет, единый список")
-        await scroll_inbox_until_loaded(page)
+        await scroll_inbox_until_loaded(page, collected_data)
         # known_map = await load_known_threads_map(account_id, _session)
         # await scroll_inbox_until_loaded(page, collected_data, known_map)
         return
@@ -955,9 +1047,7 @@ async def iterate_inbox_folders(page, inbox_received, collected_data, account_id
         await asyncio.wait_for(inbox_received.wait(), timeout=15)
     except asyncio.TimeoutError:
         print(f"[inbox] таймаут ожидания ответа для General")
-    await scroll_inbox_until_loaded(page)
-    # known_map = await load_known_threads_map(account_id, _session)
-    # await scroll_inbox_until_loaded(page, collected_data, known_map)
+    await scroll_inbox_until_loaded(page, collected_data)
 
 
 def collect_all_inbox_threads(collected_data):
@@ -1081,28 +1171,81 @@ async def test_playwright(account: Account,
 
             # === 1. Inbox ===
 
-            await page.goto('https://www.instagram.com/direct/inbox/',
-                            wait_until='domcontentloaded')
+            # await page.goto('https://www.instagram.com/direct/inbox/',
+            #                 wait_until='domcontentloaded')
                 
-            await dismiss_notifications_popup(page)
+            # await dismiss_notifications_popup(page)
+
+            # try:
+            #     await asyncio.wait_for(inbox_received.wait(), timeout=15)
+            #     print("Inbox received!")
+            # except asyncio.TimeoutError:
+            #     print("Inbox timeout")
+
+            # await page.wait_for_timeout(2000)
+
+            # await iterate_inbox_folders(page, inbox_received, collected_data, account.id, _session)
+
+            # inbox_threads = collect_all_inbox_threads(collected_data)
+
+            # print(f"Found {len(inbox_threads)} inbox threads")
+            # await process_threads(inbox_threads, account, page,
+            #                     thread_responses, thread_received, redis_pool, _session)
+            
+            # await asyncio.sleep(1)
+
+            # # === 2. Message Requests ===
+
+            request_message_received.clear()
+            collected_data.clear()
+
+            await page.goto('https://www.instagram.com/direct/requests/',
+                            wait_until='domcontentloaded')
 
             try:
-                await asyncio.wait_for(inbox_received.wait(), timeout=15)
-                print("Inbox received!")
+                await asyncio.wait_for(request_message_received.wait(), timeout=15)
+                print("Message requests received!")
             except asyncio.TimeoutError:
-                print("Inbox timeout")
+                print("Message requests timeout")
 
             await page.wait_for_timeout(2000)
 
-            await iterate_inbox_folders(page, inbox_received, collected_data, account.id, _session)
-
-            inbox_threads = collect_all_inbox_threads(collected_data)
-
-            print(f"Found {len(inbox_threads)} inbox threads")
-            await process_threads(inbox_threads, account, page,
-                                thread_responses, thread_received, redis_pool, _session)
+            await scroll_inbox_until_loaded(page, collected_data)
             
-            await asyncio.sleep(2)
+            request_pages = collect_all_request_pages(collected_data)
+            request_threads, _ = extract_threads_from_requests(request_pages)
+
+            collected_data.clear()
+
+            # === Hidden requests (спам) ===
+            request_message_received.clear()
+            await page.goto('https://www.instagram.com/direct/requests/hidden/',
+                            wait_until='domcontentloaded')
+
+            try:
+                await asyncio.wait_for(request_message_received.wait(), timeout=15)
+                print("Hidden requests received!")
+            except asyncio.TimeoutError:
+                print("Hidden requests timeout")
+
+            await page.wait_for_timeout(2000)
+            total = await scroll_inbox_until_loaded(page, collected_data)
+
+            hidden_pages = collect_all_request_pages(collected_data)
+            # с hidden-страницы ВСЁ, что нашлось, считаем spam — раздельный сбор снимает вопрос
+            # различения по полю folder внутри одного смешанного потока
+            _, spam_threads_raw = extract_threads_from_requests(hidden_pages)
+            spam_threads = spam_threads_raw   # все треды с hidden-страницы — спам
+
+            print(f"Found {len(request_threads)} request threads")
+            await process_threads(request_threads, account, page,
+                                thread_responses, thread_received, redis_pool, _session,
+                                is_request=True)
+
+            print(f"Found {len(spam_threads)} spam threads")
+            await process_threads(spam_threads, account, page,
+                                thread_responses, thread_received, redis_pool, _session,
+                                is_spam=True)
         finally:
             try:
                 page.remove_listener("response", on_response)
@@ -1110,39 +1253,6 @@ async def test_playwright(account: Account,
                 await asyncio.sleep(1)
             except Exception as ex:
                 print('ERROR WITH CLOSE PAGE',ex)
-        # === 2. Message Requests + Spam ===
-
-        # request_message_received.clear()
-
-        # await page.goto('https://www.instagram.com/direct/requests/',
-        #                 wait_until='domcontentloaded')
-
-        # try:
-        #     await asyncio.wait_for(request_message_received.wait(), timeout=15)
-        #     print("Message requests received!")
-        # except asyncio.TimeoutError:
-        #     print("Message requests timeout")
-
-        # await page.wait_for_timeout(2000)
-
-        # # total = await scroll_inbox_until_loaded(page)
-        
-        # # print(f"Scrolled inbox, {total} thread links in DOM")
-
-        # request_threads, spam_threads = extract_threads_from_requests(
-        #     collected_data.get('PolarisDirectMessageRequestQuery', [])
-        # )
-
-        # print(f"Found {len(request_threads)} request threads")
-        # await process_threads(request_threads, account_id, page,
-        #                     thread_responses, thread_received, _session,
-        #                     is_request=True)
-
-        # print(f"Found {len(spam_threads)} spam threads")
-        # await process_threads(spam_threads, account_id, page,
-        #                     thread_responses, thread_received, _session,
-        #                     is_spam=True)
-        
 
 
 #####
@@ -1257,7 +1367,7 @@ async def parse_thread_playwright(account: Account,
         finally:
             await detail_thread_page.close()
             await asyncio.sleep(1)
-#####
+
 
 async def parse_thread_list_playwright(account_id: int,
                                        threads: list[Thread],
@@ -1363,7 +1473,7 @@ async def approve_request_chat(page, thread_url: str):
         return False
 
     await accept_btn.first.click()
-    await asyncio.sleep(4)
+    await asyncio.sleep(2)
 
     # Признак успеха: после Accept появляется композер — до подтверждения
     # в request-чате писать нельзя, поля ввода нет.

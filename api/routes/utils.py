@@ -171,6 +171,21 @@ async def run_background_parse_thread(admin: admin_dependency,
     return {"status": "queued", "job_id": job.job_id}
 
 
+@utils_router.get("/block_thread_by_account_id")
+async def run_background_block_thread(admin: admin_dependency,
+                      session: session_dependency,
+                      arq_pool: arq_dependency,
+                      account_id: int,
+                      thread_id: int):
+    job = await arq_pool.enqueue_job(
+        'try_block_thread_by_account_id',
+        account_id,
+        thread_id,
+        _queue_name='arq:messages',
+    )
+    return {"status": "queued", "job_id": job.job_id}
+
+
 @utils_router.get("/try_start_vision_profile")
 async def try_start_vision_profile(admin: admin_dependency,
                                    arq_pool: arq_dependency,

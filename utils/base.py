@@ -1,3 +1,4 @@
+import re
 import pytz
 import aiohttp
 import asyncio
@@ -269,6 +270,74 @@ async def try_connect_to_main_instagram_page(profile_port: int):
                 page = await context.new_page()
 
             return True
+        
+
+async def reject_request_chat(page, thread_url: str):
+    """
+    action: 'delete' — просто удалить тред (без блокировки)
+            'block'  — заблокировать пользователя и удалить тред
+    """
+    await page.goto(thread_url, wait_until="domcontentloaded")
+
+    # ждём реального признака готовности страницы, а не фиксированную паузу
+    # try:
+    #     await page.wait_for_selector('div[role="textbox"], button:has-text("Block")',
+    #                                  timeout=20000)
+    # except Exception:
+    #     print(f"[reject] page didn't render expected UI in time, url={page.url}")
+    
+    await asyncio.sleep(4)
+
+    await dismiss_notifications_popup(page)
+
+    btn = page.get_by_role("button", name=re.compile(r"Block|บล็อก", re.I))
+
+    btn_count = 0
+    for _ in range(10):
+        btn_count = await btn.count()
+        if btn_count > 0:
+            break
+        await asyncio.sleep(1)
+
+    print(f"[reject] Block button count after wait: {btn_count}")
+
+    if await btn.count() == 0:
+        return False
+
+    await btn.first.click()
+    await asyncio.sleep(2)
+
+    # Block/Delete обычно открывает confirm-диалог — подтверди действие
+    # (у Instagram часто всплывает модалка "Block этого пользователя?" с доп. кнопкой Block/Cancel)
+    confirm_btn = page.get_by_role("button", name=re.compile(r"^Block$|^Delete$|ยืนยัน", re.I))
+    if await confirm_btn.count() > 0:
+        await confirm_btn.first.click()
+        await asyncio.sleep(1.5)
+        return True
+        
+
+async def try_block_thread(profile_port: int,
+                           thread_url: str):
+        async with async_playwright() as p:
+            browser = await p.chromium.connect_over_cdp(f'http://{VISION_BROWSER_HOST}:{profile_port}')
+            print(f"CONNECTED ON {profile_port} PORT")
+
+            context = browser.contexts[0] if browser.contexts else await browser.new_context()
+
+            _page = await context.new_page()
+
+            try:
+                await asyncio.sleep(2)
+                res = await reject_request_chat(_page,
+                                                thread_url)
+                
+                print(' -> RES ',res)
+                return res
+            except Exception as ex:
+                print(ex)
+            finally:
+                await _page.close()
+                await asyncio.sleep(1)
 
 
 async def try_translate_text(text: str):

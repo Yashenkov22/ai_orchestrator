@@ -253,8 +253,11 @@ class Thread(Base):
         default=None,
     )
     is_approved = Column(Boolean, default=False)
+    is_blocked = Column(Boolean, default=False,
+                        server_default='false')
+    proccess_block = Column(Boolean, default=False,
+                        server_default='false')
     # is_spam = Column(Boolean, default=False)
-    #is_empty/is_new = Column(Boolean, default=True)
     insta_user_id = Column(
         BigInteger,
         ForeignKey("users.id",
@@ -265,6 +268,9 @@ class Thread(Base):
     notes = Column(Text)
     is_unread = Column(Boolean,
                        default=True)
+    is_pinned = Column(Boolean,
+                       default=False,
+                       server_default='false')
     user_information = Column(JSONB,
                               nullable=True,
                               default=None)

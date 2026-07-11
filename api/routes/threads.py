@@ -13,7 +13,7 @@ from db.base import (Message,
                      Thread)
 
 from utils.schemas import (DetailThreadSchema,
-                           EditThreadColorLevelSchema, EditThreadNotesSchema, EditThreadUnreadMarkSchema,
+                           EditThreadColorLevelSchema, EditThreadNotesSchema, EditThreadPinMarkSchema, EditThreadUnreadMarkSchema,
                            ThreadSchema)
 from utils.dependencies import (admin_dependency,
                                 session_dependency)
@@ -38,8 +38,9 @@ async def get_threads(admin: admin_dependency,
             joinedload(Thread.insta_user)
         )\
         .order_by(
+            Thread.is_pinned.desc(),
             Thread.is_unread.desc(),
-            Thread.timestamp_last_seen_message.desc()
+            Thread.timestamp_last_seen_message.desc(),
         )
     )
     threads = result.scalars().all()
@@ -48,10 +49,15 @@ async def get_threads(admin: admin_dependency,
     for t in threads:
         thread_list.append({
             "id": t.id,
+            'account_id': t.account_id,
             "account_name": t.account.view_name or t.account.username,
             "user_name": t.insta_user.username,
             'has_unread': t.is_unread,
             'color_level': t.color_level,
+            'is_pinned': t.is_pinned,
+            'is_approved': t.is_approved,
+            'is_banned': t.is_blocked,
+            'proccess_block': t.proccess_block,
             "last_activity": (
                 t.timestamp_last_seen_message.strftime("%Y-%d-%m %H:%M")
                 if t.timestamp_last_seen_message else ""
@@ -77,8 +83,9 @@ async def get_threads_by_account_id(account_id: int,
             Thread.account_id == account_id
         )\
         .order_by(
+            Thread.is_pinned.desc(),
             Thread.is_unread.desc(),
-            Thread.timestamp_last_seen_message.desc()
+            Thread.timestamp_last_seen_message.desc(),
             )
     )
     threads = result.scalars().all()
@@ -87,10 +94,15 @@ async def get_threads_by_account_id(account_id: int,
     for t in threads:
         thread_list.append(ThreadSchema(**{
             "id": t.id,
+            'account_id': t.account_id,
             "account_name": t.account.view_name or t.account.username,
             "user_name": t.insta_user.username,
             'has_unread': t.is_unread,
             'color_level': t.color_level,
+            'is_pinned': t.is_pinned,
+            'is_approved': t.is_approved,
+            'is_blocked': t.is_blocked,
+            'proccess_block': t.proccess_block,
             "last_activity": (
                 t.timestamp_last_seen_message.strftime("%Y-%d-%m %H:%M")
                 if t.timestamp_last_seen_message else ""
@@ -149,6 +161,9 @@ async def get_threads(admin: admin_dependency,
     thread_info = {
         'thread_name': f'{thread.account.username} - {thread.insta_user.username}',
         'message_count': len(messages),
+        'is_approved': thread.is_approved,
+        'is_blocked': thread.is_blocked,
+        'proccess_block': thread.proccess_block,
         'account_information': {
             'photo_url': generate_valid_media_url(thread.account.photo_url),
             'information': thread.account.information,
@@ -276,6 +291,33 @@ async def edit_unread_mark_by_thread_id(data: EditThreadUnreadMarkSchema,
                                               session,
                                               with_rollback=True)
     
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)
+    
+
+@thread_router.patch("/edit_pin_mark")
+async def edit_pin_mark_by_thread_id(data: EditThreadPinMarkSchema,
+                                     admin: admin_dependency,
+                                     session: session_dependency):
+    query = (
+        select(Thread)
+        .where(
+            Thread.id == data.thread_id,
+        )
+    )
+
+    result = await execute_and_catch_db_error(session.execute(query),
+                                              session)
+    
+    thread: Thread = result.scalar_one_or_none()
+
+    if not thread:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Thread not found')
+                            
+    thread.is_pinned = not thread.is_pinned
+        
     await execute_and_catch_db_error(session.commit(),
                                      session,
                                      with_rollback=True)

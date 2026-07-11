@@ -230,6 +230,10 @@ class ThreadSchema(BaseModel):
     has_unread: bool
     last_activity: str
     color_level: str
+    is_pinned: bool
+    is_approved: bool
+    is_blocked: bool
+    proccess_block: bool
 
 
 class EditThreadColorLevelSchema(BaseModel):
@@ -238,6 +242,10 @@ class EditThreadColorLevelSchema(BaseModel):
 
 
 class EditThreadUnreadMarkSchema(BaseModel):
+    thread_id: int
+
+
+class EditThreadPinMarkSchema(BaseModel):
     thread_id: int
 
 
@@ -282,6 +290,7 @@ class UserInformationSchema(BaseModel):
 #
 class DetailThreadSchema(BaseModel):
     thread_name: str
+    is_approved: bool
     message_count: int
     account_information: AccountInformationSchema | None
     user_information: UserInformationSchema | None
