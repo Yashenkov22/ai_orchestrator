@@ -1171,28 +1171,28 @@ async def test_playwright(account: Account,
 
             # === 1. Inbox ===
 
-            # await page.goto('https://www.instagram.com/direct/inbox/',
-            #                 wait_until='domcontentloaded')
+            await page.goto('https://www.instagram.com/direct/inbox/',
+                            wait_until='domcontentloaded')
                 
-            # await dismiss_notifications_popup(page)
+            await dismiss_notifications_popup(page)
 
-            # try:
-            #     await asyncio.wait_for(inbox_received.wait(), timeout=15)
-            #     print("Inbox received!")
-            # except asyncio.TimeoutError:
-            #     print("Inbox timeout")
+            try:
+                await asyncio.wait_for(inbox_received.wait(), timeout=15)
+                print("Inbox received!")
+            except asyncio.TimeoutError:
+                print("Inbox timeout")
 
-            # await page.wait_for_timeout(2000)
+            await page.wait_for_timeout(2000)
 
-            # await iterate_inbox_folders(page, inbox_received, collected_data, account.id, _session)
+            await iterate_inbox_folders(page, inbox_received, collected_data, account.id, _session)
 
-            # inbox_threads = collect_all_inbox_threads(collected_data)
+            inbox_threads = collect_all_inbox_threads(collected_data)
 
-            # print(f"Found {len(inbox_threads)} inbox threads")
-            # await process_threads(inbox_threads, account, page,
-            #                     thread_responses, thread_received, redis_pool, _session)
+            print(f"Found {len(inbox_threads)} inbox threads")
+            await process_threads(inbox_threads, account, page,
+                                thread_responses, thread_received, redis_pool, _session)
             
-            # await asyncio.sleep(1)
+            await asyncio.sleep(1)
 
             # # === 2. Message Requests ===
 
