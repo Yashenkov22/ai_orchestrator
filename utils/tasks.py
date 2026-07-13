@@ -680,14 +680,16 @@ async def process_threads(
             insta_user = thread['users'][0]
         except IndexError:
             if is_request or is_spam:
+                print(' -> INDEX ERROR', thread)
                 continue
             insta_user = {
                 'username': thread['username'],
                 'full_name': thread['full_name'],
                 'interop_messaging_user_fbid': thread['interop_messaging_user_fbid'],
             }
-            if not insta_user:
-                continue
+        
+        if not insta_user:
+            continue
 
         _insta_user = await check_insta_user(str(insta_user.get('interop_messaging_user_fbid')),
                                              _session)
@@ -718,6 +720,10 @@ async def process_threads(
                 thread_data['is_approved'] = False
 
             current_thread = await try_add_new_thread(thread_data, _session)
+
+        # test
+        if account.id == 7:
+            print('DATA!!!',current_thread.__dict__, insta_user.__dict__)
 
         if last_message_ts and current_thread.timestamp_last_seen_message:
             last_message_ts = datetime.fromtimestamp(int(last_message_ts) / 1000, tz=timezone.utc)
@@ -1215,10 +1221,10 @@ async def test_playwright(account: Account,
             request_pages = collect_all_request_pages(collected_data)
             request_threads, _ = extract_threads_from_requests(request_pages)
 
+            request_message_received.clear()
             collected_data.clear()
 
             # === Hidden requests (спам) ===
-            request_message_received.clear()
             await page.goto('https://www.instagram.com/direct/requests/hidden/',
                             wait_until='domcontentloaded')
 
