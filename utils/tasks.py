@@ -1127,7 +1127,8 @@ async def test_playwright(account: Account,
 
                     friendly_name = extract_friendly_name(req.post_data)
                     if friendly_name:
-                        print(f"[REQ] {friendly_name}")
+                        # print(f"[REQ] {friendly_name}")
+                        pass
 
                     variables = extract_variables(req.post_data)
 

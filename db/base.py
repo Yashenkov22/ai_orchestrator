@@ -304,7 +304,7 @@ engine = create_async_engine(
     pool_size=10,          # число постоянных соединений в пуле
     max_overflow=20,       # доп. соединения при пиках нагрузки
     pool_timeout=30,       # таймаут ожидания соединения
-    echo=True,            # можно поставить True для логов SQL
+    echo=False,            # можно поставить True для логов SQL
 )
 
 # Асинхронная сессия
