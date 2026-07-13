@@ -672,6 +672,10 @@ async def process_threads(
 ) -> dict:
     all_thread_data = {}
 
+    if account.id == 7:
+        print(' -> INSIDE !!!', len(threads))
+
+
     for thread in threads:
         last_message_ts = thread.get('last_message_ts')
         last_activity = thread.get('last_activity')
@@ -722,8 +726,8 @@ async def process_threads(
             current_thread = await try_add_new_thread(thread_data, _session)
 
         # test
-        if account.id == 7:
-            print('DATA!!!',current_thread.__dict__, insta_user.__dict__)
+        # if account.id == 7:
+        #     print('DATA!!!',current_thread.__dict__, insta_user.__dict__)
 
         if last_message_ts and current_thread.timestamp_last_seen_message:
             last_message_ts = datetime.fromtimestamp(int(last_message_ts) / 1000, tz=timezone.utc)
