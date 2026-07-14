@@ -287,15 +287,15 @@ class Thread(Base):
         cascade="all, delete-orphan"
     )
 
-    messages_count = column_property(
-        select(func.count(Message.id))
-        .where(
-            Message.thread_id == id,
-            Message.status == MessageStatusEnum.PENDING,
-        )
-        .correlate_except(Message)
-        .scalar_subquery()
-    )
+    # messages_count = column_property(
+    #     select(func.count(Message.id))
+    #     .where(
+    #         Message.thread_id == id,
+    #         Message.status == MessageStatusEnum.PENDING,
+    #     )
+    #     .correlate_except(Message)
+    #     .scalar_subquery()
+    # )
 
 
 
