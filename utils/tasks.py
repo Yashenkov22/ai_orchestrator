@@ -1201,56 +1201,56 @@ async def test_playwright(account: Account,
 
             # # === 2. Message Requests ===
 
-            request_message_received.clear()
-            collected_data.clear()
+            # request_message_received.clear()
+            # collected_data.clear()
 
-            await page.goto('https://www.instagram.com/direct/requests/',
-                            wait_until='domcontentloaded')
+            # await page.goto('https://www.instagram.com/direct/requests/',
+            #                 wait_until='domcontentloaded')
 
-            try:
-                await asyncio.wait_for(request_message_received.wait(), timeout=15)
-                print("Message requests received!")
-            except asyncio.TimeoutError:
-                print("Message requests timeout")
+            # try:
+            #     await asyncio.wait_for(request_message_received.wait(), timeout=15)
+            #     print("Message requests received!")
+            # except asyncio.TimeoutError:
+            #     print("Message requests timeout")
 
-            await page.wait_for_timeout(2000)
+            # await page.wait_for_timeout(2000)
 
-            await scroll_inbox_until_loaded(page, collected_data)
+            # await scroll_inbox_until_loaded(page, collected_data)
             
-            request_pages = collect_all_request_pages(collected_data)
-            request_threads, _ = extract_threads_from_requests(request_pages)
+            # request_pages = collect_all_request_pages(collected_data)
+            # request_threads, _ = extract_threads_from_requests(request_pages)
 
-            request_message_received.clear()
-            collected_data.clear()
+            # request_message_received.clear()
+            # collected_data.clear()
 
-            # === Hidden requests (спам) ===
-            await page.goto('https://www.instagram.com/direct/requests/hidden/',
-                            wait_until='domcontentloaded')
+            # # === Hidden requests (спам) ===
+            # await page.goto('https://www.instagram.com/direct/requests/hidden/',
+            #                 wait_until='domcontentloaded')
 
-            try:
-                await asyncio.wait_for(request_message_received.wait(), timeout=15)
-                print("Hidden requests received!")
-            except asyncio.TimeoutError:
-                print("Hidden requests timeout")
+            # try:
+            #     await asyncio.wait_for(request_message_received.wait(), timeout=15)
+            #     print("Hidden requests received!")
+            # except asyncio.TimeoutError:
+            #     print("Hidden requests timeout")
 
-            await page.wait_for_timeout(2000)
-            total = await scroll_inbox_until_loaded(page, collected_data)
+            # await page.wait_for_timeout(2000)
+            # total = await scroll_inbox_until_loaded(page, collected_data)
 
-            hidden_pages = collect_all_request_pages(collected_data)
-            # с hidden-страницы ВСЁ, что нашлось, считаем spam — раздельный сбор снимает вопрос
-            # различения по полю folder внутри одного смешанного потока
-            _, spam_threads_raw = extract_threads_from_requests(hidden_pages)
-            spam_threads = spam_threads_raw   # все треды с hidden-страницы — спам
+            # hidden_pages = collect_all_request_pages(collected_data)
+            # # с hidden-страницы ВСЁ, что нашлось, считаем spam — раздельный сбор снимает вопрос
+            # # различения по полю folder внутри одного смешанного потока
+            # _, spam_threads_raw = extract_threads_from_requests(hidden_pages)
+            # spam_threads = spam_threads_raw   # все треды с hidden-страницы — спам
 
-            print(f"Found {len(request_threads)} request threads")
-            await process_threads(request_threads, account, page,
-                                thread_responses, thread_received, redis_pool, _session,
-                                is_request=True)
+            # print(f"Found {len(request_threads)} request threads")
+            # await process_threads(request_threads, account, page,
+            #                     thread_responses, thread_received, redis_pool, _session,
+            #                     is_request=True)
 
-            print(f"Found {len(spam_threads)} spam threads")
-            await process_threads(spam_threads, account, page,
-                                thread_responses, thread_received, redis_pool, _session,
-                                is_spam=True)
+            # print(f"Found {len(spam_threads)} spam threads")
+            # await process_threads(spam_threads, account, page,
+            #                     thread_responses, thread_received, redis_pool, _session,
+            #                     is_spam=True)
         finally:
             try:
                 page.remove_listener("response", on_response)
