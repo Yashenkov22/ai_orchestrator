@@ -88,6 +88,25 @@ async def test_arq(admin: admin_dependency,
     print('success!!!')
 
 
+@auth_router.get('/test_arq2')
+async def test_arq(admin: admin_dependency,
+                   session: session_dependency):
+
+    func_name = 'start_polling_request_messages_for_accounts'
+
+    job = scheduler.add_job(background_task_wrapper,
+                            trigger='interval',
+                            minutes=60,
+                            id='start_polling_request_messages_for_accounts',
+                            jobstore='sqlalchemy',
+                            coalesce=True,
+                            args=(func_name, ),
+                            kwargs={'_queue_name': 'arq:polling'})
+    
+    print(job)
+    print('success!!!')
+
+
 @auth_router.post('/create_admins')
 async def create_admins(secret: SecretShcema,
                         session: session_dependency):

@@ -1083,7 +1083,8 @@ async def test_playwright(account: Account,
                           folder_id: str,
                           profile_id: str,
                           redis_pool: ArqRedis,
-                          _session: AsyncSession):
+                          _session: AsyncSession,
+                          request_messages: bool = False):
     collected_data = {}
     thread_responses = []
     inbox_received = asyncio.Event()
@@ -1174,83 +1175,85 @@ async def test_playwright(account: Account,
         try:
             page.on("response", on_response)
 
-            # === 1. Inbox ===
+            if not request_messages:
 
-            await page.goto('https://www.instagram.com/direct/inbox/',
-                            wait_until='domcontentloaded')
+                # === 1. Inbox ===
+                await page.goto('https://www.instagram.com/direct/inbox/',
+                                wait_until='domcontentloaded')
+                    
+                await dismiss_notifications_popup(page)
+
+                try:
+                    await asyncio.wait_for(inbox_received.wait(), timeout=15)
+                    print("Inbox received!")
+                except asyncio.TimeoutError:
+                    print("Inbox timeout")
+
+                await page.wait_for_timeout(2000)
+
+                await iterate_inbox_folders(page, inbox_received, collected_data, account.id, _session)
+
+                inbox_threads = collect_all_inbox_threads(collected_data)
+
+                print(f"Found {len(inbox_threads)} inbox threads")
+                await process_threads(inbox_threads, account, page,
+                                    thread_responses, thread_received, redis_pool, _session)
                 
-            await dismiss_notifications_popup(page)
+                await asyncio.sleep(1)
+            else:
 
-            try:
-                await asyncio.wait_for(inbox_received.wait(), timeout=15)
-                print("Inbox received!")
-            except asyncio.TimeoutError:
-                print("Inbox timeout")
+                # # === 2. Message Requests ===
 
-            await page.wait_for_timeout(2000)
+                request_message_received.clear()
+                collected_data.clear()
 
-            await iterate_inbox_folders(page, inbox_received, collected_data, account.id, _session)
+                await page.goto('https://www.instagram.com/direct/requests/',
+                                wait_until='domcontentloaded')
 
-            inbox_threads = collect_all_inbox_threads(collected_data)
+                try:
+                    await asyncio.wait_for(request_message_received.wait(), timeout=15)
+                    print("Message requests received!")
+                except asyncio.TimeoutError:
+                    print("Message requests timeout")
 
-            print(f"Found {len(inbox_threads)} inbox threads")
-            await process_threads(inbox_threads, account, page,
-                                thread_responses, thread_received, redis_pool, _session)
-            
-            await asyncio.sleep(1)
+                await page.wait_for_timeout(2000)
 
-            # # === 2. Message Requests ===
+                await scroll_inbox_until_loaded(page, collected_data)
+                
+                request_pages = collect_all_request_pages(collected_data)
+                request_threads, _ = extract_threads_from_requests(request_pages)
 
-            # request_message_received.clear()
-            # collected_data.clear()
+                request_message_received.clear()
+                collected_data.clear()
 
-            # await page.goto('https://www.instagram.com/direct/requests/',
-            #                 wait_until='domcontentloaded')
+                # === Hidden requests (спам) ===
+                await page.goto('https://www.instagram.com/direct/requests/hidden/',
+                                wait_until='domcontentloaded')
 
-            # try:
-            #     await asyncio.wait_for(request_message_received.wait(), timeout=15)
-            #     print("Message requests received!")
-            # except asyncio.TimeoutError:
-            #     print("Message requests timeout")
+                try:
+                    await asyncio.wait_for(request_message_received.wait(), timeout=15)
+                    print("Hidden requests received!")
+                except asyncio.TimeoutError:
+                    print("Hidden requests timeout")
 
-            # await page.wait_for_timeout(2000)
+                await page.wait_for_timeout(2000)
+                total = await scroll_inbox_until_loaded(page, collected_data)
 
-            # await scroll_inbox_until_loaded(page, collected_data)
-            
-            # request_pages = collect_all_request_pages(collected_data)
-            # request_threads, _ = extract_threads_from_requests(request_pages)
+                hidden_pages = collect_all_request_pages(collected_data)
+                # с hidden-страницы ВСЁ, что нашлось, считаем spam — раздельный сбор снимает вопрос
+                # различения по полю folder внутри одного смешанного потока
+                _, spam_threads_raw = extract_threads_from_requests(hidden_pages)
+                spam_threads = spam_threads_raw   # все треды с hidden-страницы — спам
 
-            # request_message_received.clear()
-            # collected_data.clear()
+                print(f"Found {len(request_threads)} request threads")
+                await process_threads(request_threads, account, page,
+                                    thread_responses, thread_received, redis_pool, _session,
+                                    is_request=True)
 
-            # # === Hidden requests (спам) ===
-            # await page.goto('https://www.instagram.com/direct/requests/hidden/',
-            #                 wait_until='domcontentloaded')
-
-            # try:
-            #     await asyncio.wait_for(request_message_received.wait(), timeout=15)
-            #     print("Hidden requests received!")
-            # except asyncio.TimeoutError:
-            #     print("Hidden requests timeout")
-
-            # await page.wait_for_timeout(2000)
-            # total = await scroll_inbox_until_loaded(page, collected_data)
-
-            # hidden_pages = collect_all_request_pages(collected_data)
-            # # с hidden-страницы ВСЁ, что нашлось, считаем spam — раздельный сбор снимает вопрос
-            # # различения по полю folder внутри одного смешанного потока
-            # _, spam_threads_raw = extract_threads_from_requests(hidden_pages)
-            # spam_threads = spam_threads_raw   # все треды с hidden-страницы — спам
-
-            # print(f"Found {len(request_threads)} request threads")
-            # await process_threads(request_threads, account, page,
-            #                     thread_responses, thread_received, redis_pool, _session,
-            #                     is_request=True)
-
-            # print(f"Found {len(spam_threads)} spam threads")
-            # await process_threads(spam_threads, account, page,
-            #                     thread_responses, thread_received, redis_pool, _session,
-            #                     is_spam=True)
+                print(f"Found {len(spam_threads)} spam threads")
+                await process_threads(spam_threads, account, page,
+                                    thread_responses, thread_received, redis_pool, _session,
+                                    is_spam=True)
         finally:
             try:
                 page.remove_listener("response", on_response)

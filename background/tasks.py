@@ -67,6 +67,8 @@ async def start_polling_for_accounts(cxt):
 
                 if not task_lock:
                     continue
+                
+                is_request = False
 
                 job = await _redis_pool.enqueue_job(
                     'parse_account',
@@ -74,6 +76,58 @@ async def start_polling_for_accounts(cxt):
                     folder_id,
                     profile_id,
                     task_lock,
+                    is_request,
+                    _job_id=_key,
+                    _queue_name='arq:polling',
+                )
+
+                print('ACCOUNT PARSE JOB RUNNING...', job)
+
+
+async def start_polling_request_messages_for_accounts(cxt):
+        print('TASK FROM REQUEST ARQ ✅')
+        query = (
+              select(Account)\
+              .where(
+                  and_(
+                    Account.folder_id.isnot(None),
+                    Account.profile_id.isnot(None),
+                    Account.is_active == True,
+                  )
+                    )
+                )
+        
+        sessionmaker= cxt['sessionmaker']
+        
+        async with sessionmaker() as _session:
+            _session: AsyncSession
+            result = await execute_and_catch_db_error(_session.execute(query),
+                                                      _session)
+            accounts: list[Account] = result.scalars().all()
+
+        _redis_pool= get_redis_pool()
+
+        for account in accounts:
+            folder_id = account.folder_id
+            profile_id = account.profile_id
+
+            if folder_id and profile_id:
+
+                _key = f'lock:polling_request_account:{account.id}'
+                task_lock = acquire_task_lock(_key)
+
+                if not task_lock:
+                    continue
+                
+                is_request = True
+
+                job = await _redis_pool.enqueue_job(
+                    'parse_account',
+                    account.id,
+                    folder_id,
+                    profile_id,
+                    task_lock,
+                    is_request,
                     _job_id=_key,
                     _queue_name='arq:polling',
                 )
@@ -85,7 +139,8 @@ async def parse_account(cxt,
                         account_id: int,
                         folder_id: str,
                         profile_id: str,
-                        task_lock: str):
+                        task_lock: str,
+                        is_request: bool = False):
     try:
         print(f'TASK PARSE ACCOUNT WITH ID {account_id} ✅')
         
@@ -121,11 +176,13 @@ async def parse_account(cxt,
                                 folder_id,
                                 profile_id,
                                 redis_pool,
-                                _session)
+                                _session,
+                                is_request)
     except Exception as ex:
         print(ex)
     finally:
-        _key = f'lock:polling_account:{account_id}'
+        _key = f'lock:polling_account:{account_id}' if not is_request\
+         else f'lock:polling_request_account:{account.id}'
         release_task_lock(_key,
                           task_lock)
 

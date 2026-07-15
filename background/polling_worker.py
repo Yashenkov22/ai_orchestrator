@@ -8,6 +8,7 @@ from background.base import (redis_settings,
 from db.base import session
 
 from .tasks import (start_polling_for_accounts,
+                    start_polling_request_messages_for_accounts,
                     parse_account,
                     parse_thread)
 
@@ -39,6 +40,7 @@ async def shutdown(ctx):
 class WorkerSettings:
     functions = [
         start_polling_for_accounts,
+        start_polling_request_messages_for_accounts,
         parse_account,
         # parse_thread,
     ]
