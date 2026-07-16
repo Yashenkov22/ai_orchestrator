@@ -1483,6 +1483,29 @@ async def approve_request_chat(page, thread_url: str):
     await accept_btn.first.click()
     await asyncio.sleep(2)
 
+    # После Accept может появиться диалог выбора папки (Primary/General/Cancel)
+    # ждём его и кликаем General, если он появился
+    # try:
+    #     general_btn = page.get_by_role("button", name=re.compile(r"^General$|Общ", re.I))
+    #     # у тебя на скрине это выглядит как строка в модалке, не button — попробуем оба варианта
+    #     await general_btn.wait_for(timeout=5000)
+    #     await general_btn.first.click()
+    #     print("выбрана папка General")
+    #     await asyncio.sleep(1.5)
+    # except Exception:
+    #     # диалог не появился (например, в другой версии интерфейса) — это нормально, идём дальше
+    #     print("диалог выбора папки не появился, продолжаем")
+    try:
+        general_locator = page.locator(
+            'button:has-text("General"), div[role="button"]:has-text("General")'
+        )
+        await general_locator.first.wait_for(timeout=5000)
+        await general_locator.first.click()
+        print("выбрана папка General")
+        await asyncio.sleep(1.5)
+    except Exception:
+        print("диалог выбора папки не появился (или уже в General), продолжаем")
+
     # Признак успеха: после Accept появляется композер — до подтверждения
     # в request-чате писать нельзя, поля ввода нет.
     try:
