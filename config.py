@@ -74,3 +74,12 @@ else:
 
 
 MEDIA_PATH = os.environ.get('MEDIA_PATH')
+
+ID_LIST_FOR_PERMISSION = os.environ.get('ID_LIST_FOR_PERMISSION')
+
+if ID_LIST_FOR_PERMISSION:
+    ID_LIST_FOR_PERMISSION = [
+        int(x)
+        for x in ID_LIST_FOR_PERMISSION.split(",")
+        if x.strip()
+    ]

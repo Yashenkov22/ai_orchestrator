@@ -49,7 +49,7 @@ from .schemas import (RegisterUserSchema,
                       SendMessageSchema,
                       SecretShcema)
 
-from config import SECRET_API
+from config import SECRET_API, ID_LIST_FOR_PERMISSION
 
 
 auth_router = APIRouter(prefix='/auth',
@@ -196,6 +196,12 @@ async def create_admins(secret: SecretShcema,
 async def send_message_to_user(data: SendMessageSchema,
                                admin: admin_dependency,
                                session: session_dependency):
+    admin_id, is_main_admin = admin
+
+    if not is_main_admin:
+        if data.account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+
     check_account = await get_account_by_id(data.account_id,
                                             session,
                                             check_exists=True)

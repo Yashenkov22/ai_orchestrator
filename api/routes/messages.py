@@ -23,6 +23,8 @@ from utils.base import generate_valid_media_url
 
 from websocket.base import manager
 
+from config import ID_LIST_FOR_PERMISSION
+
 
 message_router = APIRouter(tags=['Messages'],
                            prefix='/messages')
@@ -31,6 +33,8 @@ message_router = APIRouter(tags=['Messages'],
 @message_router.get("/list")
 async def new_get_messages(admin: admin_dependency,
                        session: session_dependency):
+    admin_id, is_main_admin = admin
+
     query = (
         select(Message)
         .options(
@@ -42,6 +46,11 @@ async def new_get_messages(admin: admin_dependency,
             Message.created_at.desc(),
         )
     )
+
+    if not is_main_admin:
+        query = query.where(
+            Message.thread.has(Thread.account_id.in_(ID_LIST_FOR_PERMISSION)),
+        )
 
     result = await execute_and_catch_db_error(session.execute(query),
                                               session)
@@ -84,13 +93,21 @@ async def new_get_messages(admin: admin_dependency,
 
 
 @message_router.get("/{thread_id}/messages")
-async def get_thread_messages(thread_id: str, session: session_dependency):
+async def get_thread_messages(thread_id: str,
+                              admin: admin_dependency,
+                              session: session_dependency):
+    admin_id, is_main_admin = admin
+
     thread_result = await session.execute(
         select(Thread).where(Thread.id == int(thread_id))
     )
     thread = thread_result.scalar_one_or_none()
     if not thread:
         raise HTTPException(status_code=404, detail="Thread not found")
+    
+    if not is_main_admin:
+        if thread.account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
 
     msg_result = await session.execute(
         select(Message).options(joinedload(Message.attachment))
@@ -146,6 +163,8 @@ async def get_thread_messages(thread_id: str, session: session_dependency):
 async def new_get_messages(admin: admin_dependency,
                            session: session_dependency,
                            message_id: int):
+    admin_id, is_main_admin = admin
+
     query = (
         select(Message)
         .options(
@@ -162,6 +181,10 @@ async def new_get_messages(admin: admin_dependency,
                                               session)
     
     message = result.unique().scalar_one_or_none()
+    
+    if not is_main_admin:
+        if message.thread.account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
 
     _attachments = message.attachments
     content = message.text or ""
@@ -202,11 +225,17 @@ async def create_new_message(data: CreateMessageSchema,
                              admin: admin_dependency,
                              arq_pool: arq_dependency,
                              session: session_dependency):
+    admin_id, is_main_admin = admin
+
     thread = await get_thread_by_id(data.thread_id,
                                     session)
     
     account_id = thread.account_id
     
+    if not is_main_admin:
+        if account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+
     if not account_id:
         print('Account_id not found')
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
@@ -301,17 +330,27 @@ async def delete_message_from_thread(message_id: int,
                                      admin: admin_dependency,
                                      arq_pool: arq_dependency,
                                      session: session_dependency):
+    admin_id, is_main_admin = admin
+
     check_query = (
-        select(Message)\
+        select(Message)
+        .options(
+            joinedload(Message.thread).joinedload(Thread.account),
+        )
         .where(
-            Message.id == message_id
+            Message.id == message_id,
         )
     )
+
 
     _message = await execute_and_catch_db_error(session.execute(check_query),
                                                      session)
 
     _message = _message.scalar_one_or_none()
+
+    if not is_main_admin:
+        if _message.thread.account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
 
     if not _message:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,

@@ -20,7 +20,7 @@ from utils.dependencies import (admin_dependency,
 from utils.base import (generate_valid_insta_url,
                         generate_valid_media_url)
 
-from config import ADMIN_URL
+from config import ADMIN_URL, ID_LIST_FOR_PERMISSION
 
 
 
@@ -31,7 +31,9 @@ thread_router = APIRouter(tags=['Treads'],
 @thread_router.get("/list")
 async def get_threads(admin: admin_dependency,
                       session: session_dependency):
-    result = await session.execute(
+    admin_id, is_main_admin = admin
+
+    query = (
         select(Thread)
         .options(
             joinedload(Thread.account),
@@ -41,8 +43,16 @@ async def get_threads(admin: admin_dependency,
             Thread.is_pinned.desc(),
             Thread.is_unread.desc(),
             Thread.timestamp_last_seen_message.desc(),
-        )
+        )   
     )
+
+    if not is_main_admin:
+        query = query.where(
+            Thread.account_id.in_(ID_LIST_FOR_PERMISSION),
+        )
+         
+    result = await session.execute(query)
+
     threads = result.scalars().all()
     thread_list = []
 
@@ -73,6 +83,12 @@ async def get_threads(admin: admin_dependency,
 async def get_threads_by_account_id(account_id: int,
                                     admin: admin_dependency,
                                     session: session_dependency):
+    admin_id, is_main_admin = admin
+
+    if not is_main_admin:
+        if account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+
     result = await session.execute(
         select(Thread)
         .options(
@@ -118,6 +134,8 @@ async def get_threads_by_account_id(account_id: int,
 async def get_threads(admin: admin_dependency,
                       session: session_dependency,
                       thread_id: int):
+    admin_id, is_main_admin = admin
+
     message_query = (
         select(Message)
         .options(joinedload(Message.attachments))\
@@ -149,6 +167,10 @@ async def get_threads(admin: admin_dependency,
     if not thread:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail='Thread not found')
+    
+    if not is_main_admin:
+        if thread.account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
 
     message_list = []
 
@@ -224,8 +246,10 @@ async def get_threads(admin: admin_dependency,
 async def edit_color_level_by_thread_id(data: EditThreadColorLevelSchema,
                                         admin: admin_dependency,
                                         session: session_dependency):
+    admin_id, is_main_admin = admin
+
     query = (
-        select(1)
+        select(Thread.account_id)
         .where(
             Thread.id == data.thread_id,
         )
@@ -234,11 +258,14 @@ async def edit_color_level_by_thread_id(data: EditThreadColorLevelSchema,
     result = await execute_and_catch_db_error(session.execute(query),
                                               session)
     
-    check_exist = result.scalar_one_or_none()
+    account_id = result.scalar_one_or_none()
 
-    if not check_exist:
+    if not account_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail='Thread not found')
+    if not is_main_admin:
+        if account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     
     update_query = (
         update(
@@ -261,8 +288,10 @@ async def edit_color_level_by_thread_id(data: EditThreadColorLevelSchema,
 async def edit_unread_mark_by_thread_id(data: EditThreadUnreadMarkSchema,
                                         admin: admin_dependency,
                                         session: session_dependency):
+    admin_id, is_main_admin = admin
+
     query = (
-        select(1)
+        select(Thread.account_id)
         .where(
             Thread.id == data.thread_id,
         )
@@ -271,11 +300,15 @@ async def edit_unread_mark_by_thread_id(data: EditThreadUnreadMarkSchema,
     result = await execute_and_catch_db_error(session.execute(query),
                                               session)
     
-    check_exist = result.scalar_one_or_none()
+    account_id = result.scalar_one_or_none()
 
-    if not check_exist:
+    if not account_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail='Thread not found')
+    
+    if not is_main_admin:
+        if account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     
     update_query = (
         update(
@@ -300,6 +333,8 @@ async def edit_unread_mark_by_thread_id(data: EditThreadUnreadMarkSchema,
 async def edit_pin_mark_by_thread_id(data: EditThreadPinMarkSchema,
                                      admin: admin_dependency,
                                      session: session_dependency):
+    admin_id, is_main_admin = admin
+
     query = (
         select(Thread)
         .where(
@@ -315,7 +350,11 @@ async def edit_pin_mark_by_thread_id(data: EditThreadPinMarkSchema,
     if not thread:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail='Thread not found')
-                            
+
+    if not is_main_admin:
+        if thread.account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+
     thread.is_pinned = not thread.is_pinned
         
     await execute_and_catch_db_error(session.commit(),
@@ -327,8 +366,10 @@ async def edit_pin_mark_by_thread_id(data: EditThreadPinMarkSchema,
 async def edit_notes_by_thread_id(data: EditThreadNotesSchema,
                                         admin: admin_dependency,
                                         session: session_dependency):
+    admin_id, is_main_admin = admin
+
     query = (
-        select(1)
+        select(Thread.account_id)
         .where(
             Thread.id == data.thread_id,
         )
@@ -337,11 +378,16 @@ async def edit_notes_by_thread_id(data: EditThreadNotesSchema,
     result = await execute_and_catch_db_error(session.execute(query),
                                               session)
     
-    check_exist = result.scalar_one_or_none()
+    account_id = result.scalar_one_or_none()
 
-    if not check_exist:
+    if not account_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail='Thread not found')
+    
+    if not is_main_admin:
+        if account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+
     
     update_query = (
         update(

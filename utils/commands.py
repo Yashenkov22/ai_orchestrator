@@ -12,8 +12,8 @@ async def create_admin_accounts(session: AsyncSession):
     admin_list = [
         {
             # 'admin': pwd_context.hash('1234'),
-            'username': 'admin',
-            'password': pwd_context.hash('1234'),
+            'username': 'moder1',
+            'password': pwd_context.hash('Gfhjkm123!'),
         }
     ]
 

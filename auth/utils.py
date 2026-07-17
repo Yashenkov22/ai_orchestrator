@@ -112,8 +112,10 @@ def get_current_admin(token: Annotated[str, Depends(o2auth_bearer)]):
         if not admin_id:
             raise JWTError()
         
-        return admin_id
+        is_main_admin = admin_id == 1
         
+        return admin_id, is_main_admin
+                
     except JWTError:
         raise NOT_AUTHENTICATED_EXCEPTION
     
@@ -186,6 +188,8 @@ async def get_current_user_for_websocket(
                              JWT_SECRET_KEY,
                              algorithms=[JWT_ALGORITHM])
         user_id = payload.get('userId')
-        return user_id
+        if user_id:
+            return 1
+        # return user_id
     except Exception:
         return None  # или можно кинуть 401, если токен битый

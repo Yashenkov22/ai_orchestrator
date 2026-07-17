@@ -25,6 +25,8 @@ from utils.dependencies import (admin_dependency,
 from utils.encrypt import encrypt_password
 from utils.base import (generate_valid_media_url)
 
+from config import ID_LIST_FOR_PERMISSION
+
 
 account_router = APIRouter(tags=['Accounts'],
                            prefix='/account')
@@ -35,6 +37,12 @@ account_router = APIRouter(tags=['Accounts'],
 async def create_account(data: CreateAccountSchema,
                          admin: admin_dependency,
                          session: session_dependency):
+    admin_id, is_main_admin = admin
+
+    if not is_main_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail='Dont have permissions')
+
     check_account = await get_account_by_username(data.username,
                                                   session)
 
@@ -71,6 +79,8 @@ async def get_accounts(admin: admin_dependency,
                        session: session_dependency):
     thread_alias = aliased(Thread)
 
+    admin_id, is_main_admin = admin
+
     query = (
         select(
             Account,
@@ -86,6 +96,11 @@ async def get_accounts(admin: admin_dependency,
         .outerjoin(Thread, Thread.account_id == Account.id)\
         .group_by(Account.id)
     )
+
+    if not is_main_admin:
+        query = query.where(
+            Account.id.in_(ID_LIST_FOR_PERMISSION),
+        )
 
     result = await execute_and_catch_db_error(session.execute(query),
                                               session)
@@ -122,6 +137,12 @@ async def get_account_by_id(account_id: int,
                             admin: admin_dependency,
                             session: session_dependency):
     thread_alias = aliased(Thread)
+
+    admin_id, is_main_admin = admin
+
+    if account_id not in ID_LIST_FOR_PERMISSION:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail='Dont have permissions')
     
     query = (
         select(
@@ -171,6 +192,12 @@ async def get_account_by_id(account_id: int,
 async def update_profile_data_by_account(data: UpdateProfileDataSchema,
                                          admin: admin_dependency,
                                          session: session_dependency):
+    admin_id, is_main_admin = admin
+
+    if not is_main_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail='Dont have permissions')
+
     account_query = (
         select(Account)\
         .where(
@@ -229,6 +256,12 @@ async def update_profile_data_by_account(data: UpdateProfileDataSchema,
 async def get_account_by_id(data: PatchAccountSchema,
                             admin: admin_dependency,
                             session: session_dependency):
+    admin_id, is_main_admin = admin
+
+    if data.account_id not in ID_LIST_FOR_PERMISSION:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail='Dont have permissions')
+
     query = (
         select(
             Account
@@ -269,6 +302,12 @@ async def get_account_by_id(data: PatchAccountSchema,
 async def set_account_information(data: PatchInformationAccountSchema,
                                   admin: admin_dependency,
                                   session: session_dependency):
+    admin_id, is_main_admin = admin
+
+    if not is_main_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail='Dont have permissions')
+
     query = (
         select(
             Account
@@ -309,6 +348,12 @@ async def set_account_information(data: PatchInformationAccountSchema,
 async def set_photo_information(data: PatchPhotoAccountSchema,
                                 admin: admin_dependency,
                                 session: session_dependency):
+    admin_id, is_main_admin = admin
+
+    if data.account_id not in ID_LIST_FOR_PERMISSION:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail='Dont have permissions')
+
     query = (
         select(
             Account
@@ -341,6 +386,12 @@ async def set_photo_information(data: PatchPhotoAccountSchema,
 async def set_view_name(data: PatchViewNameAccountSchema,
                         admin: admin_dependency,
                         session: session_dependency):
+    admin_id, is_main_admin = admin
+
+    if data.account_id not in ID_LIST_FOR_PERMISSION:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail='Dont have permissions')
+
     query = (
         select(
             Account
