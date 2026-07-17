@@ -140,9 +140,10 @@ async def get_account_by_id(account_id: int,
 
     admin_id, is_main_admin = admin
 
-    if account_id not in ID_LIST_FOR_PERMISSION:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                            detail='Dont have permissions')
+    if not is_main_admin:
+        if account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                                detail='Dont have permissions')
     
     query = (
         select(
@@ -258,9 +259,10 @@ async def get_account_by_id(data: PatchAccountSchema,
                             session: session_dependency):
     admin_id, is_main_admin = admin
 
-    if data.account_id not in ID_LIST_FOR_PERMISSION:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                            detail='Dont have permissions')
+    if not is_main_admin:
+        if data.account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                                detail='Dont have permissions')
 
     query = (
         select(
@@ -350,9 +352,10 @@ async def set_photo_information(data: PatchPhotoAccountSchema,
                                 session: session_dependency):
     admin_id, is_main_admin = admin
 
-    if data.account_id not in ID_LIST_FOR_PERMISSION:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                            detail='Dont have permissions')
+    if not is_main_admin:
+        if data.account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                                detail='Dont have permissions')
 
     query = (
         select(
@@ -388,9 +391,10 @@ async def set_view_name(data: PatchViewNameAccountSchema,
                         session: session_dependency):
     admin_id, is_main_admin = admin
 
-    if data.account_id not in ID_LIST_FOR_PERMISSION:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                            detail='Dont have permissions')
+    if not is_main_admin:
+        if data.account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                                detail='Dont have permissions')
 
     query = (
         select(
