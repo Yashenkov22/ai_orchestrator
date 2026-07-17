@@ -307,11 +307,11 @@ async def create_new_message(data: CreateMessageSchema,
     payload['message'] = message_payload
     ws_msg_data = {
         'type': 'message created',
-        'user_id': admin,
+        'user_id': admin_id,
         'payload': payload,
     }
 
-    await manager.send_to_user(admin, ws_msg_data)
+    await manager.send_to_user(admin_id, ws_msg_data)
     
     job = await arq_pool.enqueue_job(
             'send_message_to_thread',
@@ -382,11 +382,11 @@ async def delete_message_from_thread(message_id: int,
 
     ws_msg_data = {
         'type': 'message deleted',
-        'user_id': admin,
+        'user_id': admin_id,
         'payload': payload,
     }
 
-    await manager.send_to_user(admin, ws_msg_data)
+    await manager.send_to_user(admin_id, ws_msg_data)
 
     return {
         'status': 'success'
