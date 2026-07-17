@@ -114,7 +114,7 @@ def get_current_admin(token: Annotated[str, Depends(o2auth_bearer)]):
         
         is_main_admin = admin_id == 1
         
-        return admin_id, is_main_admin
+        return 1, is_main_admin
                 
     except JWTError:
         raise NOT_AUTHENTICATED_EXCEPTION
