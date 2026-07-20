@@ -246,7 +246,7 @@ async def send_message_to_thread(cxt,
         .where(
             and_(
                 Account.folder_id.isnot(None),
-                    Account.profile_id.isnot(None),
+                Account.profile_id.isnot(None),
                 Account.is_active == True,
                 Account.id == account_id,
             )
