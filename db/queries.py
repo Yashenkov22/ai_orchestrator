@@ -598,7 +598,7 @@ async def try_add_messages(message_data: dict,
             
             new_generated_message = None
 
-            if thread.color_level in (ThreadColorEnum.RED, ) and thread.is_pinned:
+            if thread.color_level in (ThreadColorEnum.RED, ThreadColorEnum.GREY) and thread.is_pinned:
                 generated_text = await ai_generate_text(text=text_for_ai,
                                                         account_information=thread.account.information)
                 
