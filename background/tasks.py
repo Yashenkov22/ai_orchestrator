@@ -309,7 +309,7 @@ async def send_message_to_thread(cxt,
         task_lock = acquire_task_lock(_key)
 
         if not task_lock:
-            return
+            raise Retry(defer=15)
 
         if message:
             media_type = None
