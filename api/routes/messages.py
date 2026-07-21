@@ -202,6 +202,7 @@ async def new_get_messages(admin: admin_dependency,
     _acc_name = message.thread.account.view_name or message.thread.account.username
     result = {
         "id": message.id,
+        'account_id': message.thread.account_id,
         "role": message.sender,
         "content": content,
         "translated_content": translated_content,
@@ -296,6 +297,7 @@ async def create_new_message(data: CreateMessageSchema,
     }
     message_payload = {
         'id': str(new_message.id),
+        'account_id': account_id,
         'role': new_message.sender,
         'content': ws_content,
         'translated_content': new_message.translated_text or '',
