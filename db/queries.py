@@ -19,7 +19,9 @@ from db.base import Account, Admin, Message, Thread, InstaUser, Attachment
 from utils.ai import ai_generate_text, ai_translate_message
 from utils.base import RATIO_LEN_LIMIT, RATIO_LIMIT, generate_valid_media_url, moscow_tz, russian_ratio, try_translate_text
 from utils.exc import DB_ERROR_EXCEPTION, ChatNotFound, NotAccessToChat
+from utils.enums import MessageStatusEnum, ThreadColorEnum
 from websocket.redis_listener import publish_event
+from websocket.base import manager
 
 
 async def execute_and_catch_db_error(coro,
@@ -203,6 +205,20 @@ async def get_message_only_by_id(_id: int,
                                                _session)
     
     return message.scalar_one_or_none()
+
+
+async def get_messages_only_by_id(_ids: list[int],
+                            _session: AsyncSession) -> Message | None:
+
+    query = (
+        select(Message)
+        .where(Message.id.in_(_ids))
+    )
+    
+    message = await execute_and_catch_db_error(_session.execute(query),
+                                               _session)
+    
+    return message.scalars().all()
 
 
 async def get_thread_only_by_id(_id: int,
@@ -534,6 +550,7 @@ async def try_add_messages(message_data: dict,
     messages = message_data.get('messages')
     mark_as_unread = message_data.get('mark_as_unread')
     insert_messages = []
+    message_ids_for_translate = []
 
     unread_messages_text = ''
 
@@ -570,8 +587,6 @@ async def try_add_messages(message_data: dict,
 
             thread.timestamp_last_seen_message = ts
 
-            # if mark_as_unread is not None:
-            #     thread.is_unread = mark_as_unread
             is_unread = sender == 'user'
 
             context_from_db = thread.context or ''
@@ -580,6 +595,25 @@ async def try_add_messages(message_data: dict,
 
             new_context = await ai_generate_text(text=text_for_ai,
                                                 for_db=True)
+            
+            new_generated_message = None
+
+            if thread.color_level in (ThreadColorEnum.RED, ) and thread.is_pinned:
+                generated_text = await ai_generate_text(text=text_for_ai,
+                                                        account_information=thread.account.information)
+                
+                insert_data = {
+                    'sender': 'assistant',
+                    'created_at': datetime.now(tz=timezone.utc),
+                    'updated_at': datetime.now(tz=timezone.utc),
+                    'thread_id': thread.id,
+                    'text': generated_text,
+                    'status': MessageStatusEnum.PENDING,
+                }
+
+                new_generated_message = Message(**insert_data)
+
+                session.add(new_generated_message)
 
             thread.context = new_context
             thread.is_unread = is_unread
@@ -587,11 +621,11 @@ async def try_add_messages(message_data: dict,
             await execute_and_catch_db_error(session.commit(),
                                             session,
                                             with_rollback=True)
+
             # publish update to redis
             # thread updated
             # publish new messages to thread page
             # new messages(create message [many])
-
             payload = {
                 'account_id': thread.account_id,
             }
@@ -610,6 +644,9 @@ async def try_add_messages(message_data: dict,
             message_list = []
 
             for message in insert_messages:
+                # for transtale background task
+                message_ids_for_translate.append(message.id)
+                #
                 attachments = message.attachments
                 attachment_list = []
                 content = message.text or ""
@@ -637,6 +674,12 @@ async def try_add_messages(message_data: dict,
                     'attachments': attachment_list
                 }
                 message_list.append(message_dict)
+            
+            job = await redis_pool.enqueue_job(
+                'try_translate_message_text',
+                message_ids_for_translate,
+                _queue_name='arq:translate',
+            )
 
             thread_payload['messages'] = message_list
 
@@ -645,6 +688,30 @@ async def try_add_messages(message_data: dict,
             await publish_event(redis_pool,
                     type='Thread detail updated',
                     payload=payload)
+
+            # publish update to redis
+            # new message generated
+            # publish new message to thread page
+            # new message(ai generate)
+            if new_generated_message:
+                payload = {
+                    'thread_id': new_generated_message.thread_id,
+                }
+                message_payload = {
+                    'id': str(new_generated_message.id),
+                    'role': new_generated_message.sender,
+                    'content': new_generated_message.text,
+                    'translated_content': new_generated_message.translated_text or '',
+                    'ts': new_generated_message.created_at.strftime("%Y-%d-%m %H:%M") if new_generated_message.created_at else "",
+                    "modStatus": new_generated_message.status,
+                    'attachment': None,
+
+                }
+                payload['message'] = message_payload
+
+                await publish_event(redis_pool,
+                        type='message created',
+                        payload=payload)
 
             return True
     

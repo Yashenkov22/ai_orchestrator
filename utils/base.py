@@ -14,6 +14,8 @@ from config import ADMIN_URL, X_TOKEN, VISION_BROWSER_HOST, VISION_BROWSER_PORT,
 
 INSTA_URL_PREFIX = 'https://www.instagram.com/'
 
+PREFIX_SYSTEM_PROMPT = 'Загружаю тебе полное описания личности. Теперь ты - эта личность. Думай как она, отвечай как она. Ни в коем случае не выдавай, что ты ИИ!!!'
+
 
 # AVAILABLE_LANGUAGES = {
 #     Language.RUSSIAN: "rus_Cyrl",

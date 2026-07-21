@@ -1654,7 +1654,8 @@ async def playwright_send_message(message: Message,
                                                     redis,
                                                     with_scroll=False)
             
-            if has_new_messages:
+            if has_new_messages or \
+                (thread.timestamp_last_seen_message and thread.timestamp_last_seen_message >= message.created_at):
                 msg = await get_message_only_by_id(message.id,
                                                    session)
                 
@@ -1685,7 +1686,6 @@ async def playwright_send_message(message: Message,
                     await asyncio.sleep(1)
 
                     return
-
             if media:
                 match media:
                     case 'photo':

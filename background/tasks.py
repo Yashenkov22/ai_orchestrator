@@ -11,8 +11,10 @@ from sqlalchemy import select, and_, delete
 from db.base import Account, Thread
 from db.queries import (execute_and_catch_db_error,
                         get_message_by_id,
-                        get_account_by_id,
-                        get_thread_by_id, get_thread_only_by_id)
+                        get_account_by_id, get_messages_only_by_id,
+                        get_thread_by_id,
+                        get_thread_only_by_id,
+                        get_message_only_by_id)
 
 from utils.base import (reject_request_chat, try_block_thread, try_get_profile_port,
                         try_start_profile,
@@ -21,6 +23,7 @@ from utils.base import (reject_request_chat, try_block_thread, try_get_profile_p
 from utils.tasks import (parse_thread_playwright,
                          playwright_send_message,
                          test_playwright)
+from utils.ai import ai_translate_message
 from utils.enums import MessageStatusEnum
 
 from websocket.redis_listener import publish_event
@@ -544,3 +547,30 @@ async def try_block_thread_by_account_id(cxt,
         else:
             print('not change')
 
+
+async def try_translate_message_text(cxt,
+                                     message_ids: list[int]):
+    print(f' -> running translate task for {message_ids} msgs...')
+    
+    sessionmaker= cxt['sessionmaker']
+
+    async with sessionmaker() as _session:
+        _session: AsyncSession
+        messages = await get_messages_only_by_id(message_ids,
+                                                 _session)
+        
+        if not messages:
+            return
+        
+        for message in messages:
+            if message.text and not message.translated_text:
+                _text = await ai_translate_message(message.text)
+
+                if _text:
+                    message.translated_text = _text
+
+                await sleep(1)
+
+        await execute_and_catch_db_error(_session.commit(),
+                                        _session,
+                                        with_rollback=True)
