@@ -29,6 +29,7 @@ from db.queries import (check_insta_user, check_new_messages_in_thread,
 
 from db.base import Message, Thread, Account
 
+from utils.ai import ai_generate_text
 from utils.enums import MessageStatusEnum
 
 from utils.base import dismiss_notifications_popup, generate_valid_media_url, try_get_profile_port
@@ -1534,6 +1535,8 @@ async def playwright_send_message(message: Message,
     thread_received = asyncio.Event()
     request_message_received = asyncio.Event()
 
+    is_need_new_context = False
+
     async with async_playwright() as p:
         try:
             browser = await p.chromium.connect_over_cdp(f'http://{VISION_BROWSER_HOST}:{profile_port}')
@@ -1760,6 +1763,7 @@ async def playwright_send_message(message: Message,
                     print(" + текст отправлен")
                     # await asyncio.sleep(1.5)
                     send_success = True
+                    is_need_new_context = True
                 except Exception as ex:
                     print(ex)
                     pass
@@ -1773,6 +1777,17 @@ async def playwright_send_message(message: Message,
         if send_success:
             msg = await get_message_only_by_id(message.id,
                                                session)
+            
+            if is_need_new_context:
+                _text = f'{msg.text} | {msg.created_at} | {msg.sender}'
+
+                context_from_db = thread.context or ''
+
+                text_for_ai = 'Контекст:\n' + context_from_db + '\nНовые сообщения:\n' + _text
+
+                new_context = await ai_generate_text(text=text_for_ai,
+                                                     for_db=True)
+                thread.context = new_context
             
             msg.status = 'approved'
             ts = datetime.now(tz=timezone.utc)
