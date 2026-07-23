@@ -1657,38 +1657,38 @@ async def playwright_send_message(message: Message,
                                                     redis,
                                                     with_scroll=False)
             
-            if has_new_messages or \
-                (thread.timestamp_last_seen_message and thread.timestamp_last_seen_message >= message.created_at):
-                msg = await get_message_only_by_id(message.id,
-                                                   session)
+            # if has_new_messages or \
+            #     (thread.timestamp_last_seen_message and thread.timestamp_last_seen_message >= message.created_at):
+            #     msg = await get_message_only_by_id(message.id,
+            #                                        session)
                 
-                if msg:
+            #     if msg:
 
-                    msg.status = MessageStatusEnum.REJECTED
+            #         msg.status = MessageStatusEnum.REJECTED
 
-                    await execute_and_catch_db_error(session.commit(),
-                                                    session,
-                                                    with_rollback=True)
+            #         await execute_and_catch_db_error(session.commit(),
+            #                                         session,
+            #                                         with_rollback=True)
                     
-                    payload = {
-                        'thread_id': msg.thread_id,
-                    }
-                    msg_payload = {
-                        'id': str(msg.id),
-                        "modStatus": msg.status,
-                    }
+            #         payload = {
+            #             'thread_id': msg.thread_id,
+            #         }
+            #         msg_payload = {
+            #             'id': str(msg.id),
+            #             "modStatus": msg.status,
+            #         }
 
-                    payload['message'] = msg_payload
+            #         payload['message'] = msg_payload
 
-                    await publish_event(redis,
-                                        type='Message updated',
-                                        payload=payload)
+            #         await publish_event(redis,
+            #                             type='Message updated',
+            #                             payload=payload)
                     
-                    thread_for_send_message_page.remove_listener("response", on_response)
-                    await thread_for_send_message_page.close()
-                    await asyncio.sleep(1)
+            #         thread_for_send_message_page.remove_listener("response", on_response)
+            #         await thread_for_send_message_page.close()
+            #         await asyncio.sleep(1)
 
-                    return
+            #         return
             if media:
                 match media:
                     case 'photo':

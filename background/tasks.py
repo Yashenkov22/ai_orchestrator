@@ -274,35 +274,35 @@ async def send_message_to_thread(cxt,
         print(' ### message', message_id, message)
         return
     
-    available_lock = acquire_lock(account.id,
-                                  message.thread_id)
+    # available_lock = acquire_lock(account.id,
+    #                               message.thread_id)
 
-    if not available_lock:
-        print('error 2')
-        async with sessionmaker() as _session:
-            _session: AsyncSession
-            _message = await _session.merge(message)
-            _message.retry_send_count += 1
-            await execute_and_catch_db_error(_session.commit(),
-                                             _session,
-                                             with_rollback=True)
+    # if not available_lock:
+    #     print('error 2')
+    #     async with sessionmaker() as _session:
+    #         _session: AsyncSession
+    #         _message = await _session.merge(message)
+    #         _message.retry_send_count += 1
+    #         await execute_and_catch_db_error(_session.commit(),
+    #                                          _session,
+    #                                          with_rollback=True)
         
-        # ws событие об изменении message
-        payload = {
-            'thread_id': message.thread_id,
-        }
-        msg_payload = {
-            'id': str(message.id),
-            "retry_send_count": _message.retry_send_count,
-        }
+    #     # ws событие об изменении message
+    #     payload = {
+    #         'thread_id': message.thread_id,
+    #     }
+    #     msg_payload = {
+    #         'id': str(message.id),
+    #         "retry_send_count": _message.retry_send_count,
+    #     }
 
-        payload['message'] = msg_payload
+    #     payload['message'] = msg_payload
 
-        await publish_event(redis,
-                            type='Message send count updated',
-                            payload=payload)
+    #     await publish_event(redis,
+    #                         type='Message send count updated',
+    #                         payload=payload)
 
-        raise Retry(defer=15)
+    #     raise Retry(defer=15)
     
     try:
         _key = f'lock:send_message:acc:{account.id}:msg:{message_id}'
@@ -403,7 +403,7 @@ async def send_message_to_thread(cxt,
         print('ERROR WITH TRY SEND MESSAGE', ex)
     finally:
         try:
-            release_lock(account_id, message.thread_id, available_lock)
+            # release_lock(account_id, message.thread_id, available_lock)
             release_task_lock(_key, task_lock)
         except Exception:
             pass
