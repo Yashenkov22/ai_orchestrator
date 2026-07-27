@@ -13,7 +13,7 @@ async def create_admin_accounts(session: AsyncSession):
         {
             # 'admin': pwd_context.hash('1234'),
             'username': 'moder1',
-            'password': pwd_context.hash('Gfhjkm123!'),
+            'password': pwd_context.hash('GfhjkmGfhjkm123321!!'),
         }
     ]
 
