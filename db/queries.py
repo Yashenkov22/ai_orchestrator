@@ -16,7 +16,7 @@ from arq import ArqRedis
 
 from db.base import Account, Admin, Message, Thread, InstaUser, Attachment
 
-from utils.ai import ai_generate_text, ai_translate_message
+from utils.ai import ai_extract_user_info, ai_generate_text, ai_translate_message
 from utils.base import RATIO_LEN_LIMIT, RATIO_LIMIT, generate_valid_media_url, moscow_tz, russian_ratio, try_translate_text
 from utils.exc import DB_ERROR_EXCEPTION, ChatNotFound, NotAccessToChat
 from utils.enums import MessageStatusEnum, ThreadColorEnum
@@ -497,6 +497,10 @@ async def try_add_new_thread(thread_data: dict,
 
     await execute_and_catch_db_error(session.flush(),
                                      session)
+
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)
     
     return new_thread
 
@@ -595,6 +599,9 @@ async def try_add_messages(message_data: dict,
 
             new_context = await ai_generate_text(text=text_for_ai,
                                                 for_db=True)
+
+            new_user_information = await ai_extract_user_info(text=unread_messages_text,
+                                                              existing_info=thread.user_information)
             
             new_generated_message = None
 
@@ -617,6 +624,7 @@ async def try_add_messages(message_data: dict,
 
             thread.context = new_context
             thread.is_unread = is_unread
+            thread.user_information = new_user_information
 
             await execute_and_catch_db_error(session.commit(),
                                             session,

@@ -1,3 +1,5 @@
+import json
+
 from datetime import datetime, timezone
 from openai import OpenAI, AsyncOpenAI
 
@@ -220,3 +222,53 @@ async def ai_translate_message(text: str):
     except Exception as ex:
         print('ERROR WITH TRY TRANSTALE THROUGH DEEPSEEK')
         return None
+
+
+
+async def ai_extract_user_info(text: str, existing_info: dict | None = None) -> dict:
+    print('запрос к нейронке для извлечения профиля собеседника...')
+
+    existing_json = json.dumps(existing_info or {}, ensure_ascii=False)
+
+    system_content = (
+        "Ты выполняешь ТОЛЬКО одну техническую функцию: извлекаешь и обновляешь структурированные факты "
+        "о собеседнике из переписки в Instagram Direct.\n\n"
+        "СТРОГИЕ ПРАВИЛА:\n"
+        "1. Извлекай ТОЛЬКО факты, которые собеседник ЯВНО сообщил сам в переписке. "
+        "Никогда не придумывай и не предполагай — если факта нет в тексте, не включай поле вообще.\n"
+        "2. Возможные поля (используй только те, для которых есть реальные данные): "
+        "name, age, country, city, job, income_level, marital_status, interests, hobbies, other_notes.\n"
+        # "3. Тебе дан текущий профиль (JSON) [необязательно] и новые сообщения. Объедини: сохрани уже известные факты, "
+        "3. Тебе дан текущий профиль (JSON) [необязательно] и контекст переписки. Объедини: сохрани уже известные факты, "
+        "добавь новые, обнови изменившиеся. Не удаляй факты, которые всё ещё актуальны.\n"
+        "4. Если профиль собеседника не передан или пустой попробуй создать. "
+        "5. Верни ТОЛЬКО валидный JSON-объект, без markdown-обёртки (без ```json), без пояснений до или "
+        "после JSON. Если новых или существующих фактов нет вообще — верни пустой объект {}.\n"
+        "6. Значения полей пиши на языке, на котором говорит сам собеседник в переписке."
+    )
+
+    user_content = (
+        f"Текущий профиль собеседника (JSON):\n{existing_json}\n\n"
+        # f"Новые сообщения переписки:\n{text}\n\n"
+        f"Контекст переписки:\n{text}\n\n"
+        f"Верни обновлённый JSON-профиль."
+    )
+
+    response = await client.chat.completions.create(
+        model="deepseek/deepseek-chat",
+        messages=[
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": user_content},
+        ],
+        response_format={"type": "json_object"},   # если провайдер поддерживает — форсирует валидный JSON
+        timeout=20.0,
+    )
+
+    raw = response.choices[0].message.content if response.choices else '{}'
+    print('ответ нейронки (профиль)', raw)
+
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        print(f'[ai_extract_user_info] invalid JSON: {raw!r}')
+        return existing_info or {}   # при сбое парсинга — не теряем то, что уже было

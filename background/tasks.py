@@ -205,12 +205,14 @@ async def parse_thread(cxt,
                                        _session)
     
     if not account or not thread:
+        print('stop here 1')
         return
     
     available_lock = acquire_lock(account.id,
                                   thread_id)
 
     if not available_lock:
+        print('stop here 2')
         raise Retry(defer=15)
 
     actived_profile = await try_start_profile(account.folder_id,

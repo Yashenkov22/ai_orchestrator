@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 
 from arq import ArqRedis, Retry
 
+from sqlalchemy import select
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from playwright.async_api import async_playwright
@@ -54,35 +56,40 @@ TARGET_QUERIES = {
 
 # === Утилиты ===
 async def load_known_threads_map(account_id: int, _session: AsyncSession) -> dict:
-    """thread_id -> timestamp_last_seen_message (или None) для всех тредов аккаунта."""
-    threads = await get_all_threads_by_account(account_id, _session)  # твой существующий запрос
-    return {t.thread_id: t.timestamp_last_seen_message for t in threads}
+    result = await _session.execute(
+        select(Thread.thread_id, Thread.timestamp_last_seen_message)
+        .where(Thread.account_id == account_id)
+    )
+    return {tid: ts for tid, ts in result.all() if tid}
     
+def _thread_last_activity_dt(thread: dict):
+    ts_ms = thread.get('last_activity') or thread.get('last_message_ts')
+    if not ts_ms:
+        return None
+    try:
+        return datetime.fromtimestamp(int(ts_ms) / 1000, tz=timezone.utc)
+    except (ValueError, TypeError):
+        return None
 
-def batch_has_new_messages(batch_threads: list, known_map: dict) -> bool:
-    """
-    True — если хотя бы у одного треда в этой порции last_message_ts новее,
-    чем сохранённый timestamp_last_seen_message (или треда вообще нет в БД — новый чат).
-    """
-    for t in batch_threads:
-        thread_key = t.get('thread_key')
-        last_message_ts = t.get('last_message_ts')
-        if not last_message_ts:
-            continue
 
-        # last_message_ts = int(last_message_ts)
-        valid_ts = datetime.fromtimestamp(int(last_message_ts) / 1000, tz=timezone.utc)
-        known_ts = known_map.get(thread_key)
+def thread_has_new_messages(thread: dict, known_map: dict) -> bool:
+    tid = thread.get('thread_id')
+    if not tid:
+        return True  # нет id — не рискуем терять данные, считаем свежим
 
-        if known_ts is None:
-            # треда нет в БД вообще — это новый чат, точно "есть новое"
-            return True
+    last_activity_dt = _thread_last_activity_dt(thread)
+    if last_activity_dt is None:
+        return True  # нет таймстампа — то же самое
 
-        # known_ts_ms = int(known_ts.timestamp() * 1000)
-        if valid_ts > known_ts:
-            return True
+    known_ts = known_map.get(tid)
+    if known_ts is None:
+        return True  # тред ещё не видели в БД
 
-    return False
+    return last_activity_dt > known_ts
+
+
+def batch_has_new_messages(threads: list, known_map: dict) -> bool:
+    return any(thread_has_new_messages(t, known_map) for t in threads)
 
 
 # async def scroll_inbox_until_loaded(page, max_rounds=40,
@@ -132,7 +139,56 @@ def batch_has_new_messages(batch_threads: list, known_map: dict) -> bool:
 
 #     return prev
 
-async def scroll_inbox_until_loaded(page, collected_data, max_rounds=80,
+# async def scroll_inbox_until_loaded(page, collected_data, max_rounds=80,
+#                                     wait_after_scroll=8.0, poll_interval=0.3):
+#     item_sel = 'div[role="button"]'
+
+#     scroll_js = """() => {
+#         let best = null, max = 50;
+#         for (const c of document.querySelectorAll('*')) {
+#             const s = getComputedStyle(c);
+#             if (s.overflowY === 'auto' || s.overflowY === 'scroll') {
+#                 const d = c.scrollHeight - c.clientHeight;
+#                 if (d > max) { best = c; max = d; }
+#             }
+#         }
+#         if (!best) return {found: false};
+#         const before = best.scrollTop;
+#         best.scrollTop = best.scrollHeight;
+#         return {found: true, before: before, after: best.scrollTop,
+#                 sh: best.scrollHeight, ch: best.clientHeight};
+#     }"""
+
+#     empty_rounds = 0
+
+#     for i in range(max_rounds):
+#         pages_before = len(collected_data.get('SlideMailboxPages', []))
+
+#         res = await page.evaluate(scroll_js)
+#         count = await page.locator(item_sel).count()
+#         print(f"[scroll-inbox #{i}] count={count} pages_before={pages_before} scroll={res}")
+
+#         waited = 0.0
+#         while waited < wait_after_scroll:
+#             await page.wait_for_timeout(int(poll_interval * 1000))
+#             waited += poll_interval
+#             if len(collected_data.get('SlideMailboxPages', [])) > pages_before:
+#                 break
+
+#         pages_after = len(collected_data.get('SlideMailboxPages', []))
+
+#         if pages_after == pages_before:
+#             empty_rounds += 1
+#             print(f"[scroll-inbox] no new page at #{i}, empty={empty_rounds}")
+#             if empty_rounds >= 2:
+#                 print(f"[scroll-inbox] stop after {empty_rounds} empty rounds")
+#                 break
+#         else:
+#             empty_rounds = 0
+
+#     return await page.locator(item_sel).count()
+
+async def scroll_inbox_until_loaded(page, collected_data, known_map=None, max_rounds=80,
                                     wait_after_scroll=8.0, poll_interval=0.3):
     item_sel = 'div[role="button"]'
 
@@ -152,14 +208,63 @@ async def scroll_inbox_until_loaded(page, collected_data, max_rounds=80,
                 sh: best.scrollHeight, ch: best.clientHeight};
     }"""
 
+    if known_map is not None:
+        initial_threads = extract_threads_from_inbox(collected_data.get('PolarisDirectInboxQuery', []))
+        if initial_threads and not batch_has_new_messages(initial_threads, known_map):
+            print("[scroll-inbox] первый экран без новых сообщений — скролл не нужен")
+            return await page.locator(item_sel).count()
+
     empty_rounds = 0
 
+    # for i in range(max_rounds):
+    #     pages_before = len(collected_data.get('SlideMailboxPages', []))
+
+    #     res = await page.evaluate(scroll_js)
+    #     count = await page.locator(item_sel).count()
+    #     print(f"[scroll-inbox #{i}] count={count} pages_before={pages_before} scroll={res}")
+
+    #     waited = 0.0
+    #     while waited < wait_after_scroll:
+    #         await page.wait_for_timeout(int(poll_interval * 1000))
+    #         waited += poll_interval
+    #         if len(collected_data.get('SlideMailboxPages', [])) > pages_before:
+    #             break
+
+    #     pages_after = len(collected_data.get('SlideMailboxPages', []))
+
+    #     if pages_after == pages_before:
+    #         empty_rounds += 1
+    #         print(f"[scroll-inbox] no new page at #{i}, empty={empty_rounds}")
+    #         if empty_rounds >= 2:
+    #             print(f"[scroll-inbox] stop after {empty_rounds} empty rounds")
+    #             break
+    #         continue
+
+    #     empty_rounds = 0
+
+    #     if known_map is not None:
+    #         new_pages = collected_data['SlideMailboxPages'][pages_before:pages_after]
+    #         new_threads = extract_threads_from_inbox(new_pages)
+    #         if new_threads and not batch_has_new_messages(new_threads, known_map):
+    #             print(f"[scroll-inbox] батч #{i} без новых сообщений — стоп")
+    #             break
+
+    # return await page.locator(item_sel).count()
     for i in range(max_rounds):
         pages_before = len(collected_data.get('SlideMailboxPages', []))
 
         res = await page.evaluate(scroll_js)
         count = await page.locator(item_sel).count()
         print(f"[scroll-inbox #{i}] count={count} pages_before={pages_before} scroll={res}")
+
+        if not res.get('found'):
+            empty_rounds += 1
+            print(f"[scroll-inbox] нет скроллируемого контейнера на #{i}, empty={empty_rounds}")
+            if empty_rounds >= 2:
+                print(f"[scroll-inbox] stop after {empty_rounds} empty rounds (no scrollable container)")
+                break
+            await page.wait_for_timeout(500)
+            continue
 
         waited = 0.0
         while waited < wait_after_scroll:
@@ -176,10 +281,16 @@ async def scroll_inbox_until_loaded(page, collected_data, max_rounds=80,
             if empty_rounds >= 2:
                 print(f"[scroll-inbox] stop after {empty_rounds} empty rounds")
                 break
-        else:
-            empty_rounds = 0
+            continue
 
-    return await page.locator(item_sel).count()
+        empty_rounds = 0
+
+        if known_map is not None:
+            new_pages = collected_data['SlideMailboxPages'][pages_before:pages_after]
+            new_threads = extract_threads_from_inbox(new_pages)
+            if new_threads and not batch_has_new_messages(new_threads, known_map):
+                print(f"[scroll-inbox] батч #{i} без новых сообщений — стоп")
+                break
 
 
 def extract_friendly_name(payload: str) -> str | None:
@@ -759,9 +870,9 @@ async def process_threads(
             await asyncio.sleep(0.5)
             # return {"status": "polling", "job_id": job.job_id}
 
-        await execute_and_catch_db_error(_session.commit(),
-                                          _session,
-                                          with_rollback=True)
+        # await execute_and_catch_db_error(_session.commit(),
+        #                                   _session,
+        #                                   with_rollback=True)
 
         # publish update to redis with updated thread info(new or updated)
         payload = {
@@ -1024,35 +1135,75 @@ async def switch_inbox_tab(page, tab_name: str) -> bool:
         return False
 
 
-async def iterate_inbox_folders(page, inbox_received, collected_data, account_id, _session):
-    """
-    Проходит по всем вкладкам инбокса и скроллит каждую.
-    Если вкладок нет — скроллит текущий единый список один раз.
-    """
-    tabs = await get_inbox_tabs(page)
+# async def iterate_inbox_folders(page, inbox_received, collected_data, account_id, _session):
+#     """
+#     Проходит по всем вкладкам инбокса и скроллит каждую.
+#     Если вкладок нет — скроллит текущий единый список один раз.
+#     """
+#     tabs = await get_inbox_tabs(page)
 
-    # нет разделения на вкладки — обычный единый инбокс
+#     # нет разделения на вкладки — обычный единый инбокс
+#     if not tabs:
+#         print("[inbox] вкладок нет, единый список")
+#         await scroll_inbox_until_loaded(page, collected_data)
+#         # known_map = await load_known_threads_map(account_id, _session)
+#         # await scroll_inbox_until_loaded(page, collected_data, known_map)
+#         return
+
+#     # есть вкладки — обходим интересующие (Request обычно пропускают)
+#     # target_tabs = [t for t in tabs if t in ("Primary", "General")]
+#     # print(f"[inbox] вкладки: {tabs}, обходим: {target_tabs}")
+
+#     # for tab in target_tabs:
+#     switched = await switch_inbox_tab(page, "General")
+#     if not switched:
+#         pass
+#     inbox_received.clear()
+#     try:
+#         await asyncio.wait_for(inbox_received.wait(), timeout=15)
+#     except asyncio.TimeoutError:
+#         print(f"[inbox] таймаут ожидания ответа для General")
+#     await scroll_inbox_until_loaded(page, collected_data)
+
+# async def iterate_inbox_folders(page, inbox_received, collected_data, account_id, _session):
+#     tabs = await get_inbox_tabs(page)
+#     known_map = await load_known_threads_map(account_id, _session)
+
+#     if not tabs:
+#         print("[inbox] вкладок нет, единый список")
+#         await scroll_inbox_until_loaded(page, collected_data, known_map)
+#         return
+
+#     switched = await switch_inbox_tab(page, "General")
+#     if not switched:
+#         pass
+#     inbox_received.clear()
+#     try:
+#         await asyncio.wait_for(inbox_received.wait(), timeout=15)
+#     except asyncio.TimeoutError:
+#         print(f"[inbox] таймаут ожидания ответа для General")
+#     await scroll_inbox_until_loaded(page, collected_data, known_map)
+
+async def iterate_inbox_folders(page, inbox_received, collected_data, account_id, _session):
+    tabs = await get_inbox_tabs(page)
+    known_map = await load_known_threads_map(account_id, _session)
+    print(f"[inbox] найденные вкладки: {tabs}")  # временно, чтобы понять реальные имена
+
     if not tabs:
         print("[inbox] вкладок нет, единый список")
-        await scroll_inbox_until_loaded(page, collected_data)
-        # known_map = await load_known_threads_map(account_id, _session)
-        # await scroll_inbox_until_loaded(page, collected_data, known_map)
+        await scroll_inbox_until_loaded(page, collected_data, known_map)
         return
 
-    # есть вкладки — обходим интересующие (Request обычно пропускают)
-    # target_tabs = [t for t in tabs if t in ("Primary", "General")]
-    # print(f"[inbox] вкладки: {tabs}, обходим: {target_tabs}")
-
-    # for tab in target_tabs:
     switched = await switch_inbox_tab(page, "General")
-    if not switched:
-        pass
-    inbox_received.clear()
-    try:
-        await asyncio.wait_for(inbox_received.wait(), timeout=15)
-    except asyncio.TimeoutError:
-        print(f"[inbox] таймаут ожидания ответа для General")
-    await scroll_inbox_until_loaded(page, collected_data)
+    if switched:
+        inbox_received.clear()
+        try:
+            await asyncio.wait_for(inbox_received.wait(), timeout=15)
+        except asyncio.TimeoutError:
+            print("[inbox] таймаут ожидания ответа для General")
+    # если не переключились — новой сети не будет, ждать нечего
+
+    await scroll_inbox_until_loaded(page, collected_data, known_map)
 
 
 def collect_all_inbox_threads(collected_data):
@@ -1746,7 +1897,12 @@ async def playwright_send_message(message: Message,
                     await box.click()                  # фокус — обязательно для Lexical
                     await human_pause(0.3, 0.7)
 
-                    await box.type(message_text, delay=random.uniform(30, 90))   # человеческий ввод
+                    # await box.type(message_text, delay=random.uniform(30, 90))   # человеческий ввод
+                    # await human_pause(0.4, 1.0)
+                    char_delay = random.uniform(30, 90)
+                    type_timeout = int(len(message_text) * char_delay) + 5_000  # запас 15с
+
+                    await box.press_sequentially(message_text, delay=char_delay, timeout=type_timeout)
                     await human_pause(0.4, 1.0)
 
                     await thread_for_send_message_page.keyboard.press("Enter")

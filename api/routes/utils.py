@@ -11,18 +11,20 @@ from fastapi import (APIRouter,
 
 from sqlalchemy import select
 
+from sqlalchemy.orm import selectinload
+
 from db.queries import (execute_and_catch_db_error,
                         get_account_by_id, get_message_only_by_id, try_update_message_text)
 
-from db.base import Account
+from db.base import Account, Thread
 
 from db.queries import get_message_by_id
 
-from utils.ai import ai_translate_message
+from utils.ai import ai_extract_user_info, ai_translate_message
 from utils.dependencies import (admin_dependency,
                                 session_dependency,
                                 arq_dependency)
-from utils.enums import MessageStatusEnum
+from utils.enums import MessageStatusEnum, ThreadColorEnum
 
 from utils.base import (generate_valid_media_url,
                         get_folder_profiles,
@@ -236,3 +238,35 @@ async def try_translate_text(admin: admin_dependency,
         except Exception as ex:
             print(ex)
             return 'Error with try translate text'
+
+
+
+# @utils_router.get("/generate_user_informations")
+# async def generate_user_informations(admin: admin_dependency,
+#                                   arq_pool: arq_dependency,
+#                                   session: session_dependency):
+#     limit = 5
+#     query = (
+#         select(Thread)\
+#         .options(selectinload(Thread.insta_user),
+#                  selectinload(Thread.account))\
+#         .where(
+#             Thread.color_level == ThreadColorEnum.GREEN
+#         )
+#     )
+
+#     res = await execute_and_catch_db_error(session.execute(query),
+#                                            session)
+    
+#     threads = res.scalars().all()
+
+#     for thread in threads[:limit]:
+#         thread: Thread
+#         print(' -> data', thread.context, thread.user_information)
+#         new_user_information = await ai_extract_user_info(text=thread.context,
+#                                                           existing_info=thread.user_information)
+#         thread.user_information = new_user_information
+
+#     await execute_and_catch_db_error(session.commit(),
+#                                      session,
+#                                      with_rollback=True)
