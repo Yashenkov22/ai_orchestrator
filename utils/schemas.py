@@ -195,6 +195,7 @@ class NewAccountSchema(BaseModel):
     updated_at: datetime
     photo_url: str | None = Field(default=None)
     is_active: bool
+    is_hidden: bool
     thread_count: int
     has_unread: bool
     has_error: bool
@@ -221,6 +222,10 @@ class PatchPhotoAccountSchema(BaseModel):
 class PatchViewNameAccountSchema(BaseModel):
     account_id: int
     view_name: str
+
+
+class PatchHiddenMarkAccountSchema(BaseModel):
+    account_id: int
 
 
 class ThreadSchema(BaseModel):

@@ -10,7 +10,8 @@ from sqlalchemy.orm import joinedload
 from db.queries import (execute_and_catch_db_error)
 
 from db.base import (Message,
-                     Thread)
+                     Thread,
+                     Account)
 
 from utils.schemas import (DetailThreadSchema,
                            EditThreadColorLevelSchema, EditThreadNotesSchema, EditThreadPinMarkSchema, EditThreadUnreadMarkSchema,
@@ -35,6 +36,7 @@ async def get_threads(admin: admin_dependency,
 
     query = (
         select(Thread)
+        .join(Thread.account)
         .options(
             joinedload(Thread.account),
             joinedload(Thread.insta_user)
@@ -43,7 +45,8 @@ async def get_threads(admin: admin_dependency,
             Thread.is_pinned.desc(),
             Thread.is_unread.desc(),
             Thread.timestamp_last_seen_message.desc(),
-        )   
+        )\
+        .where(Account.is_hidden == False)
     )
 
     if not is_main_admin:

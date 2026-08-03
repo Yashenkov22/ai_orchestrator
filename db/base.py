@@ -103,6 +103,8 @@ class Account(Base):
     is_active = Column(Boolean,
                       default=True,
                       server_default="false")
+    is_hidden = Column(Boolean, default=False,
+                        server_default='false')
     # ai settings
     ai_model_id = Column(Integer,
                          ForeignKey('ai_models.id'),
