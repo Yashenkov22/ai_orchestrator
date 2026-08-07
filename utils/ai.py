@@ -227,8 +227,7 @@ async def ai_extract_user_info(text: str, existing_info: dict | None = None) -> 
         "1. Извлекай ТОЛЬКО факты, которые собеседник ЯВНО сообщил сам в переписке. "
         "Никогда не придумывай и не предполагай — если факта нет в тексте, не включай поле вообще.\n"
         "2. Возможные поля (используй только те, для которых есть реальные данные): "
-        "name, age, country, city, job, income_level, marital_status, interests, hobbies, other_notes.\n"
-        # "3. Тебе дан текущий профиль (JSON) [необязательно] и новые сообщения. Объедини: сохрани уже известные факты, "
+        "name, age, country, city, job, income_level, marital_status, interests, hobbies, behavior_patterns, financial_promises, communication_preferences, relationship_intent\n"
         "3. Тебе дан текущий профиль (JSON) [необязательно] и последние сообщения из чата. Объедини: сохрани уже известные факты, "
         "добавь новые, обнови изменившиеся. Не удаляй факты, которые всё ещё актуальны.\n"
         "4. Если профиль собеседника не передан или пустой попробуй создать. "
@@ -240,7 +239,6 @@ async def ai_extract_user_info(text: str, existing_info: dict | None = None) -> 
     user_content = (
         f"Текущий профиль собеседника (JSON):\n{existing_json}\n\n"
         f"Новые сообщения переписки:\n{text}\n\n"
-        # f"Контекст переписки:\n{text}\n\n"
         f"Верни обновлённый JSON-профиль."
     )
 
@@ -250,7 +248,6 @@ async def ai_extract_user_info(text: str, existing_info: dict | None = None) -> 
             {"role": "system", "content": system_content},
             {"role": "user", "content": user_content},
         ],
-        # response_format={"type": "json_object"},   # если провайдер поддерживает — форсирует валидный JSON
         timeout=120.0,
     )
 
