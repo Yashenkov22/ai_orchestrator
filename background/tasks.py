@@ -581,7 +581,7 @@ async def try_translate_message_text(cxt,
 
 async def generate_thread_memory(cxt,
                                  thread_id: int):
-
+    print('start...')
     sessionmaker= cxt['sessionmaker']
 
     async with sessionmaker() as _session:
@@ -591,7 +591,8 @@ async def generate_thread_memory(cxt,
                                             _session)
 
         if not thread:
-            raise
+            print('error 1')
+            return
 
         await try_update_thread_memory(thread,
                                        _session)
