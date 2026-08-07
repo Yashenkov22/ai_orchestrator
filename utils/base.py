@@ -7,9 +7,14 @@ from lingua import  Language
 
 from passlib.context import CryptContext
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from playwright.async_api import async_playwright
 
-from config import ADMIN_URL, X_TOKEN, VISION_BROWSER_HOST, VISION_BROWSER_PORT, TRANSLATOR_LINK
+from config import ADMIN_URL, LIMIT_FOR_RAW_LOG_MESSAGES, X_TOKEN, VISION_BROWSER_HOST, VISION_BROWSER_PORT, TRANSLATOR_LINK
+# from db.base import Thread, Message
+# from db.queries import get_new_thread_messages
+# from utils.ai import ai_extract_user_info, generate_thread_context
 
 
 INSTA_URL_PREFIX = 'https://www.instagram.com/'

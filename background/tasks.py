@@ -22,7 +22,7 @@ from utils.base import (reject_request_chat, try_block_thread, try_get_profile_p
                         try_connect_to_main_instagram_page)
 from utils.tasks import (parse_thread_playwright,
                          playwright_send_message,
-                         test_playwright)
+                         test_playwright, try_update_thread_memory)
 from utils.ai import ai_translate_message
 from utils.enums import MessageStatusEnum
 
@@ -572,6 +572,29 @@ async def try_translate_message_text(cxt,
                     message.translated_text = _text
 
                 await sleep(1)
+
+        await execute_and_catch_db_error(_session.commit(),
+                                        _session,
+                                        with_rollback=True)
+
+
+
+async def generate_thread_memory(cxt,
+                                 thread_id: int):
+
+    sessionmaker= cxt['sessionmaker']
+
+    async with sessionmaker() as _session:
+        _session: AsyncSession
+
+        thread = await get_thread_only_by_id(thread_id,
+                                            _session)
+
+        if not thread:
+            raise
+
+        await try_update_thread_memory(thread,
+                                       _session)
 
         await execute_and_catch_db_error(_session.commit(),
                                         _session,

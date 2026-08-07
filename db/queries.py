@@ -6,7 +6,8 @@ from sqlalchemy import (select,
                         update,
                         insert,
                         and_,
-                        exists,)
+                        exists,
+                        func)
 from sqlalchemy.engine.result import Result
 from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,12 +17,18 @@ from arq import ArqRedis
 
 from db.base import Account, Admin, Message, Thread, InstaUser, Attachment
 
-from utils.ai import ai_extract_user_info, ai_generate_text, ai_translate_message
-from utils.base import RATIO_LEN_LIMIT, RATIO_LIMIT, generate_valid_media_url, moscow_tz, russian_ratio, try_translate_text
+# from utils.ai import (ai_extract_user_info,
+#                       generate_thread_context,
+#                       generate_new_message_to_thread,
+#                       ai_translate_message)
+# from utils.base import RATIO_LEN_LIMIT, RATIO_LIMIT, generate_valid_media_url, moscow_tz, russian_ratio, try_translate_text, get_raw_messages_log_and_new_last_message_id, try_update_thread_memory
 from utils.exc import DB_ERROR_EXCEPTION, ChatNotFound, NotAccessToChat
 from utils.enums import MessageStatusEnum, ThreadColorEnum
-from websocket.redis_listener import publish_event
-from websocket.base import manager
+# from utils.tasks import get_raw_messages_log_and_new_last_message_id, try_update_thread_memory
+# from websocket.redis_listener import publish_event
+# from websocket.base import manager
+
+from config import LIMIT_FOR_RAW_LOG_MESSAGES
 
 
 async def execute_and_catch_db_error(coro,
@@ -546,182 +553,194 @@ async def update_thread_is_unread_by_id(thread_id: int,
                                      with_rollback=True)
 
 
-async def try_add_messages(message_data: dict,
-                           thread: Thread,
-                           session: AsyncSession,
-                           redis_pool: ArqRedis):
-    thread_id = message_data.get('thread_id')
-    messages = message_data.get('messages')
-    mark_as_unread = message_data.get('mark_as_unread')
-    insert_messages = []
-    message_ids_for_translate = []
+# async def try_add_messages(message_data: dict,
+#                            thread: Thread,
+#                            session: AsyncSession,
+#                            redis_pool: ArqRedis):
+#     thread_id = message_data.get('thread_id')
+#     messages = message_data.get('messages')
+#     # mark_as_unread = message_data.get('mark_as_unread')
+#     insert_messages = []
+#     message_ids_for_translate = []
 
-    unread_messages_text = ''
+#     unread_messages_text = ''
 
-    if thread_id and messages:
-        for message in reversed(messages):
-            ts = message.get('timestamp')
-            sender = message.get('sender')
+#     if thread_id and messages:
+#         for message in reversed(messages):
+#             ts = message.get('timestamp')
+#             sender = message.get('sender')
 
-            if ts:
-                ts = datetime.fromtimestamp(
-                    int(ts) / 1000,
-                    tz=timezone.utc
-                )
-            msg_data = {
-                'created_at': ts,
-                'updated_at': ts,
-                'text': message.get('text'),
-                'sender': sender,
-                'status': 'approved',
-                'thread_id': thread_id,
-            }
+#             if ts:
+#                 ts = datetime.fromtimestamp(
+#                     int(ts) / 1000,
+#                     tz=timezone.utc
+#                 )
+#             msg_data = {
+#                 'created_at': ts,
+#                 'updated_at': ts,
+#                 'text': message.get('text'),
+#                 'sender': sender,
+#                 'status': 'approved',
+#                 'thread_id': thread_id,
+#             }
 
-            new_message = Message(**msg_data,
-                                  attachments=[Attachment(media_type=t, media_url=u) for t, u in message.get("media_files", [])])
-            insert_messages.append(new_message)
+#             new_message = Message(**msg_data,
+#                                   attachments=[Attachment(media_type=t, media_url=u) for t, u in message.get("media_files", [])])
+#             insert_messages.append(new_message)
 
 
-            if new_message.text:
-                _text = f'{new_message.text} | {new_message.created_at} | {new_message.sender}'
-                unread_messages_text += _text
+#             if new_message.text:
+#                 _text = f'{new_message.text} | {new_message.created_at} | {new_message.sender}'
+#                 unread_messages_text += _text
 
-        if insert_messages:
-            session.add_all(insert_messages)
+#         if insert_messages:
+#             session.add_all(insert_messages)
 
-            thread.timestamp_last_seen_message = ts
+#             await execute_and_catch_db_error(session.flush(),
+#                                             session,
+#                                             with_rollback=True)
 
-            is_unread = sender == 'user'
+#             # is_unread = sender == 'user'
 
-            context_from_db = thread.context or ''
-
-            text_for_ai = 'Контекст:\n' + context_from_db + '\nНовые сообщения:\n' + unread_messages_text
-
-            new_context = await ai_generate_text(text=text_for_ai,
-                                                for_db=True)
-
-            new_user_information = await ai_extract_user_info(text=unread_messages_text,
-                                                              existing_info=thread.user_information)
+#             # проверить и если нужно обновить контекст 
+#             # и json о юзере, обновить last_message_id в Thread
+#             await try_update_thread_memory(thread,
+#                                            session)
             
-            new_generated_message = None
+#             # new_context = await ai_generate_text(text=text_for_ai,
+#             #                                     for_db=True)
 
-            if thread.color_level in (ThreadColorEnum.RED, ThreadColorEnum.GREY) and thread.is_pinned:
-                generated_text = await ai_generate_text(text=text_for_ai,
-                                                        account_information=thread.account.information)
+#             # new_user_information = await ai_extract_user_info(text=unread_messages_text,
+#             #                                                   existing_info=thread.user_information)
+            
+#             new_generated_message = None
+
+#             if thread.color_level in (ThreadColorEnum.RED, ThreadColorEnum.GREY) and thread.is_pinned:
+#                 # context_from_db = thread.context or ''
+#                 messages_for_raw_log = await get_new_thread_messages(thread_id=thread.id,
+#                                                                      last_message_id=thread.last_message_id,
+#                                                                      session=session)
+#                 raw_messages_log, _ = await get_raw_messages_log_and_new_last_message_id(messages_for_raw_log)
+
+
+#                 generated_text = await generate_new_message_to_thread(account_information=thread.account.information,
+#                                                                       thread_context=thread.context,
+#                                                                       new_messages=raw_messages_log)
                 
-                insert_data = {
-                    'sender': 'assistant',
-                    'created_at': datetime.now(tz=timezone.utc),
-                    'updated_at': datetime.now(tz=timezone.utc),
-                    'thread_id': thread.id,
-                    'text': generated_text,
-                    'status': MessageStatusEnum.PENDING,
-                }
+#                 insert_data = {
+#                     'sender': 'assistant',
+#                     'created_at': datetime.now(tz=timezone.utc),
+#                     'updated_at': datetime.now(tz=timezone.utc),
+#                     'thread_id': thread.id,
+#                     'text': generated_text,
+#                     'status': MessageStatusEnum.PENDING,
+#                 }
 
-                new_generated_message = Message(**insert_data)
+#                 new_generated_message = Message(**insert_data)
 
-                session.add(new_generated_message)
+#                 session.add(new_generated_message)
 
-            thread.context = new_context
-            thread.is_unread = is_unread
-            thread.user_information = new_user_information
+#             # thread.context = new_context
+#             thread.is_unread = sender == 'user'
+#             thread.timestamp_last_seen_message = ts
+#             # thread.user_information = new_user_information
 
-            await execute_and_catch_db_error(session.commit(),
-                                            session,
-                                            with_rollback=True)
+#             await execute_and_catch_db_error(session.commit(),
+#                                              session,
+#                                              with_rollback=True)
 
-            # publish update to redis
-            # thread updated
-            # publish new messages to thread page
-            # new messages(create message [many])
-            payload = {
-                'account_id': thread.account_id,
-            }
+#             # publish update to redis
+#             # thread updated
+#             # publish new messages to thread page
+#             # new messages(create message [many])
+#             payload = {
+#                 'account_id': thread.account_id,
+#             }
 
-            thread_payload = {
-                'id': thread.id,
-                'context': thread.context,
-                'has_unread': thread.is_unread,
-                "last_activity": thread.timestamp_last_seen_message.strftime("%Y-%d-%m %H:%M")\
-                                if thread.timestamp_last_seen_message else "",
-                'is_approved': thread.is_approved,
-                'is_pinned': thread.is_pinned,
-                'is_blocked': thread.is_blocked,
-                        }
+#             thread_payload = {
+#                 'id': thread.id,
+#                 'context': thread.context,
+#                 'has_unread': thread.is_unread,
+#                 "last_activity": thread.timestamp_last_seen_message.strftime("%Y-%d-%m %H:%M")\
+#                                 if thread.timestamp_last_seen_message else "",
+#                 'is_approved': thread.is_approved,
+#                 'is_pinned': thread.is_pinned,
+#                 'is_blocked': thread.is_blocked,
+#                         }
 
-            message_list = []
+#             message_list = []
 
-            for message in insert_messages:
-                # for transtale background task
-                message_ids_for_translate.append(message.id)
-                #
-                attachments = message.attachments
-                attachment_list = []
-                content = message.text or ""
-                translated_content = message.translated_text or ""
+#             for message in insert_messages:
+#                 # for transtale background task
+#                 message_ids_for_translate.append(message.id)
+#                 #
+#                 attachments = message.attachments
+#                 attachment_list = []
+#                 content = message.text or ""
+#                 translated_content = message.translated_text or ""
 
-                for _attachment in attachments:
+#                 for _attachment in attachments:
                     
-                    if _attachment:
-                        _attachment = {
-                            'media_type': _attachment.media_type,
-                            'media_url': generate_valid_media_url(_attachment.media_url),
-                        }
-                        attachment_list.append(_attachment)
+#                     if _attachment:
+#                         _attachment = {
+#                             'media_type': _attachment.media_type,
+#                             'media_url': generate_valid_media_url(_attachment.media_url),
+#                         }
+#                         attachment_list.append(_attachment)
                     
-                message_dict = {
-                    "id": str(message.id),
-                    "role": message.sender,
-                    "content": content,
-                    "translated_content": translated_content,
-                    "ts": (
-                        message.created_at.strftime("%Y-%d-%m %H:%M")
-                        if message.created_at else ""
-                    ),
-                    "modStatus": message.status,  # pending / approved / moderated
-                    'attachments': attachment_list
-                }
-                message_list.append(message_dict)
+#                 message_dict = {
+#                     "id": str(message.id),
+#                     "role": message.sender,
+#                     "content": content,
+#                     "translated_content": translated_content,
+#                     "ts": (
+#                         message.created_at.strftime("%Y-%d-%m %H:%M")
+#                         if message.created_at else ""
+#                     ),
+#                     "modStatus": message.status,  # pending / approved / moderated
+#                     'attachments': attachment_list
+#                 }
+#                 message_list.append(message_dict)
             
-            job = await redis_pool.enqueue_job(
-                'try_translate_message_text',
-                message_ids_for_translate,
-                _queue_name='arq:translate',
-            )
+#             job = await redis_pool.enqueue_job(
+#                 'try_translate_message_text',
+#                 message_ids_for_translate,
+#                 _queue_name='arq:translate',
+#             )
 
-            thread_payload['messages'] = message_list
+#             thread_payload['messages'] = message_list
 
-            payload['thread'] = thread_payload
+#             payload['thread'] = thread_payload
             
-            await publish_event(redis_pool,
-                    type='Thread detail updated',
-                    payload=payload)
+#             await publish_event(redis_pool,
+#                     type='Thread detail updated',
+#                     payload=payload)
 
-            # publish update to redis
-            # new message generated
-            # publish new message to thread page
-            # new message(ai generate)
-            if new_generated_message:
-                payload = {
-                    'thread_id': new_generated_message.thread_id,
-                }
-                message_payload = {
-                    'id': str(new_generated_message.id),
-                    'role': new_generated_message.sender,
-                    'content': new_generated_message.text,
-                    'translated_content': new_generated_message.translated_text or '',
-                    'ts': new_generated_message.created_at.strftime("%Y-%d-%m %H:%M") if new_generated_message.created_at else "",
-                    "modStatus": new_generated_message.status,
-                    'attachment': None,
+#             # publish update to redis
+#             # new message generated
+#             # publish new message to thread page
+#             # new message(ai generate)
+#             if new_generated_message:
+#                 payload = {
+#                     'thread_id': new_generated_message.thread_id,
+#                 }
+#                 message_payload = {
+#                     'id': str(new_generated_message.id),
+#                     'role': new_generated_message.sender,
+#                     'content': new_generated_message.text,
+#                     'translated_content': new_generated_message.translated_text or '',
+#                     'ts': new_generated_message.created_at.strftime("%Y-%d-%m %H:%M") if new_generated_message.created_at else "",
+#                     "modStatus": new_generated_message.status,
+#                     'attachment': None,
 
-                }
-                payload['message'] = message_payload
+#                 }
+#                 payload['message'] = message_payload
 
-                await publish_event(redis_pool,
-                        type='message created',
-                        payload=payload)
+#                 await publish_event(redis_pool,
+#                         type='message created',
+#                         payload=payload)
 
-            return True
+#             return True
     
 
 async def check_new_messages_in_thread(message: Message,
@@ -770,3 +789,83 @@ async def try_update_message_text(message_id: int,
                                          with_rollback=True)
         
     return True
+
+
+async def get_thread_messages_for_raw_log(thread_id: int,
+                                          session: AsyncSession) -> list[Message]:
+    query = (
+        select(
+            Message
+        )\
+        .where(
+            and_(
+                Message.thread_id == thread_id,
+                Message.text.is_not(None),
+                Message.text != '',
+            )\
+        )\
+        .order_by(
+            Message.id.desc(),
+        )\
+        .limit(LIMIT_FOR_RAW_LOG_MESSAGES)\
+        # .offset()
+    )
+
+    res = await execute_and_catch_db_error(session.execute(query),
+                                           session)
+    messages = res.scalars().all()
+
+    if messages:
+        messages = reversed(list(messages))
+
+    return messages
+
+
+async def get_new_thread_messages(thread_id: int,
+                                  last_message_id: int,
+                                  session: AsyncSession) -> list[Message]:
+    query = (
+        select(
+            Message
+        )\
+        .where(
+                Message.thread_id == thread_id,
+                Message.text.is_not(None),
+                Message.text != '',
+                Message.status == MessageStatusEnum.APPROVED,
+        )\
+        .order_by(Message.id.asc())
+    )
+
+    if last_message_id > 0:
+        query = query\
+            .where(Message.id > last_message_id)
+
+    query = query.limit(LIMIT_FOR_RAW_LOG_MESSAGES)
+
+    res = await execute_and_catch_db_error(session.execute(query),
+                                           session)
+    return res.scalars().all()
+
+
+async def get_message_count_after_last_message_id(thread_id: int,
+                                                  last_message_id: int,
+                                                  session: AsyncSession):
+    query = (
+        select(
+            func.count(Message.id)
+        )\
+        .select_from(Message)\
+        .where(
+            Message.thread_id == thread_id,
+            Message.text.is_not(None),
+            Message.text != '',
+            Message.id > last_message_id,
+            Message.status == MessageStatusEnum.APPROVED,
+        )
+    )
+
+    res = await execute_and_catch_db_error(session.execute(query),
+                                           session)
+
+    return res.scalar_one()

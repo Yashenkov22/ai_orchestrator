@@ -245,7 +245,10 @@ class Thread(Base):
     timestamp_last_seen_message = Column(TIMESTAMP(timezone=True),
                                          nullable=True,
                                          default=None)
-    last_message_id = Column(Text)
+    # last_message_id = Column(Text)
+    last_message_id = Column(Integer,
+                             default=0,
+                             server_default='0')
     context = Column(Text)
     account_id = Column(
         BigInteger,

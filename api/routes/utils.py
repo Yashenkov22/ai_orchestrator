@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from db.queries import (execute_and_catch_db_error,
-                        get_account_by_id, get_message_only_by_id, try_update_message_text)
+                        get_account_by_id, get_message_only_by_id, get_thread_only_by_id, try_update_message_text)
 
 from db.base import Account, Thread
 
@@ -25,6 +25,7 @@ from utils.dependencies import (admin_dependency,
                                 session_dependency,
                                 arq_dependency)
 from utils.enums import MessageStatusEnum, ThreadColorEnum
+from auth.schemas import SecretShcema
 
 from utils.base import (generate_valid_media_url,
                         get_folder_profiles,
@@ -33,7 +34,8 @@ from utils.base import (generate_valid_media_url,
                         try_start_profile,
                         try_stop_profile)
 
-from config import UPLOAD_DIR
+from config import SECRET_API, UPLOAD_DIR
+from utils.tasks import try_update_thread_memory
 
 
 utils_router = APIRouter(tags=['Utils'],
@@ -241,32 +243,16 @@ async def try_translate_text(admin: admin_dependency,
 
 
 
-# @utils_router.get("/generate_user_informations")
-# async def generate_user_informations(admin: admin_dependency,
-#                                   arq_pool: arq_dependency,
-#                                   session: session_dependency):
-#     limit = 5
-#     query = (
-#         select(Thread)\
-#         .options(selectinload(Thread.insta_user),
-#                  selectinload(Thread.account))\
-#         .where(
-#             Thread.color_level == ThreadColorEnum.GREEN
-#         )
-#     )
+@utils_router.get("/test_generate_thread_context")
+async def generate_user_informations(thread_id: int,
+                                     admin: admin_dependency,
+                                     arq_pool: arq_dependency,
+                                     session: session_dependency):
 
-#     res = await execute_and_catch_db_error(session.execute(query),
-#                                            session)
-    
-#     threads = res.scalars().all()
+    job = await arq_pool.enqueue_job(
+            'generate_thread_memory',
+            thread_id,
+            _queue_name='arq:utils',
+        )
 
-#     for thread in threads[:limit]:
-#         thread: Thread
-#         print(' -> data', thread.context, thread.user_information)
-#         new_user_information = await ai_extract_user_info(text=thread.context,
-#                                                           existing_info=thread.user_information)
-#         thread.user_information = new_user_information
-
-#     await execute_and_catch_db_error(session.commit(),
-#                                      session,
-#                                      with_rollback=True)
+    return job.job_id
