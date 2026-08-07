@@ -251,7 +251,7 @@ async def ai_extract_user_info(text: str, existing_info: dict | None = None) -> 
             {"role": "user", "content": user_content},
         ],
         # response_format={"type": "json_object"},   # если провайдер поддерживает — форсирует валидный JSON
-        timeout=30.0,
+        timeout=120.0,
     )
 
     raw = response.choices[0].message.content if response.choices else '{}'
