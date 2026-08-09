@@ -94,7 +94,7 @@ async def generate_thread_context(thread_context: str | None,
                 "content": user_content
             }
         ],
-        timeout=30.0,
+        timeout=60.0,
     )
 
     if response.choices:
