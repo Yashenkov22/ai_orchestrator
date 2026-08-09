@@ -92,102 +92,6 @@ def batch_has_new_messages(threads: list, known_map: dict) -> bool:
     return any(thread_has_new_messages(t, known_map) for t in threads)
 
 
-# async def scroll_inbox_until_loaded(page, max_rounds=40,
-#                                     wait_after_scroll=6.0, poll_interval=0.3):
-#     item_sel = 'div[role="button"]'   # чаты = div role=button (по твоим probe)
-
-#     scroll_js = """() => {
-#         // находим самый "длинный" скроллируемый контейнер на странице
-#         let best = null, max = 50;
-#         for (const c of document.querySelectorAll('*')) {
-#             const s = getComputedStyle(c);
-#             if (s.overflowY === 'auto' || s.overflowY === 'scroll') {
-#                 const d = c.scrollHeight - c.clientHeight;
-#                 if (d > max) { max = d; best = c; }
-#             }
-#         }
-#         if (!best) return {found: false};
-#         const before = best.scrollTop;
-#         best.scrollTop = best.scrollHeight;   // прыжок в самый низ
-#         return {found: true, before: before, after: best.scrollTop,
-#                 sh: best.scrollHeight, ch: best.clientHeight};
-#     }"""
-
-#     prev = -1
-#     stable = 0
-#     for i in range(max_rounds):
-#         count = await page.locator(item_sel).count()
-#         if count == prev:
-#             stable += 1
-#             if stable >= 2:
-#                 print(f"[scroll-inbox] stable at {count}, stop #{i}")
-#                 break
-#         else:
-#             stable = 0
-#         prev = count
-
-#         res = await page.evaluate(scroll_js)
-#         print(f"[scroll-inbox #{i}] count={count} scroll={res}")
-
-#         # ждём прироста чатов
-#         waited = 0.0
-#         while waited < wait_after_scroll:
-#             await page.wait_for_timeout(int(poll_interval * 1000))
-#             waited += poll_interval
-#             if await page.locator(item_sel).count() > count:
-#                 break
-
-#     return prev
-
-# async def scroll_inbox_until_loaded(page, collected_data, max_rounds=80,
-#                                     wait_after_scroll=8.0, poll_interval=0.3):
-#     item_sel = 'div[role="button"]'
-
-#     scroll_js = """() => {
-#         let best = null, max = 50;
-#         for (const c of document.querySelectorAll('*')) {
-#             const s = getComputedStyle(c);
-#             if (s.overflowY === 'auto' || s.overflowY === 'scroll') {
-#                 const d = c.scrollHeight - c.clientHeight;
-#                 if (d > max) { best = c; max = d; }
-#             }
-#         }
-#         if (!best) return {found: false};
-#         const before = best.scrollTop;
-#         best.scrollTop = best.scrollHeight;
-#         return {found: true, before: before, after: best.scrollTop,
-#                 sh: best.scrollHeight, ch: best.clientHeight};
-#     }"""
-
-#     empty_rounds = 0
-
-#     for i in range(max_rounds):
-#         pages_before = len(collected_data.get('SlideMailboxPages', []))
-
-#         res = await page.evaluate(scroll_js)
-#         count = await page.locator(item_sel).count()
-#         print(f"[scroll-inbox #{i}] count={count} pages_before={pages_before} scroll={res}")
-
-#         waited = 0.0
-#         while waited < wait_after_scroll:
-#             await page.wait_for_timeout(int(poll_interval * 1000))
-#             waited += poll_interval
-#             if len(collected_data.get('SlideMailboxPages', [])) > pages_before:
-#                 break
-
-#         pages_after = len(collected_data.get('SlideMailboxPages', []))
-
-#         if pages_after == pages_before:
-#             empty_rounds += 1
-#             print(f"[scroll-inbox] no new page at #{i}, empty={empty_rounds}")
-#             if empty_rounds >= 2:
-#                 print(f"[scroll-inbox] stop after {empty_rounds} empty rounds")
-#                 break
-#         else:
-#             empty_rounds = 0
-
-#     return await page.locator(item_sel).count()
-
 async def scroll_inbox_until_loaded(page, collected_data, known_map=None, max_rounds=80,
                                     wait_after_scroll=8.0, poll_interval=0.3):
     item_sel = 'div[role="button"]'
@@ -216,40 +120,6 @@ async def scroll_inbox_until_loaded(page, collected_data, known_map=None, max_ro
 
     empty_rounds = 0
 
-    # for i in range(max_rounds):
-    #     pages_before = len(collected_data.get('SlideMailboxPages', []))
-
-    #     res = await page.evaluate(scroll_js)
-    #     count = await page.locator(item_sel).count()
-    #     print(f"[scroll-inbox #{i}] count={count} pages_before={pages_before} scroll={res}")
-
-    #     waited = 0.0
-    #     while waited < wait_after_scroll:
-    #         await page.wait_for_timeout(int(poll_interval * 1000))
-    #         waited += poll_interval
-    #         if len(collected_data.get('SlideMailboxPages', [])) > pages_before:
-    #             break
-
-    #     pages_after = len(collected_data.get('SlideMailboxPages', []))
-
-    #     if pages_after == pages_before:
-    #         empty_rounds += 1
-    #         print(f"[scroll-inbox] no new page at #{i}, empty={empty_rounds}")
-    #         if empty_rounds >= 2:
-    #             print(f"[scroll-inbox] stop after {empty_rounds} empty rounds")
-    #             break
-    #         continue
-
-    #     empty_rounds = 0
-
-    #     if known_map is not None:
-    #         new_pages = collected_data['SlideMailboxPages'][pages_before:pages_after]
-    #         new_threads = extract_threads_from_inbox(new_pages)
-    #         if new_threads and not batch_has_new_messages(new_threads, known_map):
-    #             print(f"[scroll-inbox] батч #{i} без новых сообщений — стоп")
-    #             break
-
-    # return await page.locator(item_sel).count()
     for i in range(max_rounds):
         pages_before = len(collected_data.get('SlideMailboxPages', []))
 
@@ -346,46 +216,6 @@ async def enter_thread(page, thread_key, thread_received, timeout=15):
     await page.wait_for_timeout(2000)
 
 
-# def extract_media_urls(node: dict) -> list[dict]:
-#     # content = node.get('content', {})
-#     content = node.get('content') or {}
-#     typename = content.get('__typename', '')
-#     urls = []
-
-#     if typename == 'SlideMessageImageContent':
-#         for att in content.get('attachments', []):
-#             url = att.get('attachment_cdn_url') or att.get('preview_cdn_url')
-#             if url:
-#                 urls.append({'url': url, 'type': 'image', 'ext': '.jpg'})
-
-#     elif typename == 'SlideMessageMultiMediaContent':
-#         for att in content.get('ordered_photo_video_attachments', []):
-#             url = att.get('attachment_cdn_url') or att.get('preview_cdn_url')
-#             if url:
-#                 att_type = att.get('attachment_type', 2)
-#                 if att_type == 4:
-#                     urls.append({'url': url, 'type': 'video', 'ext': '.mp4'})
-#                 else:
-#                     urls.append({'url': url, 'type': 'image', 'ext': '.jpg'})
-
-#     elif typename == 'SlideMessageVideosContent':
-#         for vid in content.get('videos', []):
-#             video_url = vid.get('attachment_cdn_url')
-#             if video_url:
-#                 urls.append({'url': video_url, 'type': 'video', 'ext': '.mp4'})
-#             preview = vid.get('preview_cdn_url')
-#             if preview:
-#                 urls.append({'url': preview, 'type': 'video_preview', 'ext': '.jpg'})
-
-#     elif typename == 'SlideMessageAudiosContent':
-#         for audio in content.get('audio_attachments', []):
-#             audio_url = audio.get('attachment_cdn_url')
-#             if audio_url:
-#                 urls.append({'url': audio_url, 'type': 'audio', 'ext': '.mp4'})
-
-#     return urls
-
-
 def extract_media_urls(node: dict) -> list[dict]:
     content = node.get('content') or {}
     typename = content.get('__typename', '')
@@ -465,7 +295,6 @@ async def process_thread_messages(messages: list,
                                   thread: Thread,
                                   user_insta_id: str,
                                   thread_key: str):
-    # print('LEN MESSAGES BEFORE SAVE', len(messages))
     save_dir = MEDIA_PATH
     
     thread_dir = os.path.join(save_dir, str(thread_key))
@@ -501,9 +330,7 @@ async def process_thread_messages(messages: list,
             print(ex)
             raise
         
-        # print('SENDERS', user_insta_id, type(user_insta_id), _sender, type(_sender))
         view_sender = 'user' if _sender == user_insta_id else 'assistant'
-        # print(view_sender)
 
         msg_data = {
             'id': msg_id,
@@ -516,28 +343,23 @@ async def process_thread_messages(messages: list,
 
         mark_as_unread = _sender == user_insta_id
 
+        content = node.get('content') or {}
+        content_typename = content.get('__typename')
+
+        if content_typename == 'SlideMessageAdminText':
+            fragments = content.get('text_fragments') or []
+            admin_text = ' '.join(
+                f.get('plaintext', '') for f in fragments
+            ).strip()
+            msg_data['text'] = admin_text
+
         if ctype == 'TEXT':
-            text_body = node.get('text_body')
-            content = node.get('content') or {}
-            content_typename = content.get('__typename')
-            # print(node)
             msg_data['text'] = node.get('text_body', '')
 
-            if text_body:
-                # обычное текстовое сообщение
-                msg_data['text'] = text_body
-
-            elif content_typename == 'SlideMessageAdminText':
-                # системное сообщение (звонки и прочие служебные события)
-                fragments = content.get('text_fragments') or []
-                admin_text = ' '.join(
-                    f.get('plaintext', '') for f in fragments
-                ).strip()
-
-                msg_data['text'] = admin_text
         elif ctype.startswith('REACTION'):
-            # temporarily
-            pass
+            text_body = node.get('text_body', '')
+            msg_data['text'] = '* реакция на сообщение в чате\n' + text_body
+
         elif ctype in ('MESSAGE_INLINE_SHARE', 'MONTAGE_SHARE_XMA'):
             content = node.get('content') or {}
             xma = content.get('xma') or {}
@@ -559,8 +381,6 @@ async def process_thread_messages(messages: list,
                 files = await download_media(media_urls, thread_dir, str(thread_key), msg_id)
                 msg_data['media_files'] = files
         else:
-            # print('TYPE MESSAGE ->. ',ctype)
-            # print(node)
             media_urls = extract_media_urls(node)
             if media_urls:
                 files = await download_media(media_urls, thread_dir, str(thread_key), msg_id)
@@ -1036,8 +856,6 @@ async def process_thread(
     )
     await page.wait_for_timeout(500)
 
-    # print('LEN THREAD RESPONSE AFTER SCROLLING', len(thread_responses))
-
     # 1) находим thread_fbid целевого треда по детальным ответам.
     #    detail-ответы (get_slide_thread_nullable) содержат users с
     #    interop_messaging_user_fbid == thread_key. Берём их thread_fbid.
@@ -1134,55 +952,6 @@ async def switch_inbox_tab(page, tab_name: str) -> bool:
         print(f"[tab] клик по '{tab_name}' не удался: {e}")
         return False
 
-
-# async def iterate_inbox_folders(page, inbox_received, collected_data, account_id, _session):
-#     """
-#     Проходит по всем вкладкам инбокса и скроллит каждую.
-#     Если вкладок нет — скроллит текущий единый список один раз.
-#     """
-#     tabs = await get_inbox_tabs(page)
-
-#     # нет разделения на вкладки — обычный единый инбокс
-#     if not tabs:
-#         print("[inbox] вкладок нет, единый список")
-#         await scroll_inbox_until_loaded(page, collected_data)
-#         # known_map = await load_known_threads_map(account_id, _session)
-#         # await scroll_inbox_until_loaded(page, collected_data, known_map)
-#         return
-
-#     # есть вкладки — обходим интересующие (Request обычно пропускают)
-#     # target_tabs = [t for t in tabs if t in ("Primary", "General")]
-#     # print(f"[inbox] вкладки: {tabs}, обходим: {target_tabs}")
-
-#     # for tab in target_tabs:
-#     switched = await switch_inbox_tab(page, "General")
-#     if not switched:
-#         pass
-#     inbox_received.clear()
-#     try:
-#         await asyncio.wait_for(inbox_received.wait(), timeout=15)
-#     except asyncio.TimeoutError:
-#         print(f"[inbox] таймаут ожидания ответа для General")
-#     await scroll_inbox_until_loaded(page, collected_data)
-
-# async def iterate_inbox_folders(page, inbox_received, collected_data, account_id, _session):
-#     tabs = await get_inbox_tabs(page)
-#     known_map = await load_known_threads_map(account_id, _session)
-
-#     if not tabs:
-#         print("[inbox] вкладок нет, единый список")
-#         await scroll_inbox_until_loaded(page, collected_data, known_map)
-#         return
-
-#     switched = await switch_inbox_tab(page, "General")
-#     if not switched:
-#         pass
-#     inbox_received.clear()
-#     try:
-#         await asyncio.wait_for(inbox_received.wait(), timeout=15)
-#     except asyncio.TimeoutError:
-#         print(f"[inbox] таймаут ожидания ответа для General")
-#     await scroll_inbox_until_loaded(page, collected_data, known_map)
 
 async def iterate_inbox_folders(page, inbox_received, collected_data, account_id, _session):
     tabs = await get_inbox_tabs(page)
@@ -1686,8 +1455,6 @@ async def playwright_send_message(message: Message,
     thread_received = asyncio.Event()
     request_message_received = asyncio.Event()
 
-    # is_need_new_context = False
-
     async with async_playwright() as p:
         try:
             browser = await p.chromium.connect_over_cdp(f'http://{VISION_BROWSER_HOST}:{profile_port}')
@@ -1970,50 +1737,6 @@ async def playwright_send_message(message: Message,
                                 payload=payload)
 
 
-# async def get_raw_messages_log_and_new_last_message_id(messages: list[Message]):
-#     unread_messages_text = ''
-
-#     new_last_message_id = None
-
-#     for message in messages:
-#         _text = f'{message.text} | {message.created_at} | {message.sender}'
-#         unread_messages_text += _text
-#         new_last_message_id = message.id
-    
-#     return (
-#         unread_messages_text,
-#         new_last_message_id,
-#     )
-
-
-# async def try_update_thread_memory(thread: Thread,
-#                                    session: AsyncSession) -> bool:
-#     last_message_id = thread.last_message_id
-
-#     new_thread_messages = await get_new_thread_messages(thread.id,
-#                                                         last_message_id,
-#                                                         session)
-
-#     if not new_thread_messages or len(new_thread_messages) <= LIMIT_FOR_RAW_LOG_MESSAGES:
-#         return False
-
-#     raw_messages_log, new_last_message_id = await get_raw_messages_log_and_new_last_message_id(new_thread_messages)
-
-#     # thread_context = thread.context or ''
-#     # text_for_ai = 'Контекст:\n' + thread_context + '\nНовые сообщения:\n' + raw_messages_log
-#     new_thread_context = await generate_thread_context(thread.context,
-#                                                        raw_messages_log)
-
-#     new_user_information = await ai_extract_user_info(raw_messages_log,
-#                                                       thread.user_information)
-
-#     thread.context = new_thread_context
-#     thread.user_information = new_user_information
-#     thread.last_message_id = new_last_message_id
-
-#     return True
-
-
 async def try_add_messages(message_data: dict,
                            thread: Thread,
                            session: AsyncSession,
@@ -2251,7 +1974,6 @@ async def get_raw_messages_log_and_new_last_message_id(messages: list[Message]):
 
         if message.sender == 'user':
             user_message_text_only += _text
-        print(' -> new last message id',new_last_message_id)
     
     return (
         unread_messages_text,
