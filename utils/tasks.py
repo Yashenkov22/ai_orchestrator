@@ -357,8 +357,8 @@ async def process_thread_messages(messages: list,
             msg_data['text'] = node.get('text_body', '')
 
         elif ctype.startswith('REACTION'):
-            text_body = node.get('text_body', '')
-            msg_data['text'] = '* реакция на сообщение в чате\n' + text_body
+            # text_body = node.get('text_body', '')
+            msg_data['text'] = '* реакция на сообщение в чате'
 
         elif ctype in ('MESSAGE_INLINE_SHARE', 'MONTAGE_SHARE_XMA'):
             content = node.get('content') or {}
@@ -1540,12 +1540,22 @@ async def playwright_send_message(message: Message,
                 print(f"[ERROR] {friendly_name}: {e}")
 
         try:
-            thread_for_send_message_page.on("response", on_response)
+            try:
+                thread_for_send_message_page.on("response", on_response)
 
-            await thread_for_send_message_page.goto(
-                f'https://www.instagram.com/direct/t/{message.thread.thread_id}/',
-                wait_until='domcontentloaded'
-            )
+                _res = await thread_for_send_message_page.goto(
+                    f'https://www.instagram.com/direct/t/{message.thread.thread_id}/',
+                    wait_until='domcontentloaded'
+                )
+
+                print(
+                    "INSTAGRAM HOME:",
+                    _res.status if _res else None,
+                    thread_for_send_message_page.url,
+                )
+            except Exception as ex:
+                print('RESPONSE ERROR', ex)
+                raise
 
             await asyncio.sleep(3)
 
@@ -1607,6 +1617,10 @@ async def playwright_send_message(message: Message,
             #         await asyncio.sleep(1)
 
             #         return
+
+
+
+            #
             if media:
                 match media:
                     case 'photo':
