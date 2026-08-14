@@ -286,7 +286,7 @@ class AccountInformationSchema(BaseModel):
 
 class UserInformationSchema(BaseModel):
     photo_url: str | None
-    information: dict | None
+    information: dict | str | None
     insta_link: str | None
     username: str | None = Field(default=None)
     full_name: str | None = Field(default=None)

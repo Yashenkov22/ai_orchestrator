@@ -181,9 +181,11 @@ async def get_threads(admin: admin_dependency,
         user_information = json.loads(thread.user_information)
     except Exception as ex:
         print('JSON SERIALIZE ERROR', ex)
-        user_information = None
-    # if isinstance(thread.user_information, dict):
-    #     user_information = thread.user_information
+
+        if isinstance(thread.user_information, dict):
+            user_information = thread.user_information
+        else:
+            user_information = None
     # else:
     #     user_information = None
     # try:
