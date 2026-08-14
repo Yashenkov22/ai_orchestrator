@@ -1,5 +1,6 @@
 from .tasks import (generate_thread_memory,
-                    )
+                    generate_translated_user_information,
+                    translate_user_information_by_thread_id)
 from background.base import (redis_settings,
                              _redis_pool,
                              get_redis_background_pool)
@@ -38,6 +39,8 @@ async def shutdown(ctx):
 class WorkerSettings:
     functions = [
         generate_thread_memory,
+        generate_translated_user_information,
+        translate_user_information_by_thread_id,
         # try_start_stop_vision_profile_by_account_id,
         # try_block_thread_by_account_id,
         # parse_thread,

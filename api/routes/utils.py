@@ -243,14 +243,45 @@ async def try_translate_text(admin: admin_dependency,
 
 
 
-@utils_router.get("/test_generate_thread_context")
-async def generate_user_informations(thread_id: int,
-                                     admin: admin_dependency,
+@utils_router.get("/test_translate")
+async def try_translate_text2(admin: admin_dependency,
+                             session: session_dependency,
+                             text: str):    
+    try:
+        translated_text = await ai_translate_message(text)
+        # message.translated_text = translated_text
+        # await execute_and_catch_db_error(session.commit(),
+        #                                     session,
+        #                                     with_rollback=True)
+        return translated_text
+    except Exception as ex:
+        print(ex)
+        return 'Error with try translate text'
+
+
+
+
+@utils_router.get("/generate_user_information")
+async def generate_user_informations(admin: admin_dependency,
                                      arq_pool: arq_dependency,
                                      session: session_dependency):
 
     job = await arq_pool.enqueue_job(
-            'generate_thread_memory',
+            'generate_translated_user_information',
+            _queue_name='arq:utils',
+        )
+
+    return job.job_id
+
+
+@utils_router.get("/generate_user_information2")
+async def generate_user_informations2(thread_id: int,
+                                      admin: admin_dependency,
+                                     arq_pool: arq_dependency,
+                                     session: session_dependency):
+
+    job = await arq_pool.enqueue_job(
+            'translate_user_information_by_thread_id',
             thread_id,
             _queue_name='arq:utils',
         )

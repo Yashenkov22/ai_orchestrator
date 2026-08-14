@@ -150,6 +150,50 @@ async def ai_translate_message(text: str):
         return result
     except Exception as ex:
         print('ERROR WITH TRY TRANSTALE THROUGH DEEPSEEK')
+        print(ex)
+        return None
+
+
+async def ai_translate_user_information(text: str):
+    print('запрос к нейронке для перевода сообщения...')
+    try:
+        system_content = """
+        Ты переводишь значения структурированной информации о пользователе на русский язык.
+        
+        Правила:
+        1. Сохрани исходную JSON-структуру.
+        2. Не изменяй названия ключей.
+        3. Не добавляй новые ключи.
+        4. Не удаляй ключи.
+        5. Переводи только текстовые значения.
+        6. Числа, boolean, null и другие нетекстовые значения не изменяй.
+        7. Если значение является списком строк — переведи каждый элемент.
+        8. Верни ТОЛЬКО валидный JSON без markdown.
+        9. Если информация уже на русском языке - верни без изменения.
+        """
+        user_content = text
+
+        response = await deepseek_client.chat.completions.create(
+            model="deepseek-v4-flash",
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_content
+                },
+                {
+                    "role": "user",
+                    "content": user_content
+                }
+            ],
+            timeout=120.0,
+        )
+        result = response.choices[0].message.content
+        print('ответ нейронки', result, type(result))
+
+        return result
+    except Exception as ex:
+        print('ERROR WITH TRY TRANSTALE THROUGH DEEPSEEK')
+        print(ex)
         return None
 
 

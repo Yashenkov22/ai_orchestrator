@@ -487,7 +487,7 @@ async def try_add_new_thread(thread_data: dict,
     insert_data = {
         'thread_id': thread_data.get('thread_id'),
         'timestamp_last_seen_message': thread_data.get('timestamp_last_seen_message'),
-        'last_message_id': '',
+        # 'last_message_id': '',
         'context': '',
         'is_approved': thread_data.get('is_approved'),
         'is_unread':  thread_data.get('is_unread'),

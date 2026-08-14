@@ -1760,6 +1760,7 @@ async def try_add_messages(message_data: dict,
     # mark_as_unread = message_data.get('mark_as_unread')
     insert_messages = []
     message_ids_for_translate = []
+    memory_updated = None
 
     unread_messages_text = ''
 
@@ -1804,7 +1805,8 @@ async def try_add_messages(message_data: dict,
                 # проверить и если нужно обновить контекст 
                 # и json о юзере, обновить last_message_id в Thread
                 memory_updated = await try_update_thread_memory(thread,
-                                                                session)
+                                                                session,
+                                                                redis_pool)
 
                 print(f'is memory updated - {memory_updated}')
                 # context_from_db = thread.context or ''
@@ -1839,6 +1841,13 @@ async def try_add_messages(message_data: dict,
             await execute_and_catch_db_error(session.commit(),
                                              session,
                                              with_rollback=True)
+
+            if memory_updated:
+                job = await redis_pool.enqueue_job(
+                    'translate_user_information_by_thread_id',
+                    thread.id,
+                    _queue_name='arq:utils',
+                )
 
             # publish update to redis
             # thread updated
@@ -1935,7 +1944,8 @@ async def try_add_messages(message_data: dict,
 
 
 async def try_update_thread_memory(thread: Thread,
-                                   session: AsyncSession) -> bool:
+                                   session: AsyncSession,
+                                   redis_pool: ArqRedis) -> bool:
     print('here ')
 
     message_count_after_last_message_id = await get_message_count_after_last_message_id(thread_id=thread.id,
@@ -1947,7 +1957,7 @@ async def try_update_thread_memory(thread: Thread,
         return False
 
     new_thread_context = thread.context
-    new_user_information = thread.user_information
+    new_original_user_information = thread.original_user_information
     new_last_message_id = thread.last_message_id
 
     for i in range(iter_count):
@@ -1962,14 +1972,26 @@ async def try_update_thread_memory(thread: Thread,
                                                            raw_messages_log)
 
         await asyncio.sleep(2)
-        new_user_information = await ai_extract_user_info(user_message_only,
-                                                          new_user_information)
+        new_original_user_information = await ai_extract_user_info(user_message_only,
+                                                                   new_original_user_information)
+
         await asyncio.sleep(2)
+
+    # try:
+    #     json.loads(new_original_user_information)
+    # except Exception as ex:
+    #     print(ex)
+    # else:
+    #     job = await redis_pool.enqueue_job(
+    #         'try_translate_message_text',
+    #         new_original_user_information,
+    #         _queue_name='arq:utils',
+    #     )fdssfs
 
     print('here 2')
 
     thread.context = new_thread_context
-    thread.user_information = new_user_information
+    thread.original_user_information = new_original_user_information
     thread.last_message_id = new_last_message_id
 
     return True

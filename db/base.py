@@ -279,6 +279,9 @@ class Thread(Base):
     user_information = Column(JSONB,
                               nullable=True,
                               default=None)
+    original_user_information = Column(JSONB,
+                                       nullable=True,
+                                       default=None)
     color_level = Column(String,
                          nullable=False,
                          default=ThreadColorEnum.GREY)

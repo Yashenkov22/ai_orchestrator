@@ -1,3 +1,7 @@
+import json
+
+import time
+
 from typing import Literal
 
 from asyncio import sleep
@@ -6,7 +10,9 @@ from arq import Retry
 
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, delete
+from sqlalchemy import select, and_, delete, cast, text
+
+from sqlalchemy.dialects.postgresql import JSONB
 
 from db.base import Account, Thread
 from db.queries import (execute_and_catch_db_error,
@@ -23,7 +29,7 @@ from utils.base import (reject_request_chat, try_block_thread, try_get_profile_p
 from utils.tasks import (parse_thread_playwright,
                          playwright_send_message,
                          test_playwright, try_update_thread_memory)
-from utils.ai import ai_translate_message
+from utils.ai import ai_translate_message, ai_translate_user_information
 from utils.enums import MessageStatusEnum
 
 from websocket.redis_listener import publish_event
@@ -600,3 +606,102 @@ async def generate_thread_memory(cxt,
         await execute_and_catch_db_error(_session.commit(),
                                         _session,
                                         with_rollback=True)
+
+
+
+async def generate_translated_user_information(cxt):
+    print('start...')
+    sessionmaker= cxt['sessionmaker']
+
+    query = (
+        select(Thread)
+        .where(
+            Thread.user_information.is_not(None),
+            Thread.user_information != text("'null'::jsonb"),
+            Thread.user_information != text("'{}'::jsonb"),
+        )
+    )
+
+    async with sessionmaker() as _session:
+        _session: AsyncSession
+
+        res = await execute_and_catch_db_error(_session.execute(query),
+                                               _session)
+
+        threads = res.scalars().all()
+
+        if not threads:
+            return
+        
+        print(' -> LEN THREADS',len(threads))
+
+        for thread in threads:
+            thread: Thread
+            _info = thread.user_information
+
+            try:
+                _info = json.dumps(_info)
+            except Exception:
+                continue
+
+            translated_info = await ai_translate_user_information(_info)
+            time.sleep(5)
+
+            thread.original_user_information = thread.user_information
+
+            # if isinstance(translated_info, dict):
+            try:
+                thread.user_information = json.loads(translated_info)
+            except Exception:
+                continue
+            print(f'1. {thread.original_user_information}\n2. {thread.user_information}')
+
+        await execute_and_catch_db_error(_session.commit(),
+                                         _session,
+                                         with_rollback=True)
+
+
+
+async def translate_user_information_by_thread_id(cxt,
+                                                  thread_id: int):
+    print(f'start translate task for {thread_id}')
+    sessionmaker= cxt['sessionmaker']
+
+    query = (
+        select(Thread)
+        .where(
+            Thread.id == thread_id,
+        )
+    )
+
+    async with sessionmaker() as _session:
+        _session: AsyncSession
+
+        res = await execute_and_catch_db_error(_session.execute(query),
+                                               _session)
+
+        thread = res.scalar_one_or_none()
+
+        if not thread:
+            return
+        
+        thread: Thread
+
+        try:
+            _info = json.dumps(thread.original_user_information)
+        except Exception:
+            return
+
+        translated_info = await ai_translate_user_information(_info)
+
+        try:
+            json.loads(translated_info)
+        except Exception as ex:
+            print(ex)
+            return
+
+        thread.user_information = translated_info
+
+        await execute_and_catch_db_error(_session.commit(),
+                                            _session,
+                                            with_rollback=True)
