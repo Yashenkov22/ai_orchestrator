@@ -63,7 +63,8 @@ async def load_known_threads_map(account_id: int, _session: AsyncSession) -> dic
     return {tid: ts for tid, ts in result.all() if tid}
     
 def _thread_last_activity_dt(thread: dict):
-    ts_ms = thread.get('last_activity') or thread.get('last_message_ts')
+    # ts_ms = thread.get('last_activity') or thread.get('last_message_ts')
+    ts_ms = thread.get('last_message_ts')
     if not ts_ms:
         return None
     try:
@@ -73,7 +74,7 @@ def _thread_last_activity_dt(thread: dict):
 
 
 def thread_has_new_messages(thread: dict, known_map: dict) -> bool:
-    tid = thread.get('thread_id')
+    tid = thread.get('thread_key')
     if not tid:
         return True  # нет id — не рискуем терять данные, считаем свежим
 
@@ -1063,7 +1064,7 @@ async def test_playwright(account: Account,
                         if variables and 'folder' in variables:
                             key = f"{friendly_name}:{variables['folder']}"
 
-                        if friendly_name == 'IGDThreadDetailQuery':
+                        elif friendly_name == 'IGDThreadDetailQuery':
                             thread_responses.append(parsed)
                             thread_received.set()
 

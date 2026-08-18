@@ -10,25 +10,28 @@ from arq import Retry
 
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, delete, cast, text
+from sqlalchemy import select, and_, text
 
 from sqlalchemy.dialects.postgresql import JSONB
 
 from db.base import Account, Thread
 from db.queries import (execute_and_catch_db_error,
                         get_message_by_id,
-                        get_account_by_id, get_messages_only_by_id,
+                        get_account_by_id,
+                        get_messages_only_by_id,
                         get_thread_by_id,
                         get_thread_only_by_id,
                         get_message_only_by_id)
 
-from utils.base import (reject_request_chat, try_block_thread, try_get_profile_port,
+from utils.base import (try_block_thread,
+                        try_get_profile_port,
                         try_start_profile,
                         try_stop_profile,
                         try_connect_to_main_instagram_page)
 from utils.tasks import (parse_thread_playwright,
                          playwright_send_message,
-                         test_playwright, try_update_thread_memory)
+                         test_playwright,
+                         try_update_thread_memory)
 from utils.ai import ai_translate_message, ai_translate_user_information
 from utils.enums import MessageStatusEnum
 
