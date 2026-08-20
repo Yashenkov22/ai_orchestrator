@@ -25,7 +25,7 @@ from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy import select, func
 from sqlalchemy.orm import column_property
 
-from utils.enums import MessageStatusEnum, MessageTypeEnum, SessionStatusEnum, ThreadColorEnum
+from utils.enums import AIModelEnum, MessageStatusEnum, MessageTypeEnum, SessionStatusEnum, ThreadColorEnum
 
 from config import db_url
 
@@ -105,6 +105,10 @@ class Account(Base):
                       server_default="false")
     is_hidden = Column(Boolean, default=False,
                         server_default='false')
+    parse_whole_thread_list = Column(Boolean,
+                                     default=False,
+                                     nullable=False,
+                                     server_default='false')
     # ai settings
     ai_model_id = Column(Integer,
                          ForeignKey('ai_models.id'),
@@ -285,6 +289,13 @@ class Thread(Base):
     color_level = Column(String,
                          nullable=False,
                          default=ThreadColorEnum.GREY)
+    # ai_model = Column(String,
+    #                   nullable=False,
+    #                   default=AIModelEnum.CLAUDE_SONNET_5,
+    #                   server_default='anthropic/claude-sonnet-5')
+    # ai_temperature = Column(Float,
+    #                         default=0.5,
+    #                         server_default='0.5')
     
     account = relationship("Account", back_populates="threads")
     insta_user = relationship("InstaUser", back_populates="threads")

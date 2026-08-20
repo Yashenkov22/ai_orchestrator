@@ -23,7 +23,7 @@ from db.base import Account, Admin, Message, Thread, InstaUser, Attachment
 #                       ai_translate_message)
 # from utils.base import RATIO_LEN_LIMIT, RATIO_LIMIT, generate_valid_media_url, moscow_tz, russian_ratio, try_translate_text, get_raw_messages_log_and_new_last_message_id, try_update_thread_memory
 from utils.exc import DB_ERROR_EXCEPTION, ChatNotFound, NotAccessToChat
-from utils.enums import MessageStatusEnum, ThreadColorEnum
+from utils.enums import MessageStatusEnum, ThreadColorEnum, AIModelEnum
 # from utils.tasks import get_raw_messages_log_and_new_last_message_id, try_update_thread_memory
 # from websocket.redis_listener import publish_event
 # from websocket.base import manager
@@ -492,6 +492,8 @@ async def try_add_new_thread(thread_data: dict,
         'is_approved': thread_data.get('is_approved'),
         'is_unread':  thread_data.get('is_unread'),
         'color_level': 'grey',
+        # 'ai_model': AIModelEnum.CLAUDE_SONNET_5,
+        # 'ai_temperature': 0.5,
         'user_information': None,
         'account_id':  thread_data.get('account_id'),
         'insta_user_id':  thread_data.get('insta_user_id'),

@@ -163,6 +163,382 @@ async def scroll_inbox_until_loaded(page, collected_data, known_map=None, max_ro
                 print(f"[scroll-inbox] батч #{i} без новых сообщений — стоп")
                 break
 
+# async def scroll_inbox_until_loaded(
+
+#     page,
+
+#     collected_data,
+
+#     known_map=None,
+
+#     max_rounds=110,
+
+#     wait_after_scroll=3.0,
+
+#     poll_interval=0.3,
+
+# ):
+
+#     item_sel = 'div[role="button"]'
+
+#     scroll_js = """() => {
+
+#         let best = null, max = 50;
+
+#         for (const c of document.querySelectorAll('*')) {
+
+#             const s = getComputedStyle(c);
+
+#             if (s.overflowY === 'auto' || s.overflowY === 'scroll') {
+
+#                 const d = c.scrollHeight - c.clientHeight;
+
+#                 if (d > max) {
+
+#                     best = c;
+
+#                     max = d;
+
+#                 }
+
+#             }
+
+#         }
+
+#         if (!best) {
+
+#             return {found: false};
+
+#         }
+
+#         const before = best.scrollTop;
+
+#         best.scrollTop = best.scrollHeight;
+
+#         return {
+
+#             found: true,
+
+#             before: before,
+
+#             after: best.scrollTop,
+
+#             sh: best.scrollHeight,
+
+#             ch: best.clientHeight
+
+#         };
+
+#     }"""
+
+#     for i in range(max_rounds):
+
+#         pages_before = len(
+
+#             collected_data.get('SlideMailboxPages', [])
+
+#         )
+
+#         res = await page.evaluate(scroll_js)
+
+#         count = await page.locator(item_sel).count()
+
+#         print(
+
+#             f"[scroll-inbox #{i}] "
+
+#             f"count={count} "
+
+#             f"pages_before={pages_before} "
+
+#             f"scroll={res}"
+
+#         )
+
+#         if not res.get('found'):
+
+#             print("[scroll-inbox] scrollable container not found")
+
+#             break
+
+#         # Ждём, пока Instagram подгрузит следующий батч
+
+#         waited = 0.0
+
+#         while waited < wait_after_scroll:
+
+#             await page.wait_for_timeout(
+
+#                 int(poll_interval * 1000)
+
+#             )
+
+#             waited += poll_interval
+
+#             pages_after = len(
+
+#                 collected_data.get('SlideMailboxPages', [])
+
+#             )
+
+#             if pages_after > pages_before:
+
+#                 print(
+
+#                     f"[scroll-inbox #{i}] "
+
+#                     f"new pages: {pages_before} -> {pages_after}"
+
+#                 )
+
+#                 break
+
+#         # Просто продолжаем скроллить.
+
+#         # Никаких known_map / batch_has_new_messages / empty_rounds.
+
+    
+
+#     return await page.locator(item_sel).count()
+
+
+async def scroll_inbox_until_loaded_whole_thread_list(
+    page,
+    collected_data,
+    known_map=None,
+    max_rounds=200,
+    wait_after_scroll=3.0,
+    stable_rounds=3,
+):
+
+    item_sel = 'div[role="button"]'
+
+    find_scroll_container_js = """() => {
+        let best = null;
+        let max = 50;
+        for (const c of document.querySelectorAll('*')) {
+            const s = getComputedStyle(c);
+            if (s.overflowY === 'auto' || s.overflowY === 'scroll') {
+                const d = c.scrollHeight - c.clientHeight;
+                if (d > max) {
+                    best = c;
+                    max = d;
+                }
+            }
+        }
+
+        if (!best) {
+            return null;
+        }
+
+        return {
+            scrollTop: best.scrollTop,
+            scrollHeight: best.scrollHeight,
+            clientHeight: best.clientHeight,
+        };
+
+    }"""
+
+    scroll_to_bottom_js = """() => {
+
+        let best = null;
+
+        let max = 50;
+
+        for (const c of document.querySelectorAll('*')) {
+
+            const s = getComputedStyle(c);
+
+            if (s.overflowY === 'auto' || s.overflowY === 'scroll') {
+
+                const d = c.scrollHeight - c.clientHeight;
+
+                if (d > max) {
+
+                    best = c;
+
+                    max = d;
+
+                }
+
+            }
+
+        }
+
+        if (!best) {
+
+            return {
+
+                found: false
+
+            };
+
+        }
+
+        const before = {
+
+            scrollTop: best.scrollTop,
+
+            scrollHeight: best.scrollHeight,
+
+            clientHeight: best.clientHeight,
+
+        };
+
+        best.scrollTop = best.scrollHeight;
+
+        return {
+
+            found: true,
+
+            before: before,
+
+            after: {
+
+                scrollTop: best.scrollTop,
+
+                scrollHeight: best.scrollHeight,
+
+                clientHeight: best.clientHeight,
+
+            },
+
+        };
+
+    }"""
+
+    stable_count = 0
+    previous_height = None
+
+    for i in range(max_rounds):
+        pages_before = len(
+            collected_data.get('SlideMailboxPages', [])
+        )
+
+        # Скроллим контейнер в самый низ
+
+        res = await page.evaluate(scroll_to_bottom_js)
+        count = await page.locator(item_sel).count()
+
+        print(
+            f"[scroll-inbox #{i}] "
+            f"count={count} "
+            f"pages_before={pages_before} "
+            f"scroll={res}"
+        )
+
+        if not res.get('found'):
+            print(
+                "[scroll-inbox] "
+                "scrollable container not found"
+            )
+
+            break
+
+        height_before = res["after"]["scrollHeight"]
+
+        # Ждём загрузку новых сообщений Instagram
+
+        await page.wait_for_timeout(
+            int(wait_after_scroll * 1000)
+        )
+
+        # Проверяем состояние контейнера после ожидания
+
+        state = await page.evaluate(find_scroll_container_js)
+
+        if state is None:
+            print(
+                "[scroll-inbox] "
+                "scrollable container not found after wait"
+            )
+
+            break
+
+        current_height = state["scrollHeight"]
+        scroll_top = state["scrollTop"]
+        client_height = state["clientHeight"]
+
+        at_bottom = (
+            scroll_top + client_height
+            >= current_height - 2
+        )
+
+        pages_after = len(
+
+            collected_data.get('SlideMailboxPages', [])
+
+        )
+
+        print(
+            f"[scroll-inbox #{i}] "
+            f"height={height_before}->{current_height} "
+            f"pages={pages_before}->{pages_after} "
+            f"scrollTop={scroll_top} "
+            f"clientHeight={client_height} "
+            f"at_bottom={at_bottom}"
+        )
+
+        # ---------------------------------------------------------
+
+        # Instagram загрузил новые элементы.
+
+        # Значит, конец ещё не достигнут.
+
+        # ---------------------------------------------------------
+
+        if (
+            previous_height is not None
+            and current_height > previous_height
+        ):
+
+            stable_count = 0
+
+            print(
+                f"[scroll-inbox #{i}] "
+                f"new content loaded: "
+                f"{previous_height} -> {current_height}"
+            )
+
+        # ---------------------------------------------------------
+
+        # Высота не изменилась.
+
+        # Если мы внизу — считаем стабильность.
+
+        # ---------------------------------------------------------
+
+        elif at_bottom:
+            stable_count += 1
+
+            print(
+                f"[scroll-inbox #{i}] "
+                f"bottom is stable: "
+                f"{stable_count}/{stable_rounds}"
+            )
+
+            if stable_count >= stable_rounds:
+                print(
+                    "[scroll-inbox] "
+                    "reached end of inbox"
+                )
+                break
+
+        else:
+            # Мы не внизу — следующая итерация снова скроллит.
+            stable_count = 0
+
+        previous_height = current_height
+
+    else:
+
+        print(
+            f"[scroll-inbox] "
+            f"max_rounds={max_rounds} reached"
+        )
+
+    return await page.locator(item_sel).count()
+
 
 def extract_friendly_name(payload: str) -> str | None:
     for part in payload.split('&'):
@@ -954,14 +1330,21 @@ async def switch_inbox_tab(page, tab_name: str) -> bool:
         return False
 
 
-async def iterate_inbox_folders(page, inbox_received, collected_data, account_id, _session):
+async def iterate_inbox_folders(page, inbox_received, collected_data, account, _session):
     tabs = await get_inbox_tabs(page)
-    known_map = await load_known_threads_map(account_id, _session)
+
+    if account.parse_whole_thread_list:
+        known_map = None
+        scroll_func = scroll_inbox_until_loaded_whole_thread_list
+    else:
+        scroll_func = scroll_inbox_until_loaded
+        known_map = await load_known_threads_map(account.id, _session)
+
     print(f"[inbox] найденные вкладки: {tabs}")  # временно, чтобы понять реальные имена
 
     if not tabs:
         print("[inbox] вкладок нет, единый список")
-        await scroll_inbox_until_loaded(page, collected_data, known_map)
+        await scroll_func(page, collected_data, known_map)
         return
 
     switched = await switch_inbox_tab(page, "General")
@@ -973,7 +1356,7 @@ async def iterate_inbox_folders(page, inbox_received, collected_data, account_id
             print("[inbox] таймаут ожидания ответа для General")
     # если не переключились — новой сети не будет, ждать нечего
 
-    await scroll_inbox_until_loaded(page, collected_data, known_map)
+    await scroll_func(page, collected_data, known_map)
 
 
 def collect_all_inbox_threads(collected_data):
@@ -1061,16 +1444,18 @@ async def test_playwright(account: Account,
                         parsed = parse_ig_response(body)
 
                         key = friendly_name
+
                         if variables and 'folder' in variables:
                             key = f"{friendly_name}:{variables['folder']}"
 
-                        elif friendly_name == 'IGDThreadDetailQuery':
+                        if friendly_name == 'IGDThreadDetailQuery':
                             thread_responses.append(parsed)
                             thread_received.set()
 
                         # пагинация списка чатов (бизнес-аккаунт) — накапливаем отдельно
                         elif friendly_name in ('IGDThreadListProfessionalOffMsysPaginationQuery',
                                                'IGDThreadListOffMsysPaginationQuery'):
+
                             # разовая диагностика структуры
                             try:
                                 sample = parsed[0] if isinstance(parsed, list) and parsed else parsed
@@ -1080,6 +1465,7 @@ async def test_playwright(account: Account,
                                 print('.  ERROR WITH PARSE THREAD LIST')
                                 pass
 
+                            # print('adding...22', parsed)
                             collected_data.setdefault('SlideMailboxPages', []).append(parsed)
 
                         else:
@@ -1113,7 +1499,7 @@ async def test_playwright(account: Account,
 
                 await page.wait_for_timeout(2000)
 
-                await iterate_inbox_folders(page, inbox_received, collected_data, account.id, _session)
+                await iterate_inbox_folders(page, inbox_received, collected_data, account, _session)
 
                 inbox_threads = collect_all_inbox_threads(collected_data)
 
@@ -1177,6 +1563,7 @@ async def test_playwright(account: Account,
                                     thread_responses, thread_received, redis_pool, _session,
                                     is_spam=True)
         finally:
+            print(' -> FINALLY BLOCK...')
             try:
                 page.remove_listener("response", on_response)
                 await page.close()
@@ -1216,7 +1603,7 @@ async def parse_thread_playwright(account: Account,
         # context = await browser.new_context()
 
         if len(context.pages) >= 6:
-            raise Retry(defer=5)
+            raise Retry(defer=25)
 
         detail_thread_page = await context.new_page()
 
@@ -1818,6 +2205,7 @@ async def try_add_messages(message_data: dict,
 
 
                 generated_text = await generate_new_message_to_thread(account_info=thread.account.information,
+                                                                      thread=thread,
                                                                       thread_context=thread.context,
                                                                       new_messages=raw_messages_log)
                 

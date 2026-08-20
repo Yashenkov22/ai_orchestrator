@@ -3,6 +3,8 @@ import json
 from datetime import datetime, timezone
 from openai import OpenAI, AsyncOpenAI
 
+from db.base import Thread
+
 # from lingua import LanguageDetectorBuilder, Language
 
 from .base import PREFIX_SYSTEM_PROMPT
@@ -198,10 +200,15 @@ async def ai_translate_user_information(text: str):
 
 
 async def generate_new_message_to_thread(account_info: str,
+                                         thread: Thread,
                                          thread_context: str | None,
                                          new_messages: str | None):
+    # model = thread.ai_model or 'anthropic/claude-sonnet-5'
+    # ai_temperature = thread.ai_temperature or 0.5
+
     model = 'anthropic/claude-sonnet-5'
-    # _client = openrouter_client
+    ai_temperature = 0.5
+
 
     language_rule = (
         "CRITICAL LANGUAGE RULE: Your entire response must be written in the SAME language as the "
@@ -268,6 +275,7 @@ async def generate_new_message_to_thread(account_info: str,
             }
         ],
         timeout=30.0,
+        temperature=ai_temperature,
     )
 
     if response.choices:
