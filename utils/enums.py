@@ -38,3 +38,4 @@ class AIModelEnum(str, Enum):
     DEEPSEEK_LATEST = "deepseek/deepseek-v4-flash-latest"
     QWEN_3 = 'qwen/qwen3-14b'
     QWEN_ORCA = 'obsidian/Qwen3.8-27B'
+    GLM_FREE = 'z-ai/glm-5.2:free'
