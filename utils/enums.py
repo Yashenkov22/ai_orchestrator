@@ -39,3 +39,4 @@ class AIModelEnum(str, Enum):
     QWEN_3 = 'qwen/qwen3-14b'
     QWEN_ORCA = 'obsidian/Qwen3.8-27B'
     GLM_FREE = 'z-ai/glm-5.2:free'
+    GLM_4_6 = 'z-ai/glm-4.6'
