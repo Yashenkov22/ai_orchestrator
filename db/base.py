@@ -289,13 +289,15 @@ class Thread(Base):
     color_level = Column(String,
                          nullable=False,
                          default=ThreadColorEnum.GREY)
-    # ai_model = Column(String,
-    #                   nullable=False,
-    #                   default=AIModelEnum.CLAUDE_SONNET_5,
-    #                   server_default='anthropic/claude-sonnet-5')
-    # ai_temperature = Column(Float,
-    #                         default=0.5,
-    #                         server_default='0.5')
+    ai_model = Column(String,
+                      nullable=False,
+                      default=AIModelEnum.CLAUDE_SONNET_5,
+                      server_default='anthropic/claude-sonnet-5')
+    ai_temperature = Column(Float,
+                            default=0.5,
+                            server_default='0.5')
+    # full_parse = Column(Boolean, default=False,
+    #                     server_default='false')
     
     account = relationship("Account", back_populates="threads")
     insta_user = relationship("InstaUser", back_populates="threads")

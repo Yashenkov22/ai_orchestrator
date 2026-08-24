@@ -14,7 +14,12 @@ from db.base import (Message,
                      Account)
 
 from utils.schemas import (DetailThreadSchema,
-                           EditThreadColorLevelSchema, EditThreadNotesSchema, EditThreadPinMarkSchema, EditThreadUnreadMarkSchema,
+                           EditThreadAIModelSchema,
+                           EditThreadAITemperatureSchema,
+                           EditThreadColorLevelSchema, EditThreadFullParseSchema,
+                           EditThreadNotesSchema,
+                           EditThreadPinMarkSchema,
+                           EditThreadUnreadMarkSchema,
                            ThreadSchema)
 from utils.dependencies import (admin_dependency,
                                 session_dependency)
@@ -186,10 +191,6 @@ async def get_threads(admin: admin_dependency,
             user_information = thread.user_information
         else:
             user_information = None
-    # else:
-    #     user_information = None
-    # try:
-
 
     thread_info = {
         'thread_name': f'{thread.account.username} - {thread.insta_user.username}',
@@ -197,6 +198,9 @@ async def get_threads(admin: admin_dependency,
         'is_approved': thread.is_approved,
         'is_blocked': thread.is_blocked,
         'proccess_block': thread.proccess_block,
+        'ai_model': thread.ai_model,
+        'ai_temperature': thread.ai_temperature,
+        # 'full_parse': thread.full_parse,
         'account_information': {
             'photo_url': generate_valid_media_url(thread.account.photo_url),
             'information': thread.account.information,
@@ -371,7 +375,111 @@ async def edit_pin_mark_by_thread_id(data: EditThreadPinMarkSchema,
     await execute_and_catch_db_error(session.commit(),
                                      session,
                                      with_rollback=True)
+
+
+@thread_router.patch("/edit_ai_model")
+async def edit_ai_model_by_thread_id(data: EditThreadAIModelSchema,
+                                     admin: admin_dependency,
+                                     session: session_dependency):
+    admin_id, is_main_admin = admin
+
+    query = (
+        select(Thread)
+        .where(
+            Thread.id == data.thread_id,
+        )
+    )
+
+    result = await execute_and_catch_db_error(session.execute(query),
+                                              session)
     
+    thread: Thread = result.scalar_one_or_none()
+
+    if not thread:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Thread not found')
+
+    if not is_main_admin:
+        if thread.account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+
+    thread.ai_model = data.ai_model
+        
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)
+
+
+@thread_router.patch("/edit_ai_temperature")
+async def edit_ai_temperature_by_thread_id(data: EditThreadAITemperatureSchema,
+                                     admin: admin_dependency,
+                                     session: session_dependency):
+    admin_id, is_main_admin = admin
+
+    query = (
+        select(Thread)
+        .where(
+            Thread.id == data.thread_id,
+        )
+    )
+
+    result = await execute_and_catch_db_error(session.execute(query),
+                                              session)
+    
+    thread: Thread = result.scalar_one_or_none()
+
+    if not thread:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Thread not found')
+
+    if not is_main_admin:
+        if thread.account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+
+    thread.ai_temperature = data.ai_temperature
+        
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)
+
+
+@thread_router.patch("/edit_full_parse_mark_by_thread_id")
+async def edit_full_parse_mark_by_thread_id(data: EditThreadFullParseSchema,
+                                     admin: admin_dependency,
+                                     session: session_dependency):
+    admin_id, is_main_admin = admin
+
+    query = (
+        select(Thread)
+        .where(
+            Thread.id == data.thread_id,
+        )
+    )
+
+    result = await execute_and_catch_db_error(session.execute(query),
+                                              session)
+    
+    thread: Thread = result.scalar_one_or_none()
+
+    if not thread:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Thread not found')
+
+    if not is_main_admin:
+        if thread.account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+
+    thread.full_parse = not thread.full_parse
+
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)
+
+    return {
+        'thread_id': data.thread_id,
+        'full_parse': thread.full_parse,
+    }
+
 
 @thread_router.patch("/edit_thread_notes")
 async def edit_notes_by_thread_id(data: EditThreadNotesSchema,

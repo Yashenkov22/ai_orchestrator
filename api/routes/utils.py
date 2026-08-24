@@ -1,5 +1,8 @@
+import base64
 import os
 import shutil
+
+from time import time
 
 from uuid import uuid4
 
@@ -20,11 +23,11 @@ from db.base import Account, Thread
 
 from db.queries import get_message_by_id
 
-from utils.ai import ai_extract_user_info, ai_translate_message
+from utils.ai import ai_extract_user_info, ai_test_photo, ai_translate_message
 from utils.dependencies import (admin_dependency,
                                 session_dependency,
                                 arq_dependency)
-from utils.enums import MessageStatusEnum, ThreadColorEnum
+from utils.enums import MessageStatusEnum, ThreadColorEnum, AIModelEnum
 from auth.schemas import SecretShcema
 
 from utils.base import (generate_valid_media_url,
@@ -287,3 +290,28 @@ async def generate_user_informations2(thread_id: int,
         )
 
     return job.job_id
+
+
+@utils_router.get("/test_photo_to_ai")
+async def test_photo_to_ai(admin: admin_dependency,
+                                     arq_pool: arq_dependency,
+                                     session: session_dependency):
+    phto_url = "./test.jpg"
+    with open(phto_url, "rb") as f:
+
+        image_bytes = f.read()
+
+    base64_image = base64.b64encode(image_bytes).decode("utf-8")
+    start_time = time()
+    print(f' -> start {start_time}')
+    await ai_test_photo(base64_image)
+    end_time = time()
+    print(f' -> end {end_time}')
+    print(f' -> result {end_time - start_time}')
+
+
+@utils_router.get("/get_ai_model_list")
+async def get_ai_model_list(admin: admin_dependency,
+                            arq_pool: arq_dependency,
+                            session: session_dependency):
+    return [model.value for model in AIModelEnum]

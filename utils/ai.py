@@ -7,9 +7,11 @@ from db.base import Thread
 
 # from lingua import LanguageDetectorBuilder, Language
 
+from utils.enums import AIModelEnum
+
 from .base import PREFIX_SYSTEM_PROMPT
 
-from config import AI_API_TOKEN, DEEPSEEK_API_TOKEN
+from config import AI_API_TOKEN, DEEPSEEK_API_TOKEN, AI_ORCA_API_TOKEN
 
 
 
@@ -24,6 +26,10 @@ openrouter_client = AsyncOpenAI(
     base_url="https://openrouter.ai/api/v1"
 )
 
+orcarouter_client = AsyncOpenAI(
+    api_key=AI_ORCA_API_TOKEN,
+    base_url="https://api.orcarouter.ai/v1"
+)
 
 
 async def generate_thread_context(thread_context: str | None,
@@ -203,12 +209,19 @@ async def generate_new_message_to_thread(account_info: str,
                                          thread: Thread,
                                          thread_context: str | None,
                                          new_messages: str | None):
-    # model = thread.ai_model or 'anthropic/claude-sonnet-5'
-    # ai_temperature = thread.ai_temperature or 0.5
+    model = thread.ai_model or 'anthropic/claude-sonnet-5'
+    ai_temperature = thread.ai_temperature or 0.5
 
-    model = 'anthropic/claude-sonnet-5'
-    ai_temperature = 0.5
+    ai_router = openrouter_client
 
+    if model == AIModelEnum.QWEN_ORCA:
+        ai_router = orcarouter_client
+    
+
+    # model = 'anthropic/claude-sonnet-5'
+    # ai_temperature = 0.5
+
+    print(f'using model {model} for generating...\ntemperature ai - {ai_temperature}')
 
     language_rule = (
         "CRITICAL LANGUAGE RULE: Your entire response must be written in the SAME language as the "
@@ -262,7 +275,7 @@ async def generate_new_message_to_thread(account_info: str,
         f"без пояснений и без пересказа переписки."
     )
 
-    response = await openrouter_client.chat.completions.create(
+    response = await ai_router.chat.completions.create(
         model=model,
         messages=[
             {
@@ -393,3 +406,58 @@ async def ai_extract_user_info(text: str, existing_info: dict | None = None) -> 
     except (json.JSONDecodeError, TypeError):
         print(f'[ai_extract_user_info] invalid JSON: {raw!r}')
         return existing_info or {}   # при сбое парсинга — не теряем то, что уже было
+
+
+
+
+
+
+
+async def ai_test_photo(photo_url: str):
+    print('запрос к нейронке для перевода сообщения...')
+    try:
+        system_content = """
+        Ты переводишь значения структурированной информации о пользователе на русский язык.
+        
+        Правила:
+        1. Сохрани исходную JSON-структуру.
+        2. Не изменяй названия ключей.
+        3. Не добавляй новые ключи.
+        4. Не удаляй ключи.
+        5. Переводи только текстовые значения.
+        6. Числа, boolean, null и другие нетекстовые значения не изменяй.
+        7. Если значение является списком строк — переведи каждый элемент.
+        8. Верни ТОЛЬКО валидный JSON без markdown.
+        9. Если информация уже на русском языке - верни без изменения.
+        """
+        # user_content = text
+
+        response = await orcarouter_client.chat.completions.create(
+            model="obsidian/Qwen3.8-27B",
+    messages=[
+                {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Опиши подробно, что изображено на фотографии."
+                    },
+                            {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{photo_url}"
+                                }
+                            }
+                        ]
+                    }
+            ],
+            timeout=120.0,
+        )
+        result = response.choices[0].message.content
+        print('ответ нейронки', result, type(result))
+
+        return result
+    except Exception as ex:
+        print('ERROR WITH TRY TRANSTALE THROUGH DEEPSEEK')
+        print(ex)
+        return None

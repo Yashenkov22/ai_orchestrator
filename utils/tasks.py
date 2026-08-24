@@ -1334,9 +1334,11 @@ async def iterate_inbox_folders(page, inbox_received, collected_data, account, _
     tabs = await get_inbox_tabs(page)
 
     if account.parse_whole_thread_list:
+        print('parse whole thread list...')
         known_map = None
         scroll_func = scroll_inbox_until_loaded_whole_thread_list
     else:
+        print('parse only unread threads...')
         scroll_func = scroll_inbox_until_loaded
         known_map = await load_known_threads_map(account.id, _session)
 

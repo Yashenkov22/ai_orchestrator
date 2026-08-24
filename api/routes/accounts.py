@@ -178,6 +178,7 @@ async def get_account_by_id(account_id: int,
             'photo_url': generate_valid_media_url(account.photo_url),
             'is_active': account.is_active,
             'is_hidden': account.is_hidden,
+            'parse_whole_thread_list': account.parse_whole_thread_list,
             'thread_count': thread_count,
             'has_unread': has_unread,
             'has_error': -(account.has_error),
@@ -462,4 +463,44 @@ async def edit_hidden_mark_by_account_id(data: PatchHiddenMarkAccountSchema,
     return {
         'account_id': account.id,
         'is_hidden': account.is_hidden,
+    }
+
+
+@account_router.patch("/edit_full_parse_by_account_id")
+async def edit_hidden_mark_by_account_id(data: PatchHiddenMarkAccountSchema,
+                        admin: admin_dependency,
+                        session: session_dependency):
+    admin_id, is_main_admin = admin
+
+    if not is_main_admin:
+        if data.account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                                detail='Dont have permissions')
+
+    query = (
+        select(
+            Account
+        )\
+        .where(
+            Account.id == data.account_id
+        )
+    )
+
+    res = await execute_and_catch_db_error(session.execute(query),
+                                           session)
+    
+    account: Account = res.scalar_one_or_none()
+
+    if not account:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Account not found')
+    
+    account.parse_whole_thread_list = not account.parse_whole_thread_list
+
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)
+    return {
+        'account_id': account.id,
+        'parse_whole_thread_list': account.parse_whole_thread_list,
     }

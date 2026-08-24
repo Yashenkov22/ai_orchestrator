@@ -10,7 +10,7 @@ from fastapi import HTTPException
 
 from pydantic.alias_generators import to_camel
 
-from utils.enums import MessageStatusEnum, MessageTypeEnum, ThreadColorEnum
+from utils.enums import MessageStatusEnum, MessageTypeEnum, ThreadColorEnum, AIModelEnum
 
 
 
@@ -196,6 +196,7 @@ class NewAccountSchema(BaseModel):
     photo_url: str | None = Field(default=None)
     is_active: bool
     is_hidden: bool
+    parse_whole_thread_list: bool
     thread_count: int
     has_unread: bool
     has_error: bool
@@ -254,6 +255,20 @@ class EditThreadPinMarkSchema(BaseModel):
     thread_id: int
 
 
+class EditThreadAIModelSchema(BaseModel):
+    thread_id: int
+    ai_model: AIModelEnum
+
+
+class EditThreadAITemperatureSchema(BaseModel):
+    thread_id: int
+    ai_temperature: float
+
+
+class EditThreadFullParseSchema(BaseModel):
+    thread_id: int
+
+
 class EditThreadNotesSchema(BaseModel):
     thread_id: int
     notes: str | None
@@ -297,6 +312,9 @@ class DetailThreadSchema(BaseModel):
     thread_name: str
     is_approved: bool
     message_count: int
+    ai_model: str
+    ai_temperature: float
+    # full_parse: bool
     account_information: AccountInformationSchema | None
     user_information: UserInformationSchema | None
     context: str | None
