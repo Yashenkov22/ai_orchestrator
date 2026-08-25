@@ -320,6 +320,7 @@ class DetailThreadSchema(BaseModel):
     context: str | None
     notes: str | None
     messages: list[MessageSchema]
+    oldest_message_id: int | None
 
 
 class UpdateProfileDataSchema(BaseModel):

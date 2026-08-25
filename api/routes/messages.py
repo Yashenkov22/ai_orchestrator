@@ -1,10 +1,11 @@
 from datetime import datetime, timezone
+from math import ceil
 
 from fastapi import (APIRouter,
                      HTTPException,
                      status)
 
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from sqlalchemy.orm import joinedload, selectinload
 
 from db.queries import (get_message_only_by_id, get_thread_by_id,
@@ -32,8 +33,17 @@ message_router = APIRouter(tags=['Messages'],
 
 @message_router.get("/list")
 async def new_get_messages(admin: admin_dependency,
-                       session: session_dependency):
+                           session: session_dependency,
+                           page: int = 1):
+    elements_on_page = 20
     admin_id, is_main_admin = admin
+
+    count_query = (
+        select(
+            func.count()
+        )\
+        .select_from(Message)
+    )
 
     query = (
         select(Message)
@@ -44,7 +54,8 @@ async def new_get_messages(admin: admin_dependency,
         )
         .order_by(
             Message.created_at.desc(),
-        )
+        )\
+        .offset(elements_on_page * (page-1))\
     )
 
     if not is_main_admin:
@@ -52,10 +63,21 @@ async def new_get_messages(admin: admin_dependency,
             Message.thread.has(Thread.account_id.in_(ID_LIST_FOR_PERMISSION)),
         )
 
+    query = query.offset(elements_on_page * (page-1))\
+                    .limit(elements_on_page)
+
+    count_result = await execute_and_catch_db_error(session.execute(count_query),
+                                                    session)
+    messages_count = count_result.scalar_one()
+
     result = await execute_and_catch_db_error(session.execute(query),
                                               session)
-    
     messages = result.scalars().all()
+
+    res = {
+        'pages': ceil(messages_count / elements_on_page),
+        'page': page,
+    }
 
     message_list = []
     for message in messages:
@@ -89,7 +111,9 @@ async def new_get_messages(admin: admin_dependency,
             'attachment': attachment_list,
         })
 
-    return message_list
+    res['message_list'] = message_list
+
+    return res
 
 
 @message_router.get("/{thread_id}/messages")

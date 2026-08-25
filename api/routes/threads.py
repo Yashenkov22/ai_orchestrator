@@ -150,7 +150,8 @@ async def get_threads(admin: admin_dependency,
         .where(
             Message.thread_id == thread_id,
         )
-        .order_by(Message.created_at.asc())
+        .order_by(Message.created_at.desc())\
+        .limit(50)
     )
     
     message_query_result = await execute_and_catch_db_error(session.execute(message_query),
@@ -251,9 +252,82 @@ async def get_threads(admin: admin_dependency,
             }
             message_list.append(message_dict)
 
-    thread_info['messages'] = message_list
+        oldest_message_id = message.id
+
+    thread_info['messages'] = reversed(message_list)
+    thread_info['oldest_message_id'] = oldest_message_id
 
     return thread_info
+
+
+@thread_router.get("/{thread_id}/pagination")
+async def get_pagination_messages_by_thread(admin: admin_dependency,
+                                            session: session_dependency,
+                                            thread_id: int,
+                                            oldest_message_id: int):
+    admin_id, is_main_admin = admin
+
+    message_query = (
+        select(Message)
+        .options(joinedload(Message.attachments))\
+        .where(
+            Message.thread_id == thread_id,
+            Message.id < oldest_message_id,
+        )
+        .order_by(Message.created_at.desc())\
+        .limit(50)
+    )
+
+    message_query_result = await execute_and_catch_db_error(session.execute(message_query),
+                                                            session)
+
+    messages = message_query_result.unique().scalars().all()
+
+    message_list = []
+
+    if messages:
+        for message in messages:
+            attachments = message.attachments
+            attachment_list = []
+            content = message.text or ""
+            translated_content = message.translated_text or ""
+
+            for _attachment in attachments:
+                
+                if _attachment:
+                    _attachment = {
+                        'media_type': _attachment.media_type,
+                        'media_url': generate_valid_media_url(_attachment.media_url),
+                    }
+                    attachment_list.append(_attachment)
+                
+            message_dict = {
+                "id": str(message.id),
+                "role": message.sender,
+                "content": content,
+                "translated_content": translated_content,
+                "ts": (
+                    message.created_at.strftime("%Y-%d-%m %H:%M")
+                    if message.created_at else ""
+                ),
+                "modStatus": message.status,  # pending / approved / moderated
+                'attachments': attachment_list
+            }
+            message_list.append(message_dict)
+
+        oldest_message_id = message.id
+
+        message_list.reverse()
+
+        return {
+            'messages': message_list,
+            'oldest_message_id': oldest_message_id,
+        }
+    else:
+        return {
+            'messages': None,
+            'oldest_message_id': None,
+        }
 
 
 # @thread_router.patch("/threads/edit_color_level")
