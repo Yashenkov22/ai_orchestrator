@@ -4,19 +4,22 @@ from fastapi import (APIRouter,
                      HTTPException,
                      status)
 
-from sqlalchemy import select, update, and_
+from sqlalchemy import select, update, and_, func
 from sqlalchemy.orm import joinedload
 
 from db.queries import (execute_and_catch_db_error)
 
 from db.base import (Message,
                      Thread,
-                     Account)
+                     Account,
+                     Attachment)
 
-from utils.schemas import (DetailThreadSchema,
+from utils.schemas import (AttachmentListSchema,
+                           DetailThreadSchema,
                            EditThreadAIModelSchema,
                            EditThreadAITemperatureSchema,
-                           EditThreadColorLevelSchema, EditThreadFullParseSchema,
+                           EditThreadColorLevelSchema,
+                           EditThreadFullParseSchema,
                            EditThreadNotesSchema,
                            EditThreadPinMarkSchema,
                            EditThreadUnreadMarkSchema,
@@ -157,8 +160,18 @@ async def get_threads(admin: admin_dependency,
     message_query_result = await execute_and_catch_db_error(session.execute(message_query),
                                                             session)
     
+    message_count = (
+        select(func.count(Message.id))
+        .where(Message.thread_id == Thread.id)
+        .correlate(Thread)
+        .scalar_subquery()
+    )
+
     thread_query = (
-        select(Thread)\
+        select(
+            Thread,
+            message_count.label("message_count"),
+        )
         .options(
             joinedload(Thread.account),
             joinedload(Thread.insta_user),
@@ -171,11 +184,14 @@ async def get_threads(admin: admin_dependency,
 
     messages = message_query_result.unique().scalars().all()
 
-    thread = thread_context_query_result.scalar_one_or_none()
+    # thread = thread_context_query_result.scalar_one_or_none()
+    thread_data = thread_context_query_result.one_or_none()
 
-    if not thread:
+    if not thread_data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail='Thread not found')
+
+    thread, message_count = thread_data
     
     if not is_main_admin:
         if thread.account_id not in ID_LIST_FOR_PERMISSION:
@@ -201,7 +217,7 @@ async def get_threads(admin: admin_dependency,
         'proccess_block': thread.proccess_block,
         'ai_model': thread.ai_model,
         'ai_temperature': thread.ai_temperature,
-        # 'full_parse': thread.full_parse,
+        'message_count': message_count,
         'account_information': {
             'photo_url': generate_valid_media_url(thread.account.photo_url),
             'information': thread.account.information,
@@ -258,6 +274,53 @@ async def get_threads(admin: admin_dependency,
     thread_info['oldest_message_id'] = oldest_message_id
 
     return thread_info
+
+
+@thread_router.get("/{thread_id}/attachments",
+                   response_model=list[AttachmentListSchema])
+async def get_thread_attachments(admin: admin_dependency,
+                                 session: session_dependency,
+                                 thread_id: int):
+    admin_id, is_main_admin = admin
+
+    query = (
+        select(
+            Attachment,
+            Message.created_at,
+            Message.sender,
+        )
+        .join(Message, Attachment.message_id == Message.id)
+        .where(Message.thread_id == thread_id)
+        .order_by(Message.created_at.asc())
+    )
+
+    result = await session.execute(query)
+
+    attachments = result.all()
+
+    if not attachments:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Attachments not found')
+
+    attachment_list = []
+        
+    for attachment_data in attachments:
+        attachment, message_creted_at, message_sender = attachment_data
+        data = {
+            "ts": (
+                message_creted_at.strftime("%Y-%d-%m %H:%M")
+                if message_creted_at else ""
+            ),
+            'sender': message_sender,
+        }
+        _attachment = {
+            'media_type': attachment.media_type,
+            'media_url': generate_valid_media_url(attachment.media_url),
+        }
+        data['attachment'] = _attachment
+        attachment_list.append(data)
+
+    return attachment_list
 
 
 @thread_router.get("/{thread_id}/pagination")

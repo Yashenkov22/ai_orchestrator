@@ -337,3 +337,9 @@ class UpdateProfileDataSchema(BaseModel):
 #     account_information: str | None
 #     context: str | None
 #     messages: list[MessageSchema]
+
+
+class AttachmentListSchema(BaseModel):
+    ts: str
+    sender: str
+    attachment: AttachmentSchema
