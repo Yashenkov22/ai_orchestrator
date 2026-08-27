@@ -2053,7 +2053,7 @@ async def try_add_messages(message_data: dict,
             
             new_generated_message = None
 
-            if thread.color_level in (ThreadColorEnum.RED, ThreadColorEnum.GREY) and thread.is_pinned:
+            if thread.color_level in (ThreadColorEnum.YELLOW, ThreadColorEnum.GREY) and thread.is_pinned:
                 # проверить и если нужно обновить контекст 
                 # и json о юзере, обновить last_message_id в Thread
                 memory_updated = await try_update_thread_memory(thread,

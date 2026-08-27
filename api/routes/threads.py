@@ -207,7 +207,7 @@ async def get_threads(admin: admin_dependency,
         if isinstance(thread.user_information, dict):
             user_information = thread.user_information
         else:
-            user_information = None
+            user_information = thread.original_user_information or None
 
     thread_info = {
         'thread_name': f'{thread.account.username} - {thread.insta_user.username}',
