@@ -729,6 +729,7 @@ async def generate_thread_momory_by_id(cxt,
                                                             _session)
                 # await sleep(2)
         except Exception as ex:
+            print(' -> ERROR, NO SAVED',ex)
             pass
         else:
             await execute_and_catch_db_error(_session.commit(),
