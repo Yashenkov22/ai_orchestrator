@@ -881,6 +881,7 @@ async def get_threads_by_color(color: str,
         )\
         .where(
             Thread.color_level == color,
+            Thread.is_pinned == True,
         )
     )
 
