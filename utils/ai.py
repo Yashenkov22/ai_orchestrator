@@ -40,7 +40,7 @@ async def generate_thread_context(thread_context: str | None,
     print('запрос к нейронке...')
     
     # if for_db:
-    model="deepseek-v4-flash"
+    model="deepseek/deepseek-v4-flash-0731"
     _client = deepseek_client
     system_content = (
         # "Ты выполняешь ТОЛЬКО одну техническую функцию: сжимаешь длительную переписку в Instagram Direct "
@@ -142,7 +142,7 @@ async def ai_translate_message(text: str):
         user_content = text
 
         response = await deepseek_client.chat.completions.create(
-            model="deepseek-v4-flash",
+            model="deepseek/deepseek-v4-flash-0731",
             messages=[
                 {
                     "role": "system",
@@ -185,7 +185,7 @@ async def ai_translate_user_information(text: str):
         user_content = text
 
         response = await deepseek_client.chat.completions.create(
-            model="deepseek-v4-flash",
+            model="deepseek/deepseek-v4-flash-0731",
             messages=[
                 {
                     "role": "system",
@@ -393,7 +393,7 @@ async def ai_extract_user_info(text: str, existing_info: dict | None = None) -> 
     )
 
     response = await deepseek_client.chat.completions.create(
-        model="deepseek-v4-flash",
+        model="deepseek/deepseek-v4-flash-0731",
         messages=[
             {"role": "system", "content": system_content},
             {"role": "user", "content": user_content},
