@@ -871,3 +871,22 @@ async def get_message_count_after_last_message_id(thread_id: int,
                                            session)
 
     return res.scalar_one()
+
+
+async def get_threads_by_color(color: str,
+                               session: AsyncSession):
+    query = (
+        select(
+            Thread
+        )\
+        .where(
+            Thread.color_level == color,
+        )
+    )
+
+    res = await execute_and_catch_db_error(session.execute(query),
+                                           session)
+
+    return res.scalars().all()
+
+    

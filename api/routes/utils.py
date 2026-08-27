@@ -1,6 +1,7 @@
 import base64
 import os
 import shutil
+import asyncio
 
 from time import time
 
@@ -17,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from db.queries import (execute_and_catch_db_error,
-                        get_account_by_id, get_message_only_by_id, get_thread_only_by_id, try_update_message_text)
+                        get_account_by_id, get_message_only_by_id, get_thread_only_by_id, get_threads_by_color, try_update_message_text)
 
 from db.base import Account, Thread
 
@@ -245,7 +246,6 @@ async def try_translate_text(admin: admin_dependency,
             return 'Error with try translate text'
 
 
-
 @utils_router.get("/test_translate")
 async def try_translate_text2(admin: admin_dependency,
                              session: session_dependency,
@@ -315,3 +315,41 @@ async def get_ai_model_list(admin: admin_dependency,
                             arq_pool: arq_dependency,
                             session: session_dependency):
     return [model.value for model in AIModelEnum]
+
+
+@utils_router.get("/generate_thread_memories_for_color")
+async def generate_thread_memories(admin: admin_dependency,
+                                   arq_pool: arq_dependency,
+                                   session: session_dependency,
+                                   secret: str,
+                                   color: ThreadColorEnum):
+    if secret != SECRET_API:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+
+
+    job = await arq_pool.enqueue_job(
+        'generate_thread_momories_by_color_level',
+        color,
+        _queue_name='arq:utils',
+    )
+
+    return job.job_id
+
+    # threads = await get_threads_by_color(color,
+    #                                      session)
+
+    # if not threads:
+    #     return
+
+    # thread_len = len(threads)
+
+    # for idx, thread in enumerate(threads):
+    #     print(f'{idx+1} iteration from {thread_len}')
+    #     memory_updated = await try_update_thread_memory(thread,
+    #                                                     session,
+    #                                                     arq_pool)
+    #     await asyncio.sleep(2)
+
+    # await execute_and_catch_db_error(session.commit(),
+    #                                  session,
+    #                                  with_rollback=True)

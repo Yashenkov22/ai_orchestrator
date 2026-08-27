@@ -21,7 +21,7 @@ from db.queries import (execute_and_catch_db_error,
                         get_messages_only_by_id,
                         get_thread_by_id,
                         get_thread_only_by_id,
-                        get_message_only_by_id)
+                        get_message_only_by_id, get_threads_by_color)
 
 from utils.base import (try_block_thread,
                         try_get_profile_port,
@@ -708,3 +708,27 @@ async def translate_user_information_by_thread_id(cxt,
         await execute_and_catch_db_error(_session.commit(),
                                             _session,
                                             with_rollback=True)
+
+
+async def generate_thread_momories_by_color_level(cxt,
+                                                  color: str):
+    sessionmaker= cxt['sessionmaker']
+    async with sessionmaker() as _session:
+        _session: AsyncSession
+
+        threads = await get_threads_by_color(color,
+                                            _session)
+        if not threads:
+            return
+
+        thread_len = len(threads)
+
+        for idx, thread in enumerate(threads):
+            print(f'{idx+1} iteration from {thread_len}...')
+            memory_updated = await try_update_thread_memory(thread,
+                                                            _session)
+            await sleep(2)
+
+        await execute_and_catch_db_error(_session.commit(),
+                                        _session,
+                                        with_rollback=True)

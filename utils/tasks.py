@@ -163,144 +163,6 @@ async def scroll_inbox_until_loaded(page, collected_data, known_map=None, max_ro
                 print(f"[scroll-inbox] батч #{i} без новых сообщений — стоп")
                 break
 
-# async def scroll_inbox_until_loaded(
-
-#     page,
-
-#     collected_data,
-
-#     known_map=None,
-
-#     max_rounds=110,
-
-#     wait_after_scroll=3.0,
-
-#     poll_interval=0.3,
-
-# ):
-
-#     item_sel = 'div[role="button"]'
-
-#     scroll_js = """() => {
-
-#         let best = null, max = 50;
-
-#         for (const c of document.querySelectorAll('*')) {
-
-#             const s = getComputedStyle(c);
-
-#             if (s.overflowY === 'auto' || s.overflowY === 'scroll') {
-
-#                 const d = c.scrollHeight - c.clientHeight;
-
-#                 if (d > max) {
-
-#                     best = c;
-
-#                     max = d;
-
-#                 }
-
-#             }
-
-#         }
-
-#         if (!best) {
-
-#             return {found: false};
-
-#         }
-
-#         const before = best.scrollTop;
-
-#         best.scrollTop = best.scrollHeight;
-
-#         return {
-
-#             found: true,
-
-#             before: before,
-
-#             after: best.scrollTop,
-
-#             sh: best.scrollHeight,
-
-#             ch: best.clientHeight
-
-#         };
-
-#     }"""
-
-#     for i in range(max_rounds):
-
-#         pages_before = len(
-
-#             collected_data.get('SlideMailboxPages', [])
-
-#         )
-
-#         res = await page.evaluate(scroll_js)
-
-#         count = await page.locator(item_sel).count()
-
-#         print(
-
-#             f"[scroll-inbox #{i}] "
-
-#             f"count={count} "
-
-#             f"pages_before={pages_before} "
-
-#             f"scroll={res}"
-
-#         )
-
-#         if not res.get('found'):
-
-#             print("[scroll-inbox] scrollable container not found")
-
-#             break
-
-#         # Ждём, пока Instagram подгрузит следующий батч
-
-#         waited = 0.0
-
-#         while waited < wait_after_scroll:
-
-#             await page.wait_for_timeout(
-
-#                 int(poll_interval * 1000)
-
-#             )
-
-#             waited += poll_interval
-
-#             pages_after = len(
-
-#                 collected_data.get('SlideMailboxPages', [])
-
-#             )
-
-#             if pages_after > pages_before:
-
-#                 print(
-
-#                     f"[scroll-inbox #{i}] "
-
-#                     f"new pages: {pages_before} -> {pages_after}"
-
-#                 )
-
-#                 break
-
-#         # Просто продолжаем скроллить.
-
-#         # Никаких known_map / batch_has_new_messages / empty_rounds.
-
-    
-
-#     return await page.locator(item_sel).count()
-
 
 async def scroll_inbox_until_loaded_whole_thread_list(
     page,
@@ -2197,14 +2059,12 @@ async def try_add_messages(message_data: dict,
                 memory_updated = await try_update_thread_memory(thread,
                                                                 session,
                                                                 redis_pool)
-
                 print(f'is memory updated - {memory_updated}')
-                # context_from_db = thread.context or ''
+
                 messages_for_raw_log = await get_new_thread_messages(thread_id=thread.id,
                                                                      last_message_id=thread.last_message_id,
                                                                      session=session)
                 raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(messages_for_raw_log)
-
 
                 generated_text = await generate_new_message_to_thread(account_info=thread.account.information,
                                                                       thread=thread,
@@ -2336,7 +2196,7 @@ async def try_add_messages(message_data: dict,
 
 async def try_update_thread_memory(thread: Thread,
                                    session: AsyncSession,
-                                   redis_pool: ArqRedis) -> bool:
+                                   redis_pool: ArqRedis = None) -> bool:
     print('here ')
 
     message_count_after_last_message_id = await get_message_count_after_last_message_id(thread_id=thread.id,
@@ -2367,17 +2227,6 @@ async def try_update_thread_memory(thread: Thread,
                                                                    new_original_user_information)
 
         await asyncio.sleep(2)
-
-    # try:
-    #     json.loads(new_original_user_information)
-    # except Exception as ex:
-    #     print(ex)
-    # else:
-    #     job = await redis_pool.enqueue_job(
-    #         'try_translate_message_text',
-    #         new_original_user_information,
-    #         _queue_name='arq:utils',
-    #     )fdssfs
 
     print('here 2')
 
