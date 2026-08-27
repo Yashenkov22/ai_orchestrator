@@ -327,29 +327,19 @@ async def generate_thread_memories(admin: admin_dependency,
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
 
-    job = await arq_pool.enqueue_job(
-        'generate_thread_momories_by_color_level',
-        color,
-        _queue_name='arq:utils',
-    )
+    threads = await get_threads_by_color(color='yellow',
+                                         session=session)
 
-    return job.job_id
+    task_counter = 0
 
-    # threads = await get_threads_by_color(color,
-    #                                      session)
+    for thread in threads:    
+        job = await arq_pool.enqueue_job(
+            'generate_thread_momory_by_id',
+            thread.id,
+            _queue_name='arq:utils',
+        )
+        task_counter += 1
 
-    # if not threads:
-    #     return
+    return f'{task_counter} background tasks was running...'
 
-    # thread_len = len(threads)
 
-    # for idx, thread in enumerate(threads):
-    #     print(f'{idx+1} iteration from {thread_len}')
-    #     memory_updated = await try_update_thread_memory(thread,
-    #                                                     session,
-    #                                                     arq_pool)
-    #     await asyncio.sleep(2)
-
-    # await execute_and_catch_db_error(session.commit(),
-    #                                  session,
-    #                                  with_rollback=True)

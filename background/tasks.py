@@ -710,25 +710,27 @@ async def translate_user_information_by_thread_id(cxt,
                                             with_rollback=True)
 
 
-async def generate_thread_momories_by_color_level(cxt,
-                                                  color: str):
+async def generate_thread_momory_by_id(cxt,
+                                       thread_id: int):
     sessionmaker= cxt['sessionmaker']
     async with sessionmaker() as _session:
         _session: AsyncSession
 
-        threads = await get_threads_by_color(color,
+        thread = await get_thread_only_by_id(thread_id,
                                             _session)
-        if not threads:
+        if not thread:
             return
 
-        thread_len = len(threads)
-
-        for idx, thread in enumerate(threads):
-            print(f'{idx+1} iteration from {thread_len}...')
+        # thread_len = len(threads)
+        try:
+            # for idx, thread in enumerate(threads):
+                # print(f'{idx+1} iteration from {thread_len}...')
             memory_updated = await try_update_thread_memory(thread,
                                                             _session)
-            await sleep(2)
-
-        await execute_and_catch_db_error(_session.commit(),
-                                        _session,
-                                        with_rollback=True)
+                # await sleep(2)
+        except Exception as ex:
+            pass
+        else:
+            await execute_and_catch_db_error(_session.commit(),
+                                            _session,
+                                            with_rollback=True)

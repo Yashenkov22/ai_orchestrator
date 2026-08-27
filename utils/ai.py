@@ -107,7 +107,7 @@ async def generate_thread_context(thread_context: str | None,
 
     if response.choices:
         result = response.choices[0].message.content
-        print('ответ нейронки',result)
+        # print('ответ нейронки',result)
     else:
         result = ''
     
@@ -395,11 +395,16 @@ async def ai_extract_user_info(text: str, existing_info: dict | None = None) -> 
             {"role": "system", "content": system_content},
             {"role": "user", "content": user_content},
         ],
+        response_format={"type": "json_object"},
         timeout=120.0,
     )
 
     raw = response.choices[0].message.content if response.choices else '{}'
-    print('ответ нейронки (профиль)', raw)
+    # print('ответ нейронки (профиль)', raw)
+
+    if isinstance(raw, dict):
+        print(' -> return valid dict!')
+        return raw
 
     try:
         return json.loads(raw)

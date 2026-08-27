@@ -2197,7 +2197,7 @@ async def try_add_messages(message_data: dict,
 async def try_update_thread_memory(thread: Thread,
                                    session: AsyncSession,
                                    redis_pool: ArqRedis = None) -> bool:
-    print('here ')
+    # print('here ')
 
     message_count_after_last_message_id = await get_message_count_after_last_message_id(thread_id=thread.id,
                                                                                         last_message_id=thread.last_message_id,
@@ -2228,7 +2228,7 @@ async def try_update_thread_memory(thread: Thread,
 
         await asyncio.sleep(2)
 
-    print('here 2')
+    # print('here 2')
 
     thread.context = new_thread_context
     thread.original_user_information = new_original_user_information
