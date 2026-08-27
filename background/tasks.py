@@ -735,3 +735,4 @@ async def generate_thread_momory_by_id(cxt,
             await execute_and_catch_db_error(_session.commit(),
                                             _session,
                                             with_rollback=True)
+            print(f' -> thread {thread_id} has been updated!')

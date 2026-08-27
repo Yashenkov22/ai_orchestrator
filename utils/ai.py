@@ -15,11 +15,14 @@ from config import AI_API_TOKEN, DEEPSEEK_API_TOKEN, AI_ORCA_API_TOKEN
 
 
 
+# deepseek_client = AsyncOpenAI(
+#     api_key=DEEPSEEK_API_TOKEN,
+#     base_url="https://api.deepseek.com"   # было https://openrouter.ai/api/v1
+# )
 deepseek_client = AsyncOpenAI(
-    api_key=DEEPSEEK_API_TOKEN,
-    base_url="https://api.deepseek.com"   # было https://openrouter.ai/api/v1
+    api_key=AI_API_TOKEN,
+    base_url="https://openrouter.ai/api/v1"
 )
-
 
 openrouter_client = AsyncOpenAI(
     api_key=AI_API_TOKEN,
@@ -411,11 +414,6 @@ async def ai_extract_user_info(text: str, existing_info: dict | None = None) -> 
     except (json.JSONDecodeError, TypeError):
         print(f'[ai_extract_user_info] invalid JSON: {raw!r}')
         return existing_info or {}   # при сбое парсинга — не теряем то, что уже было
-
-
-
-
-
 
 
 async def ai_test_photo(photo_url: str):
