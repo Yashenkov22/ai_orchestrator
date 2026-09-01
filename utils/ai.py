@@ -245,7 +245,7 @@ async def generate_new_message_to_thread(account_info: str,
         # "user - это собеседник, assistant - это девушка, которая общается с user`ом\n"
         # "Ты генерируешь сообщение от лица assistant\n"
 
-        'Your only task is to generate ONE message to send to the interlocutor in Instagram Direct, ',
+        'Your only task is to generate ONE message to send to the interlocutor in Instagram Direct, '
         'as a natural and realistic reply in the conversation. '
         'DO NOT create a summary, recap, or retelling of the conversation — your response must be a single message, as if you were writing directly to the interlocutor right now.'
         'The conversation context and new messages provided below are for understanding the situation only — do not repeat or summarize them; simply reply to them.'
