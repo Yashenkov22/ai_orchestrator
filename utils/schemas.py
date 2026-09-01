@@ -10,7 +10,7 @@ from fastapi import HTTPException
 
 from pydantic.alias_generators import to_camel
 
-from utils.enums import MessageStatusEnum, MessageTypeEnum, ThreadColorEnum, AIModelEnum
+from utils.enums import MessageStatusEnum, MessageTypeEnum, ThreadColorEnum, AIModelEnum, LanguageEnum
 
 
 
@@ -269,6 +269,11 @@ class EditThreadFullParseSchema(BaseModel):
     thread_id: int
 
 
+class EditThreadLanguageSchema(BaseModel):
+    thread_id: int
+    language: LanguageEnum
+
+
 class EditThreadNotesSchema(BaseModel):
     thread_id: int
     notes: str | None
@@ -314,6 +319,7 @@ class DetailThreadSchema(BaseModel):
     message_count: int
     ai_model: str
     ai_temperature: float
+    language: str
     # full_parse: bool
     account_information: AccountInformationSchema | None
     user_information: UserInformationSchema | None

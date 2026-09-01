@@ -19,7 +19,7 @@ from utils.schemas import (AttachmentListSchema,
                            EditThreadAIModelSchema,
                            EditThreadAITemperatureSchema,
                            EditThreadColorLevelSchema,
-                           EditThreadFullParseSchema,
+                           EditThreadFullParseSchema, EditThreadLanguageSchema,
                            EditThreadNotesSchema,
                            EditThreadPinMarkSchema,
                            EditThreadUnreadMarkSchema,
@@ -218,6 +218,7 @@ async def get_threads(admin: admin_dependency,
         'ai_model': thread.ai_model,
         'ai_temperature': thread.ai_temperature,
         'message_count': message_count,
+        'language': thread.language,
         'account_information': {
             'photo_url': generate_valid_media_url(thread.account.photo_url),
             'information': thread.account.information,
@@ -662,3 +663,42 @@ async def edit_notes_by_thread_id(data: EditThreadNotesSchema,
     await execute_and_catch_db_error(session.commit(),
                                      session,
                                      with_rollback=True)
+
+
+
+@thread_router.patch("/edit_language_by_thread_id")
+async def edit_language_by_thread_id(data: EditThreadLanguageSchema,
+                                     admin: admin_dependency,
+                                     session: session_dependency):
+    admin_id, is_main_admin = admin
+
+    query = (
+        select(Thread)
+        .where(
+            Thread.id == data.thread_id,
+        )
+    )
+
+    result = await execute_and_catch_db_error(session.execute(query),
+                                              session)
+    
+    thread: Thread = result.scalar_one_or_none()
+
+    if not thread:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Thread not found')
+
+    if not is_main_admin:
+        if thread.account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+
+    thread.language = data.language
+
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)
+
+    return {
+        'thread_id': data.thread_id,
+        'language': thread.language,
+    }

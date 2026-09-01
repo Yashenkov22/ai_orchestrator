@@ -28,7 +28,7 @@ from utils.ai import ai_extract_user_info, ai_test_photo, ai_translate_message
 from utils.dependencies import (admin_dependency,
                                 session_dependency,
                                 arq_dependency)
-from utils.enums import MessageStatusEnum, ThreadColorEnum, AIModelEnum
+from utils.enums import MessageStatusEnum, ThreadColorEnum, AIModelEnum, LanguageEnum
 from auth.schemas import SecretShcema
 
 from utils.base import (generate_valid_media_url,
@@ -315,6 +315,13 @@ async def get_ai_model_list(admin: admin_dependency,
                             arq_pool: arq_dependency,
                             session: session_dependency):
     return [model.value for model in AIModelEnum]
+
+
+@utils_router.get("/get_language_list")
+async def get_language_list(admin: admin_dependency,
+                            arq_pool: arq_dependency,
+                            session: session_dependency):
+    return sorted(model.value for model in LanguageEnum)
 
 
 @utils_router.get("/generate_thread_memories_for_color")

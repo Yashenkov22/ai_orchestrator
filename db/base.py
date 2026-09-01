@@ -25,7 +25,7 @@ from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy import select, func
 from sqlalchemy.orm import column_property
 
-from utils.enums import AIModelEnum, MessageStatusEnum, MessageTypeEnum, SessionStatusEnum, ThreadColorEnum
+from utils.enums import AIModelEnum, LanguageEnum, MessageStatusEnum, MessageTypeEnum, SessionStatusEnum, ThreadColorEnum
 
 from config import db_url
 
@@ -296,8 +296,10 @@ class Thread(Base):
     ai_temperature = Column(Float,
                             default=0.5,
                             server_default='0.5')
-    # full_parse = Column(Boolean, default=False,
-    #                     server_default='false')
+    language = Column(String,
+                      nullable=False,
+                      default=LanguageEnum.ENGLISH,
+                      server_default='English')
     
     account = relationship("Account", back_populates="threads")
     insta_user = relationship("InstaUser", back_populates="threads")
