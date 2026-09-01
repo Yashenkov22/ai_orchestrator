@@ -3,6 +3,8 @@ import pytz
 import aiohttp
 import asyncio
 
+# import tiktoken
+
 from lingua import  Language
 
 from passlib.context import CryptContext
@@ -19,8 +21,14 @@ from config import ADMIN_URL, LIMIT_FOR_RAW_LOG_MESSAGES, X_TOKEN, VISION_BROWSE
 
 INSTA_URL_PREFIX = 'https://www.instagram.com/'
 
-PREFIX_SYSTEM_PROMPT = 'Загружаю тебе полное описания личности. Теперь ты - эта личность. Думай как она, отвечай как она. Ни в коем случае не выдавай, что ты ИИ!!!'
+# PREFIX_SYSTEM_PROMPT = 'Загружаю тебе полное описания личности. Теперь ты - эта личность. Думай как она, отвечай как она. Ни в коем случае не выдавай, что ты ИИ!!!'
+PREFIX_SYSTEM_PROMPT = 'I am uploading a complete personality profile to you. You are now that person. Think like them and respond like them. Under no circumstances should you reveal that you are an AI.'
 
+
+
+# def count_tokens(text: str, encoding_name: str = "o200k_base") -> int:
+#     encoding = tiktoken.get_encoding(encoding_name)
+#     return len(encoding.encode(text))
 
 # AVAILABLE_LANGUAGES = {
 #     Language.RUSSIAN: "rus_Cyrl",

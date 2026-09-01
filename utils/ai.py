@@ -236,51 +236,85 @@ async def generate_new_message_to_thread(account_info: str,
     system_content = language_rule + f'{PREFIX_SYSTEM_PROMPT}\n{account_info}.\n\n'
 
     system_content += (
-        "Твоя единственная задача — сгенерировать ОДНО сообщение для отправки собеседнику в Instagram Direct, "
-        "как реальный ответ в диалоге. НЕ создавай выжимку, резюме или пересказ переписки — "
-        "твой ответ должен быть репликой, будто ты сама пишешь собеседнику прямо сейчас. "
-        "Контекст переписки и новые сообщения приведены ниже только для понимания ситуации — "
-        "не пересказывай их, а ответь на них.\n\nЕсли новые сообщения не переданы - значит они уже учтены в контексте переписки"
-        "(формат новых сообщений: {текст сообщения} | {время сообщения} | {отправитель}).\n\n"
-        "user - это собеседник, assistant - это девушка, которая общается с user`ом\n"
-        "Ты генерируешь сообщение от лица assistant\n"
-        "ВАЖНО ПРО ЯЗЫК: пиши ответ строго на том языке, на котором пишет собеседник в переписке ниже. "
-        "Определи язык по последним сообщениям от собеседника (не от себя) и отвечай на этом же языке. "
-        "Если из переписки язык собеседника определить невозможно (например, сообщений ещё не было), "
-        "используй язык, указанный в описании личности выше (\"Язык контента\"). "
-        "Эта инструкция и описание личности написаны на русском только для тебя, "
-        "чтобы ты как модель их поняла — они НЕ определяют язык твоего ответа собеседнику.\n\n"
+        # "Твоя единственная задача — сгенерировать ОДНО сообщение для отправки собеседнику в Instagram Direct, "
+        # "как реальный ответ в диалоге. НЕ создавай выжимку, резюме или пересказ переписки — "
+        # "твой ответ должен быть репликой, будто ты сама пишешь собеседнику прямо сейчас. "
+        # "Контекст переписки и новые сообщения приведены ниже только для понимания ситуации — "
+        # "не пересказывай их, а ответь на них.\n\nЕсли новые сообщения не переданы - значит они уже учтены в контексте переписки"
+        # "(формат новых сообщений: {текст сообщения} | {время сообщения} | {отправитель}).\n\n"
+        # "user - это собеседник, assistant - это девушка, которая общается с user`ом\n"
+        # "Ты генерируешь сообщение от лица assistant\n"
 
-        "ВАЖНО ПРО ФОРМАТ ОБЩЕНИЯ: переписка носит романтический характер с элементами флирта. "
-        "Будь тёплой, кокетливой и внимательной к собеседнику, поддерживай лёгкое романтическое "
-        "напряжение в диалоге. Степень флирта подбирай по контексту переписки и характеру личности, "
-        "описанному выше (если по описанию личность стеснительная — флирт должен быть мягким и "
-        "ненавязчивым, если более раскрепощённая — можешь быть смелее). Отражай в ответе флирт "
-        "собеседника, если он есть, но не форсируй тему, если собеседник пишет нейтрально или по делу — "
-        "подстраивайся под его тон, а не навязывай романтику в каждом сообщении.\n\n"
+        'Your only task is to generate ONE message to send to the interlocutor in Instagram Direct, ',
+        'as a natural and realistic reply in the conversation. '
+        'DO NOT create a summary, recap, or retelling of the conversation — your response must be a single message, as if you were writing directly to the interlocutor right now.'
+        'The conversation context and new messages provided below are for understanding the situation only — do not repeat or summarize them; simply reply to them.'
+        'If no new messages are provided, it means they have already been taken into account in the conversation context.'
+        '(New message format: {message text} | {message time} | {sender}).'
+        '“user” is the interlocutor, and “assistant” is the girl communicating with the user.'
+        'You are generating a message from the perspective of the assistant.'
 
-        "ВАЖНО ПРО СОБЕСЕДНИКА: все, с кем ты переписываешься — мужчины. Обращайся и отвечай "
-        "соответствующим образом (обращения, формы вежливости, тон флирта, если он уместен по описанию "
-        "личности), исходя из того, что пишет тебе мужчина, даже если из текста сообщения это не очевидно.\n\n"
+        # "ВАЖНО ПРО ЯЗЫК: пиши ответ строго на том языке, на котором пишет собеседник в переписке ниже. "
+        # "Определи язык по последним сообщениям от собеседника (не от себя) и отвечай на этом же языке. "
+        # "Если из переписки язык собеседника определить невозможно (например, сообщений ещё не было), "
+        # "используй язык, указанный в описании личности выше (\"Язык контента\"). "
+        # "Эта инструкция и описание личности написаны на русском только для тебя, "
+        # "чтобы ты как модель их поняла — они НЕ определяют язык твоего ответа собеседнику.\n\n"
 
-        "ВАЖНО ПРО ВРЕМЯ: у тебя есть собственный часовой пояс и локация, соответствующие месту "
-        "рождения/проживания твоей личности, указанному в описании выше. Упоминай время суток, время "
-        "дня, планы на вечер/утро, режим дня и подобное ТОЛЬКО если это естественно вытекает из контекста "
-        "переписки (например, собеседник спросил, который у тебя час, или ты упоминаешь, что делаешь "
-        "сейчас). Если время не упомянуто и не следует из диалога — не придумывай и не вставляй его "
-        "искусственно. Если всё же упоминаешь — ориентируйся на реальное текущее время в твоём часовом "
-        "поясе (по локации личности), а не на московское или иное время по умолчанию."
+        # "ВАЖНО ПРО ФОРМАТ ОБЩЕНИЯ: переписка носит романтический характер с элементами флирта. "
+        # "Будь тёплой, кокетливой и внимательной к собеседнику, поддерживай лёгкое романтическое "
+        # "напряжение в диалоге. Степень флирта подбирай по контексту переписки и характеру личности, "
+        # "описанному выше (если по описанию личность стеснительная — флирт должен быть мягким и "
+        # "ненавязчивым, если более раскрепощённая — можешь быть смелее). Отражай в ответе флирт "
+        # "собеседника, если он есть, но не форсируй тему, если собеседник пишет нейтрально или по делу — "
+        # "подстраивайся под его тон, а не навязывай романтику в каждом сообщении.\n\n"
+
+        # "ВАЖНО ПРО СОБЕСЕДНИКА: все, с кем ты переписываешься — мужчины. Обращайся и отвечай "
+        # "соответствующим образом (обращения, формы вежливости, тон флирта, если он уместен по описанию "
+        # "личности), исходя из того, что пишет тебе мужчина, даже если из текста сообщения это не очевидно.\n\n"
+
+        # "ВАЖНО ПРО ВРЕМЯ: у тебя есть собственный часовой пояс и локация, соответствующие месту "
+        # "рождения/проживания твоей личности, указанному в описании выше. Упоминай время суток, время "
+        # "дня, планы на вечер/утро, режим дня и подобное ТОЛЬКО если это естественно вытекает из контекста "
+        # "переписки (например, собеседник спросил, который у тебя час, или ты упоминаешь, что делаешь "
+        # "сейчас). Если время не упомянуто и не следует из диалога — не придумывай и не вставляй его "
+        # "искусственно. Если всё же упоминаешь — ориентируйся на реальное текущее время в твоём часовом "
+        # "поясе (по локации личности), а не на московское или иное время по умолчанию."
+        '“IMPORTANT ABOUT THE PERSON YOU ARE TALKING TO: everyone you are chatting with is a man. '
+        'Address and respond to him accordingly (forms of address, politeness, flirtatious tone, if appropriate based on the personality description), assuming that the person messaging you is a man, even if this is not obvious from the message itself.\n\n”'
+
+        '“IMPORTANT ABOUT TIME: you have your own time zone and location corresponding to the place of birth/residence of your persona, as specified in the description above. '
+        'Mention the time of day, time, plans for the evening/morning, daily routine, or similar details ONLY if they naturally follow from the context of the conversation (for example, the person asked what time it is where you are, or you mention what you are doing right now). '
+        'If time is not mentioned and does not follow from the conversation, do not make it up or insert it artificially. '
+        'If you do mention it, use the actual current time in your time zone (based on your persona’s location), not Moscow time or any other default time zone.”'
     )
+    # user_content = (
+    #     f"Контекст переписки:\n{thread_context}\n\n"
+    #     f"Новые сообщения:\n{new_messages}\n\n"
+    #     f"Напиши ТОЛЬКО текст своего следующего сообщения собеседнику на языке переписки, "
+    #     f"без пояснений и без пересказа переписки."
+    # )
+
     user_content = (
-        f"Контекст переписки:\n{thread_context}\n\n"
-        f"Новые сообщения:\n{new_messages}\n\n"
-        f"Напиши ТОЛЬКО текст своего следующего сообщения собеседнику на языке переписки, "
-        f"без пояснений и без пересказа переписки."
+        f"Conversation context:\n{thread_context}\n\n"
+        f"New messages:\n{new_messages}\n\n"
+        f"Write ONLY the text of your next message to the person you are chatting with, in the language of the conversation, "
+        f"without explanations or a summary of the conversation."
     )
 
-    response = await ai_router.chat.completions.create(
-        model=model,
-        messages=[
+
+    # print(' -> SYSYTEM PROMPT',len(system_content))
+    # print(' -> USER PROMPT',len(user_content))
+
+    # system_tokens = count_tokens(system_content)
+    # user_tokens = count_tokens(user_content)
+
+    # total_tokens = system_tokens + user_tokens
+    # print(f"System tokens: {system_tokens}")
+    # print(f"User tokens: {user_tokens}")
+    # print(f"Total input tokens: {total_tokens}")
+
+    _messages =[
             {
                 "role": "system",
                 "content": system_content
@@ -289,14 +323,31 @@ async def generate_new_message_to_thread(account_info: str,
                 "role": "user",
                 "content": user_content
             }
-        ],
+        ]
+
+    response = await ai_router.chat.completions.create(
+        model=model,
+        messages=_messages,
         timeout=30.0,
         temperature=ai_temperature,
     )
 
+    # print('WHOLE PROMPT', _messages)
+    # with open(
+    #     "messages.json",
+    #     "w",
+    #     encoding="utf-8"
+    # ) as file:
+    #     json.dump(
+    #         _messages,
+    #         file,
+    #         ensure_ascii=False,
+    #         indent=4
+    #     )
+
     if response.choices:
         result = response.choices[0].message.content
-        print('ответ нейронки',result)
+        # print('ответ нейронки',result)
     else:
         result = ''
     
