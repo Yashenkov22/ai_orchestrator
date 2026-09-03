@@ -282,6 +282,9 @@ async def create_new_message(data: CreateMessageSchema,
         'status': MessageStatusEnum.PENDING,
     }
 
+    if data.attachment:
+        insert_data.update({'type': data.attachment['media_type']})
+
     new_message = Message(**insert_data)
     session.add(new_message)
 

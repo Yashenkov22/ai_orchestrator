@@ -1,5 +1,6 @@
 import json
 
+from math import ceil
 import time
 
 from typing import Literal
@@ -14,10 +15,10 @@ from sqlalchemy import select, and_, text
 
 from sqlalchemy.dialects.postgresql import JSONB
 
-from db.base import Account, Thread
-from db.queries import (execute_and_catch_db_error,
+from db.base import Account, Thread, Message
+from db.queries import (execute_and_catch_db_error, get_all_message_count,
                         get_message_by_id,
-                        get_account_by_id,
+                        get_account_by_id, get_message_slice,
                         get_messages_only_by_id,
                         get_thread_by_id,
                         get_thread_only_by_id,
@@ -33,7 +34,7 @@ from utils.tasks import (parse_thread_playwright,
                          test_playwright,
                          try_update_thread_memory)
 from utils.ai import ai_translate_message, ai_translate_user_information
-from utils.enums import MessageStatusEnum
+from utils.enums import MessageStatusEnum, MessageTypeEnum
 
 from websocket.redis_listener import publish_event
 
@@ -736,3 +737,69 @@ async def generate_thread_momory_by_id(cxt,
                                             _session,
                                             with_rollback=True)
             print(f' -> thread {thread_id} has been updated!')
+
+
+def get_message_type(message: Message):
+    attachments = message.attachments
+
+    if attachments:
+        if len(attachments) == 1:
+            attachment = attachments[0]
+            type = attachment.media_type
+        elif len(attachments) == 2:
+            media_urls = [att.media_url for att in attachments]
+
+            if any(media_url for media_url in media_urls if media_url.find('video_preview_') != -1):
+                type = MessageTypeEnum.VIDEO
+            else:
+                type = MessageTypeEnum.MUTLI_MEDIA
+        else:
+            type = MessageTypeEnum.MUTLI_MEDIA
+            
+    else:
+        try:
+            message_text: str = message.text
+
+            if message_text.find('missed an audio call') != -1:
+                type = MessageTypeEnum.SYSTEM
+            elif message_text.find('a video chat') != -1:
+                type = MessageTypeEnum.SYSTEM
+            elif message_text == '* реакция на сообщение в чате':
+                type = MessageTypeEnum.REACTION
+            else:
+                type = MessageTypeEnum.TEXT
+        except Exception as ex:
+            print('ERROR WITH UNDEFINED TYPE', ex)
+            type = MessageTypeEnum.UNDEFINED
+
+    return type
+
+
+async def organize_new_message_types(cxt):
+    print('start organize message types...')
+    sessionmaker= cxt['sessionmaker']
+
+    limit_for_iteration = 1000
+
+    offset = 0
+
+    async with sessionmaker() as _session:
+        _session: AsyncSession
+        message_count = await get_all_message_count(_session)
+
+        iter_count = ceil(message_count / limit_for_iteration)
+
+        for _ in range(iter_count):
+            message_slice = await get_message_slice(offset=offset,
+                                                    limit=limit_for_iteration,
+                                                    session=_session)
+            offset += limit_for_iteration
+
+            for message in message_slice:
+                message: Message
+                message_type = get_message_type(message)
+                message.type = message_type
+        
+        await execute_and_catch_db_error(_session.commit(),
+                                         _session,
+                                         with_rollback=True)

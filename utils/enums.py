@@ -1,13 +1,28 @@
 from enum import Enum
 
 
+# class MessageTypeEnum(str, Enum):
+#     TEXT = "text"
+#     VIDEO = "video"
+#     PHOTO = "photo"
+#     AUDIO = "audio"
+#     AUDIOMESSAGE = "audiomessage"
+#     VIDEOMESSAGE = "videomessage"
+
+
 class MessageTypeEnum(str, Enum):
+    # without attachments
     TEXT = "text"
-    VIDEO = "video"
+    SYSTEM = 'system'
+    REACTION = 'reaction'
+    UNDEFINED = 'undefined'
+
+    # with attachments
+    SHARED = 'shared'
     PHOTO = "photo"
+    VIDEO = "video"
     AUDIO = "audio"
-    AUDIOMESSAGE = "audiomessage"
-    VIDEOMESSAGE = "videomessage"
+    MUTLI_MEDIA = 'multi_media'
 
 
 class MessageStatusEnum(str, Enum):

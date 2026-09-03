@@ -176,9 +176,10 @@ class Message(Base):
     text = Column(Text,
                   nullable=True,
                   default=None)
-    # type = Column(String,
-    #               nullable=False,
-    #               default=MessageTypeEnum.TEXT)
+    type = Column(String,
+                  nullable=False,
+                  default=MessageTypeEnum.TEXT,
+                  server_default='text')
     sender = Column(String,
                     nullable=False)
     status = Column(String,

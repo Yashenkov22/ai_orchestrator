@@ -890,4 +890,36 @@ async def get_threads_by_color(color: str,
 
     return res.scalars().all()
 
+
+
+async def get_all_message_count(session: AsyncSession):
+    query = (
+        select(
+            func.count(Message.id)
+        )
+    )
+
+    query = select(func.count(Message.id))
+
+    result = await session.execute(query)
+
+    count = result.scalar_one()
+
+    return count
+
+
+async def get_message_slice(offset: int,
+                            limit: int,
+                            session: AsyncSession):
+    query = (
+        select(Message)
+        .options(selectinload(Message.attachments))
+        .order_by(Message.id.asc())
+        .limit(limit)
+        .offset(offset)
+    )
     
+    messages = await execute_and_catch_db_error(session.execute(query),
+                                               session)
+    
+    return messages.scalars().all()

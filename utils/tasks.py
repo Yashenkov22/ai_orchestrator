@@ -32,7 +32,7 @@ from db.queries import (check_insta_user, check_new_messages_in_thread,
 from db.base import Attachment, Message, Thread, Account
 
 from utils.ai import ai_extract_user_info, generate_new_message_to_thread, generate_thread_context
-from utils.enums import MessageStatusEnum, ThreadColorEnum
+from utils.enums import MessageStatusEnum, ThreadColorEnum, MessageTypeEnum
 
 from utils.base import dismiss_notifications_popup, generate_valid_media_url, try_get_profile_port
 
@@ -591,13 +591,16 @@ async def process_thread_messages(messages: list,
                 f.get('plaintext', '') for f in fragments
             ).strip()
             msg_data['text'] = admin_text
+            msg_data['type'] = MessageTypeEnum.SYSTEM
 
         if ctype == 'TEXT':
             msg_data['text'] = node.get('text_body', '')
+            msg_data['type'] = MessageTypeEnum.TEXT
 
         elif ctype.startswith('REACTION'):
             # text_body = node.get('text_body', '')
             msg_data['text'] = '* реакция на сообщение в чате'
+            msg_data['type'] = MessageTypeEnum.REACTION
 
         elif ctype in ('MESSAGE_INLINE_SHARE', 'MONTAGE_SHARE_XMA'):
             content = node.get('content') or {}
@@ -619,11 +622,18 @@ async def process_thread_messages(messages: list,
             if media_urls:
                 files = await download_media(media_urls, thread_dir, str(thread_key), msg_id)
                 msg_data['media_files'] = files
+                msg_data['type'] = MessageTypeEnum.SHARED
         else:
             media_urls = extract_media_urls(node)
             if media_urls:
                 files = await download_media(media_urls, thread_dir, str(thread_key), msg_id)
                 msg_data['media_files'] = files
+
+                if len(files) > 1:
+                    msg_data['type'] = MessageTypeEnum.MUTLI_MEDIA
+                else:
+                    media_type, _ = files[0]
+                    msg_data['type'] = media_type
 
         all_messages.append(msg_data)
 
@@ -1875,7 +1885,7 @@ async def playwright_send_message(message: Message,
             #
             if media:
                 match media:
-                    case 'photo':
+                    case 'photo' | 'video' | 'audio':
                         _attachments = message.attachments
                         _attachment = _attachments[0]
                         media_url = _attachment.media_url
@@ -2009,7 +2019,6 @@ async def try_add_messages(message_data: dict,
                            redis_pool: ArqRedis):
     thread_id = message_data.get('thread_id')
     messages = message_data.get('messages')
-    # mark_as_unread = message_data.get('mark_as_unread')
     insert_messages = []
     message_ids_for_translate = []
     memory_updated = None
@@ -2022,10 +2031,8 @@ async def try_add_messages(message_data: dict,
             sender = message.get('sender')
 
             if ts:
-                ts = datetime.fromtimestamp(
-                    int(ts) / 1000,
-                    tz=timezone.utc
-                )
+                ts = datetime.fromtimestamp(int(ts) / 1000,
+                                            tz=timezone.utc)
             msg_data = {
                 'created_at': ts,
                 'updated_at': ts,
@@ -2035,10 +2042,12 @@ async def try_add_messages(message_data: dict,
                 'thread_id': thread_id,
             }
 
+            if _type := message.get('type'):
+                msg_data.update({'type': _type})
+
             new_message = Message(**msg_data,
                                   attachments=[Attachment(media_type=t, media_url=u) for t, u in message.get("media_files", [])])
             insert_messages.append(new_message)
-
 
             if new_message.text:
                 _text = f'{new_message.text} | {new_message.created_at} | {new_message.sender}'

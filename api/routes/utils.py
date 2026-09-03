@@ -350,3 +350,27 @@ async def generate_thread_memories(admin: admin_dependency,
     return f'{task_counter} background tasks was running...'
 
 
+@utils_router.get("/reorganize_message_types")
+async def generate_thread_memories(admin: admin_dependency,
+                                   arq_pool: arq_dependency,
+                                   session: session_dependency,
+                                   secret: str):
+    if secret != SECRET_API:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+
+
+    # threads = await get_threads_by_color(color='yellow',
+    #                                      session=session)
+
+    # task_counter = 0
+
+    # for thread in threads:    
+    job = await arq_pool.enqueue_job(
+        'organize_new_message_types',
+        _queue_name='arq:utils',
+    )
+
+    return job.job_id
+    # task_counter += 1
+
+    # return f'{task_counter} background tasks was running...'
