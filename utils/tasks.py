@@ -34,7 +34,7 @@ from db.base import Attachment, Message, Thread, Account
 from utils.ai import ai_extract_user_info, generate_new_message_to_thread, generate_thread_context
 from utils.enums import MessageStatusEnum, ThreadColorEnum, MessageTypeEnum
 
-from utils.base import dismiss_notifications_popup, generate_valid_media_url, try_get_profile_port
+from utils.base import dismiss_notifications_popup, generate_valid_media_url, is_video_thumbnail_response, try_get_profile_port
 
 from websocket.redis_listener import publish_event
 
@@ -1847,92 +1847,61 @@ async def playwright_send_message(message: Message,
                                                     redis,
                                                     with_scroll=False)
             
-            # if has_new_messages or \
-            #     (thread.timestamp_last_seen_message and thread.timestamp_last_seen_message >= message.created_at):
-            #     msg = await get_message_only_by_id(message.id,
-            #                                        session)
-                
-            #     if msg:
-
-            #         msg.status = MessageStatusEnum.REJECTED
-
-            #         await execute_and_catch_db_error(session.commit(),
-            #                                         session,
-            #                                         with_rollback=True)
-                    
-            #         payload = {
-            #             'thread_id': msg.thread_id,
-            #         }
-            #         msg_payload = {
-            #             'id': str(msg.id),
-            #             "modStatus": msg.status,
-            #         }
-
-            #         payload['message'] = msg_payload
-
-            #         await publish_event(redis,
-            #                             type='Message updated',
-            #                             payload=payload)
-                    
-            #         thread_for_send_message_page.remove_listener("response", on_response)
-            #         await thread_for_send_message_page.close()
-            #         await asyncio.sleep(1)
-
-            #         return
-
-
-
-            #
             if media:
-                match media:
-                    case 'photo' | 'video' | 'audio':
-                        _attachments = message.attachments
-                        _attachment = _attachments[0]
-                        media_url = _attachment.media_url
+                _attachments = message.attachments
+                _attachment = _attachments[0]
+                media_url = _attachment.media_url
 
-                        if media_url.startswith('./'):
-                            media_url = media_url[2:]
-                        if media_url.startswith('media/'):
-                            media_url = media_url[len('media/'):]
+                if media_url.startswith('./'):
+                    media_url = media_url[2:]
+                if media_url.startswith('media/'):
+                    media_url = media_url[len('media/'):]
 
-                        media_url_for_send = f'{MEDIA_PATH}/{media_url}'
+                media_url_for_send = f'{MEDIA_PATH}/{media_url}'
+                # media_url_for_send = '/Users/skxnny/web/ai_orchestrator/CIBL0832.JPG'
 
-                        try:
-                            inp = thread_for_send_message_page.locator('input[type="file"]')
+                try:
+                    inp = thread_for_send_message_page.locator('input[type="file"]')
 
-                            await inp.set_input_files(media_url_for_send)   # абсолютный путь
-                            await asyncio.sleep(2.5)
+                    await inp.set_input_files(media_url_for_send)   # абсолютный путь
+                    await asyncio.sleep(2.5)
 
+                    if media == 'photo':
                             # ждём появления превью вложения (кнопка "Remove")
                             await thread_for_send_message_page.wait_for_selector(
                                 'button[aria-label^="Remove"], [aria-label^="Remove"]',
                                 timeout=20000)
 
-                            # Отправка через Enter в композере
-                            box = thread_for_send_message_page.locator('div[role="textbox"]').last
-                            await box.click()
-                            # await thread_for_send_message_page.keyboard.press("Enter")
+                    # Отправка через Enter в композере
+                    box = thread_for_send_message_page.locator('div[role="textbox"]').last
+                    await box.click()
 
-                            # Подтверждение: кнопка удаления вложения исчезла = ушло
-                            # await thread_for_send_message_page.wait_for_selector(
-                            #     'button[aria-label^="Remove"]',
-                            #     state="detached", timeout=20000)
-                            # ловим РЕАЛЬНЫЙ сетевой ответ на отправку, не DOM
-                            async with thread_for_send_message_page.expect_response(
-                                lambda r: '/graphql' in r.url and r.request.method == 'POST',
-                                timeout=20000
-                            ) as resp_info:
-                                await thread_for_send_message_page.keyboard.press("Enter")
+                    # ловим РЕАЛЬНЫЙ сетевой ответ на отправку, не DOM
+                    if media == 'photo':
+                        async with thread_for_send_message_page.expect_response(
+                            lambda r: '/graphql' in r.url and r.request.method == 'POST',
+                            timeout=20000
+                        ) as resp_info:
+                            await thread_for_send_message_page.keyboard.press("Enter")
+
+                        response = await resp_info.value
+                        send_success = response.status == 200
+                        print(" + фото отправлено")
+
+                    elif media == 'video':
+                        async with thread_for_send_message_page.expect_response(
+                            is_video_thumbnail_response,
+                            timeout=30000  # видео может обрабатываться дольше, чем фото
+                        ) as resp_info:
+                            await thread_for_send_message_page.keyboard.press("Enter")
 
                             response = await resp_info.value
-                            send_success = response.status == 200
-                            print(" + фото отправлено")
-                            # send_success = True
-                        except Exception as ex:
-                            print('ERROR WITH TRY SEND MESSAGE', ex)
+                            send_success = response.status == 200                            
+                        print(" + видео отправлено")
 
-                    case _:
-                        pass
+                except Exception as ex:
+                    print('ERROR WITH TRY SEND MESSAGE', ex)
+
             else:
                 try:
                     message_text = message.text

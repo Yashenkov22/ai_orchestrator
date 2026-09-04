@@ -3,6 +3,9 @@ import pytz
 import aiohttp
 import asyncio
 
+import base64
+from urllib.parse import urlparse, parse_qs, unquote
+
 # import tiktoken
 
 from lingua import  Language
@@ -424,3 +427,25 @@ async def try_translate_text(text: str):
     except Exception as ex:
         print(ex)
         raise
+
+
+
+
+def is_video_thumbnail_response(response) -> bool:
+    req = response.request
+    if req.resource_type != 'image':
+        return False
+    if 'fbcdn.net' not in response.url:
+        return False
+
+    qs = parse_qs(urlparse(response.url).query)
+    efg = qs.get('efg', [None])[0]
+    if not efg:
+        return False
+
+    try:
+        decoded = base64.b64decode(efg + '=' * (-len(efg) % 4)).decode('utf-8')
+    except Exception:
+        return False
+
+    return 'igd_messenger_video_thumbnail' in decoded
