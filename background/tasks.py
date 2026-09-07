@@ -237,7 +237,7 @@ async def parse_thread(cxt,
     try:
         if profile_port:
 
-            await sleep(5)
+            await sleep(3)
             
             async with sessionmaker() as _session:
                 _session: AsyncSession

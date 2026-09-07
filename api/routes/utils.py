@@ -40,6 +40,7 @@ from utils.base import (generate_valid_media_url,
 
 from config import SECRET_API, UPLOAD_DIR
 from utils.tasks import try_update_thread_memory
+from websocket.redis_listener import publish_event
 
 
 utils_router = APIRouter(tags=['Utils'],
@@ -160,6 +161,20 @@ async def test_hander(admin: admin_dependency,
             await execute_and_catch_db_error(session.commit(),
                                              session,
                                              with_rollback=True)
+
+            payload = {
+                'thread_id': msg.thread_id,
+            }
+            message_payload = {
+                'id': str(msg.id),
+                "modStatus": msg.status,
+                'text': msg.text,
+            }
+            payload['message'] = message_payload
+
+            await publish_event(arq_pool,
+                                type='Message updated',
+                                payload=payload)
         
         return {"status": "queued", "job_id": job.job_id}
     

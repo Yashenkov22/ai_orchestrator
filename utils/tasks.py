@@ -1556,8 +1556,11 @@ async def parse_thread_playwright(account: Account,
             
             detail_thread_page.remove_listener("response", on_response)
         finally:
-            await detail_thread_page.close()
-            await asyncio.sleep(1)
+            try:
+                await detail_thread_page.close()
+                await asyncio.sleep(1)
+            except Exception as ex:
+                print(' -> ERROR WITH TRY CLOSE PAGE IN FINNALY BLOCK', ex)
 
 
 async def parse_thread_list_playwright(account_id: int,
