@@ -1,8 +1,8 @@
 import json
-
-from math import ceil
 import time
 
+from math import ceil
+from datetime import datetime, timezone
 from typing import Literal
 
 from asyncio import sleep
@@ -19,7 +19,7 @@ from db.base import Account, Thread, Message
 from db.queries import (execute_and_catch_db_error, get_all_message_count,
                         get_message_by_id,
                         get_account_by_id, get_message_slice,
-                        get_messages_only_by_id,
+                        get_messages_only_by_id, get_new_thread_messages,
                         get_thread_by_id,
                         get_thread_only_by_id,
                         get_message_only_by_id, get_threads_by_color)
@@ -29,11 +29,11 @@ from utils.base import (try_block_thread,
                         try_start_profile,
                         try_stop_profile,
                         try_connect_to_main_instagram_page)
-from utils.tasks import (parse_thread_playwright,
+from utils.tasks import (get_raw_messages_log_and_new_last_message_id, parse_thread_playwright,
                          playwright_send_message,
                          test_playwright,
                          try_update_thread_memory)
-from utils.ai import ai_translate_message, ai_translate_user_information
+from utils.ai import ai_translate_message, ai_translate_user_information, generate_new_message_to_thread
 from utils.enums import MessageStatusEnum, MessageTypeEnum
 
 from websocket.redis_listener import publish_event
@@ -803,3 +803,73 @@ async def organize_new_message_types(cxt):
         await execute_and_catch_db_error(_session.commit(),
                                          _session,
                                          with_rollback=True)
+
+
+async def background_ai_generation(cxt,
+                                   thread_id: int):
+    sessionmaker= cxt['sessionmaker']
+    redis_pool = cxt['redis_pool']
+
+    async with sessionmaker() as _session:
+        _session: AsyncSession
+        thread = await get_thread_by_id(thread_id,
+                                        _session)
+
+        memory_updated = await try_update_thread_memory(thread,
+                                                        _session,
+                                                        redis_pool)
+        print(f'is memory updated - {memory_updated}')
+
+        messages_for_raw_log = await get_new_thread_messages(thread_id=thread.id,
+                                                                last_message_id=thread.last_message_id,
+                                                                session=_session)
+        raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(messages_for_raw_log)
+
+        generated_text = await generate_new_message_to_thread(account_info=thread.account.information,
+                                                                thread=thread,
+                                                                thread_context=thread.context,
+                                                                new_messages=raw_messages_log)
+        
+        insert_data = {
+            'sender': 'assistant',
+            'created_at': datetime.now(tz=timezone.utc),
+            'updated_at': datetime.now(tz=timezone.utc),
+            'thread_id': thread.id,
+            'text': generated_text,
+            'status': MessageStatusEnum.PENDING,
+        }
+
+        new_generated_message = Message(**insert_data)
+
+        _session.add(new_generated_message)
+
+        await execute_and_catch_db_error(_session.commit(),
+                                         _session,
+                                         with_rollback=True)
+
+    if new_generated_message:
+        payload = {
+            'thread_id': new_generated_message.thread_id,
+        }
+        message_payload = {
+            'id': str(new_generated_message.id),
+            'role': new_generated_message.sender,
+            'content': new_generated_message.text,
+            'translated_content': new_generated_message.translated_text or '',
+            'ts': new_generated_message.created_at.strftime("%Y-%d-%m %H:%M") if new_generated_message.created_at else "",
+            "modStatus": new_generated_message.status,
+            'attachment': None,
+
+        }
+        payload['message'] = message_payload
+
+        await publish_event(redis_pool,
+                type='message created',
+                payload=payload)
+
+    if memory_updated:
+        job = await redis_pool.enqueue_job(
+            'translate_user_information_by_thread_id',
+            thread.id,
+            _queue_name='arq:utils',
+        )

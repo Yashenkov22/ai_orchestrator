@@ -7,6 +7,8 @@ import aiofiles
 
 import aiohttp
 
+from typing import Any
+
 from urllib.parse import unquote
 
 from pathlib import Path
@@ -1092,18 +1094,25 @@ async def process_thread(
     redis: ArqRedis,
     is_request: bool = False,
     is_spam: bool = False,
-    with_scroll: bool = True,
+    with_scroll: bool = False,
 ) -> dict:
     all_thread_data = {}
     thread_key = thread.thread_id
     user_insta_id = thread.insta_user.insta_id
 
-    # if with_scroll:
-    await scroll_messages_until_seen(
-        page, thread_responses, thread_key,
-        last_seen_ts=thread.timestamp_last_seen_message
-    )
-    await page.wait_for_timeout(500)
+    if with_scroll:
+        await scroll_messages_until_seen(
+            page, thread_responses, thread_key,
+            last_seen_ts=thread.timestamp_last_seen_message
+        )
+        await page.wait_for_timeout(500)
+
+    # try:
+    #     page.remove_listener("response", on_response)
+    #     await page.close()
+    #     await asyncio.sleep(1)
+    # except Exception as ex:
+    #     print(' -> ERROR WITH TRY CLOSE PAGE IN FINNALY BLOCK', ex)
 
     # 1) находим thread_fbid целевого треда по детальным ответам.
     #    detail-ответы (get_slide_thread_nullable) содержат users с
@@ -1446,6 +1455,17 @@ async def test_playwright(account: Account,
                 print('ERROR WITH CLOSE PAGE',ex)
 
 
+async def scroll_and_collect(page,
+                             thread_key,
+                             thread_responses,
+                             thread):
+    await scroll_messages_until_seen(
+        page, thread_responses, thread_key,
+        last_seen_ts=thread.timestamp_last_seen_message
+    )
+    await page.wait_for_timeout(500)
+
+
 #####
 async def parse_thread_playwright(account: Account,
                                   thread: Thread,
@@ -1551,12 +1571,23 @@ async def parse_thread_playwright(account: Account,
 
             await detail_thread_page.wait_for_timeout(2000)
 
+            await scroll_and_collect(detail_thread_page,
+                                     thread.thread_id,
+                                     thread_responses,
+                                     thread)
+            try:
+                detail_thread_page.remove_listener("response", on_response)
+                await detail_thread_page.close()
+                await asyncio.sleep(1)
+            except Exception as ex:
+                print(' -> ERROR WITH TRY CLOSE PAGE IN FINNALY BLOCK', ex)
+
             await process_thread(thread, account.id, detail_thread_page,
                                 thread_responses, thread_received, _session, redis)
             
-            detail_thread_page.remove_listener("response", on_response)
         finally:
             try:
+                detail_thread_page.remove_listener("response", on_response)
                 await detail_thread_page.close()
                 await asyncio.sleep(1)
             except Exception as ex:
@@ -1848,7 +1879,7 @@ async def playwright_send_message(message: Message,
                                                     thread_received,
                                                     session,
                                                     redis,
-                                                    with_scroll=False)
+                                                    with_scroll=True)
             
             if media:
                 _attachments = message.attachments
@@ -1976,6 +2007,10 @@ async def playwright_send_message(message: Message,
             msg_payload = {
                 'id': str(msg.id),
                 "modStatus": msg.status,
+                "ts": (
+                msg.created_at.strftime("%Y-%d-%m %H:%M")
+                if msg.created_at else ""
+            ),
             }
 
             payload['message'] = msg_payload
@@ -2032,38 +2067,44 @@ async def try_add_messages(message_data: dict,
                                             session,
                                             with_rollback=True)
             
-            new_generated_message = None
+            # new_generated_message = None
 
             if thread.color_level in (ThreadColorEnum.YELLOW, ThreadColorEnum.GREY) and thread.is_pinned:
+
+                job = await redis_pool.enqueue_job(
+                    'background_ai_generation',
+                    thread.id,
+                    _queue_name='arq:ai',
+                )
                 # проверить и если нужно обновить контекст 
                 # и json о юзере, обновить last_message_id в Thread
-                memory_updated = await try_update_thread_memory(thread,
-                                                                session,
-                                                                redis_pool)
-                print(f'is memory updated - {memory_updated}')
+                # memory_updated = await try_update_thread_memory(thread,
+                #                                                 session,
+                #                                                 redis_pool)
+                # print(f'is memory updated - {memory_updated}')
 
-                messages_for_raw_log = await get_new_thread_messages(thread_id=thread.id,
-                                                                     last_message_id=thread.last_message_id,
-                                                                     session=session)
-                raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(messages_for_raw_log)
+                # messages_for_raw_log = await get_new_thread_messages(thread_id=thread.id,
+                #                                                      last_message_id=thread.last_message_id,
+                #                                                      session=session)
+                # raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(messages_for_raw_log)
 
-                generated_text = await generate_new_message_to_thread(account_info=thread.account.information,
-                                                                      thread=thread,
-                                                                      thread_context=thread.context,
-                                                                      new_messages=raw_messages_log)
+                # generated_text = await generate_new_message_to_thread(account_info=thread.account.information,
+                #                                                       thread=thread,
+                #                                                       thread_context=thread.context,
+                #                                                       new_messages=raw_messages_log)
                 
-                insert_data = {
-                    'sender': 'assistant',
-                    'created_at': datetime.now(tz=timezone.utc),
-                    'updated_at': datetime.now(tz=timezone.utc),
-                    'thread_id': thread.id,
-                    'text': generated_text,
-                    'status': MessageStatusEnum.PENDING,
-                }
+                # insert_data = {
+                #     'sender': 'assistant',
+                #     'created_at': datetime.now(tz=timezone.utc),
+                #     'updated_at': datetime.now(tz=timezone.utc),
+                #     'thread_id': thread.id,
+                #     'text': generated_text,
+                #     'status': MessageStatusEnum.PENDING,
+                # }
 
-                new_generated_message = Message(**insert_data)
+                # new_generated_message = Message(**insert_data)
 
-                session.add(new_generated_message)
+                # session.add(new_generated_message)
 
             # thread.context = new_context
             thread.is_unread = sender == 'user'
@@ -2074,12 +2115,12 @@ async def try_add_messages(message_data: dict,
                                              session,
                                              with_rollback=True)
 
-            if memory_updated:
-                job = await redis_pool.enqueue_job(
-                    'translate_user_information_by_thread_id',
-                    thread.id,
-                    _queue_name='arq:utils',
-                )
+            # if memory_updated:
+            #     job = await redis_pool.enqueue_job(
+            #         'translate_user_information_by_thread_id',
+            #         thread.id,
+            #         _queue_name='arq:utils',
+            #     )
 
             # publish update to redis
             # thread updated
@@ -2152,25 +2193,25 @@ async def try_add_messages(message_data: dict,
             # new message generated
             # publish new message to thread page
             # new message(ai generate)
-            if new_generated_message:
-                payload = {
-                    'thread_id': new_generated_message.thread_id,
-                }
-                message_payload = {
-                    'id': str(new_generated_message.id),
-                    'role': new_generated_message.sender,
-                    'content': new_generated_message.text,
-                    'translated_content': new_generated_message.translated_text or '',
-                    'ts': new_generated_message.created_at.strftime("%Y-%d-%m %H:%M") if new_generated_message.created_at else "",
-                    "modStatus": new_generated_message.status,
-                    'attachment': None,
+            # if new_generated_message:
+            #     payload = {
+            #         'thread_id': new_generated_message.thread_id,
+            #     }
+            #     message_payload = {
+            #         'id': str(new_generated_message.id),
+            #         'role': new_generated_message.sender,
+            #         'content': new_generated_message.text,
+            #         'translated_content': new_generated_message.translated_text or '',
+            #         'ts': new_generated_message.created_at.strftime("%Y-%d-%m %H:%M") if new_generated_message.created_at else "",
+            #         "modStatus": new_generated_message.status,
+            #         'attachment': None,
 
-                }
-                payload['message'] = message_payload
+            #     }
+            #     payload['message'] = message_payload
 
-                await publish_event(redis_pool,
-                        type='message created',
-                        payload=payload)
+            #     await publish_event(redis_pool,
+            #             type='message created',
+            #             payload=payload)
 
             return True
 
