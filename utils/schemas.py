@@ -349,3 +349,26 @@ class AttachmentListSchema(BaseModel):
     ts: str
     sender: str
     attachment: AttachmentSchema
+
+
+#     # {
+#     #     1 | priority: {
+#     #         'action' : 'str', описание | действие
+#     #         'status': '?', ['не выполнено', 'в процессе', 'выполнено']
+#     #         'result': 'str' | {'key': 'value'}
+#     #     },
+#     #     2 | priority: {
+#     #         'action' : 'str', описание | действие
+#     #         'status': '?', ['не выполнено', 'в процессе', 'выполнено']
+#     #         'result': 'str' | {'key': 'value'}
+#     #     },
+#     # }
+
+# class ScenarioStepDetailSchema(BaseModel):
+#     action: str
+#     status: str
+#     result: str | dict
+
+# class ScenarioStepSchema(BaseModel):
+#     id: int
+

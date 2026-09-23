@@ -141,8 +141,11 @@ async def ai_translate_message(text: str):
         )
         user_content = text
 
-        response = await deepseek_client.chat.completions.create(
-            model="deepseek/deepseek-v4-flash-0731",
+        model = 'obsidian/Qwen3.8-27B'
+
+        response = await orcarouter_client.chat.completions.create(
+            # model="deepseek/deepseek-v4-flash-0731",
+            model=model,
             messages=[
                 {
                     "role": "system",
@@ -156,6 +159,8 @@ async def ai_translate_message(text: str):
             timeout=30.0,
         )
         result = response.choices[0].message.content
+        print(f'модель - {model}')
+        print(f'исходный текст - {text}')
         print('ответ нейронки', result)
 
         return result

@@ -108,3 +108,15 @@ class LanguageEnum(str, Enum):
     URDU = "Urdu"
     VIETNAMESE = "Vietnamese"
     ZULU = "Zulu"
+
+
+class ScenarioStatus(str, Enum):
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
+class ScenarioEvaluationType(str, Enum):
+    NOAL = "noal"
+    CHOICE = "choice"
+    SCORE = 'score'
