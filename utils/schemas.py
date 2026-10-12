@@ -10,7 +10,7 @@ from fastapi import HTTPException
 
 from pydantic.alias_generators import to_camel
 
-from utils.enums import MessageStatusEnum, MessageTypeEnum, ThreadColorEnum, AIModelEnum, LanguageEnum
+from utils.enums import CoffeeStatusEnum, MessageStatusEnum, MessageTypeEnum, ThreadColorEnum, AIModelEnum, LanguageEnum, ScenarioEvaluationType, CoffeeStepLogSchema
 
 
 
@@ -219,6 +219,10 @@ class PatchPhotoAccountSchema(BaseModel):
     account_id: int
     media_url: str
 
+class CreateCoffeeScenarioPhotoSchema(PatchPhotoAccountSchema):
+    media_url: str
+    purpose: Literal['before', 'after']
+
 
 class PatchViewNameAccountSchema(BaseModel):
     account_id: int
@@ -372,3 +376,61 @@ class AttachmentListSchema(BaseModel):
 # class ScenarioStepSchema(BaseModel):
 #     id: int
 
+
+
+class CreateScenarioSchema(BaseModel):
+    name: str
+    description: str | None = Field(default=None)
+
+
+class CreateScenarioStepSchema(BaseModel):
+    scenario_id: int
+    order: int
+    name: str
+    instruction: str
+
+
+class CreateScenarioEvaluationSchema(BaseModel):
+    scenario_id: int
+    question: str
+    type: ScenarioEvaluationType
+    choices: dict | list | None = Field(default=None)
+
+
+
+class EvaluationCondition(BaseModel):
+    evaluation_id: int
+    value: str
+    operator: str
+    min_probability: float
+
+
+class AddNewTransitionSchema(BaseModel):
+    step_from_id: int
+    step_to_id: int | None
+    evaluation_conditions: list[EvaluationCondition]
+
+
+class CoffeeLogStepSchema(BaseModel):
+    status: str = Field(default=CoffeeStepLogSchema.WAITING)
+    result: str | None = Field(default=None)
+
+
+class CoffeeStateSchema(BaseModel):
+    status: CoffeeStatusEnum
+    current_step: int
+    is_scenario_step: bool
+    logs: dict[str, CoffeeLogStepSchema] # key - step_1/2/3/4
+
+
+
+class CoffeeScenarioPhotoSchema(BaseModel):
+    account_id: int
+    purpose: str
+    photo: dict
+
+
+class DetailCofeeScenarioPhotoSchema(BaseModel):
+    id: int
+    media_url: str
+    purpose: Literal['before', 'after']

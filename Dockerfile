@@ -20,7 +20,10 @@ RUN pip install --upgrade pip
 # зависимости сначала (лучше кэшируется Docker'ом)
 COPY requirements.txt .
 
-RUN pip install --no-cache-dir -r requirements.txt
+# RUN pip install --no-cache-dir -r requirements.txt
+
+RUN pip install -r requirements.txt
+
 
 # устанавливаем браузеры Playwright + системные зависимости
 # RUN python -m playwright install --with-deps

@@ -140,6 +140,129 @@ class Account(Base):
         cascade="all, delete-orphan"
     )
 
+    coffee_photos = relationship(
+        "CoffeeScenarioPhoto",
+        back_populates="account",
+        cascade="all, delete-orphan"
+    )
+
+
+class CoffeeScenarioPhoto(Base):
+    __tablename__ = "coffee_scenario_photos"
+
+    id = Column(
+        BigInteger,
+        primary_key=True,
+        index=True,
+    )
+
+    account_id = Column(
+        BigInteger,
+        ForeignKey("accounts.id",
+        ondelete="SET NULL"),
+        nullable=True,
+        default=None,
+    )
+
+    media_url = Column(
+        String(2048),
+        nullable=False
+    )
+
+    purpose = Column(
+        String(50),
+        nullable=False
+    )
+
+    account = relationship(
+        "Account",
+        back_populates="coffee_photos"
+    )
+
+
+# class CoffeeScenarioSupply(Base):
+#     __tablename__ = "coffee_scenario_supplies"
+
+#     id = Column(
+#         BigInteger,
+#         primary_key=True,
+#         index=True
+#     )
+
+#     account_id = Column(
+#         BigInteger,
+#         ForeignKey("accounts.id", ondelete="CASCADE"),
+#         nullable=False,
+#         unique=True,
+#         index=True
+#     )
+
+#     account = relationship(
+#         "Account",
+#         back_populates="coffee_scenario_supply"
+#     )
+
+#     photos = relationship(
+#         "CoffeeScenarioPhoto",
+#         back_populates="supply",
+#         cascade="all, delete-orphan"
+#     )
+# class AccountMedia(Base):
+#     __tablename__ = "account_media"
+
+#     id = Column(
+#         BigInteger,
+#         primary_key=True,
+#         index=True,
+#     )
+
+#     account_id = Column(
+#         BigInteger,
+#         ForeignKey("accounts.id", ondelete="CASCADE"),
+#         nullable=False,
+#         index=True,
+#     )
+
+#     # photo / video
+#     media_type = Column(
+#         String(50),
+#         nullable=False,
+#     )
+
+#     # Например:
+#     # avatar
+#     # greeting
+#     # scenario
+#     # coffee
+#     # thank_you
+#     # generic
+#     marker = Column(
+#         String(100),
+#         nullable=True,
+#         default=None,
+#         index=True,
+#     ) # возможно Enum
+
+#     # Человеческое название:
+#     # "Фото с кофе"
+#     # "Видео из кафе"
+#     name = Column(
+#         String(255),
+#         nullable=True,
+#         default=None,
+#     )
+
+#     # Путь или URL к файлу
+#     media_url = Column(
+#         String(2048),
+#         nullable=False,
+#     )
+
+#     account = relationship(
+#         "Account",
+#         back_populates="media",
+#     )
+
 
 class Admin(Base):
     __tablename__ = 'admins'
@@ -248,324 +371,385 @@ class Attachment(Base):
 
 ################ new idea
 
-class Scenario(Base):
-    __tablename__ = "scenarios"
+# class Scenario(Base):
+#     __tablename__ = "scenarios"
 
-    id = Column(
-        BigInteger,
-        primary_key=True,
-        index=True,
-    )
+#     id = Column(
+#         BigInteger,
+#         primary_key=True,
+#         index=True,
+#     )
 
-    name = Column(
-        String(255),
-        nullable=False,
-    )
+#     name = Column(
+#         String(255),
+#         nullable=False,
+#     )
 
-    description = Column(
-        Text,
-        nullable=True,
-    )
+#     description = Column(
+#         Text,
+#         nullable=True,
+#     )
 
-    created_at = Column(
-        TIMESTAMP(timezone=True),
-        nullable=True,
-        default=None,
-    )
+#     created_at = Column(
+#         TIMESTAMP(timezone=True),
+#         nullable=True,
+#         default=None,
+#     )
 
-    updated_at = Column(
-        TIMESTAMP(timezone=True),
-        nullable=True,
-        default=None,
-    )
+#     updated_at = Column(
+#         TIMESTAMP(timezone=True),
+#         nullable=True,
+#         default=None,
+#     )
 
-    steps = relationship(
-        "ScenarioStep",
-        back_populates="scenario",
-        cascade="all, delete-orphan",
-        order_by="ScenarioStep.order",
-    )
+#     steps = relationship(
+#         "ScenarioStep",
+#         back_populates="scenario",
+#         cascade="all, delete-orphan",
+#         order_by="ScenarioStep.order",
+#     )
 
-    # наводящие вопросы с вероятностным выбором ответа из перечня для дальнейших переходов к другим шагам
-    evaluations = relationship(
-        "ScenarioEvaluation",
-        back_populates="scenario",
-        cascade="all, delete-orphan",
-    )
+#     # наводящие вопросы с вероятностным выбором ответа из перечня для дальнейших переходов к другим шагам
+#     evaluations = relationship(
+#         "ScenarioEvaluation",
+#         back_populates="scenario",
+#         cascade="all, delete-orphan",
+#     )
 
-    thread_scenarios = relationship(
-        "ThreadScenario",
-        back_populates="scenario",
-        cascade="all, delete-orphan",
-    )
+#     thread_scenarios = relationship(
+#         "ThreadScenario",
+#         back_populates="scenario",
+#         cascade="all, delete-orphan",
+#     )
 
-class ScenarioStep(Base):
-    __tablename__ = "scenario_steps"
+# class ScenarioStep(Base):
+#     __tablename__ = "scenario_steps"
 
-    id = Column(
-        BigInteger,
-        primary_key=True,
-        index=True,
-    )
+#     id = Column(
+#         BigInteger,
+#         primary_key=True,
+#         index=True,
+#     )
 
-    scenario_id = Column(
-        BigInteger,
-        ForeignKey(
-            "scenarios.id",
-            ondelete="CASCADE",
-        ),
-        nullable=False,
-        index=True,
-    )
+#     scenario_id = Column(
+#         BigInteger,
+#         ForeignKey(
+#             "scenarios.id",
+#             ondelete="CASCADE",
+#         ),
+#         nullable=False,
+#         index=True,
+#     )
 
-    order = Column(
-        Integer,
-        nullable=False,
-    )
+#     order = Column(
+#         Integer,
+#         nullable=False,
+#     )
 
-    name = Column(
-        String(255),
-        nullable=False,
-    )
+#     name = Column(
+#         String(255),
+#         nullable=False,
+#     )
 
-    # action
-    instructions = Column(
-        Text,
-        nullable=False,
-    )
+#     # action
+#     instructions = Column(
+#         Text,
+#         nullable=False,
+#     )
 
-    scenario = relationship(
-        "Scenario",
-        back_populates="steps",
-    )
+#     scenario = relationship(
+#         "Scenario",
+#         back_populates="steps",
+#     )
 
-    # наводящие вопросы с вероятностным выбором ответа из перечня для дальнейших переходов к другим шагам
-    # evaluations = relationship(
+#     # наводящие вопросы с вероятностным выбором ответа из перечня для дальнейших переходов к другим шагам
+#     # evaluations = relationship(
 
-    #     "ScenarioEvaluation",
+#     #     "ScenarioEvaluation",
 
-    #     back_populates="step",
+#     #     back_populates="step",
 
-    #     cascade="all, delete-orphan",
+#     #     cascade="all, delete-orphan",
 
-    #     order_by="ScenarioEvaluation.id",
+#     #     order_by="ScenarioEvaluation.id",
 
-    # )
+#     # )
 
-    outgoing_transitions = relationship(
-        "ScenarioTransition",
-        foreign_keys="ScenarioTransition.from_step_id",
-        back_populates="from_step",
-        cascade="all, delete-orphan",
-    )
+#     outgoing_transitions = relationship(
+#         "ScenarioTransition",
+#         foreign_keys="ScenarioTransition.from_step_id",
+#         back_populates="from_step",
+#         cascade="all, delete-orphan",
+#     )
 
-    incoming_transitions = relationship(
-        "ScenarioTransition",
-        foreign_keys="ScenarioTransition.to_step_id",
-        back_populates="to_step",
-    )
+#     incoming_transitions = relationship(
+#         "ScenarioTransition",
+#         foreign_keys="ScenarioTransition.to_step_id",
+#         back_populates="to_step",
+#     )
 
-    __table_args__ = (
-        UniqueConstraint(
-            "scenario_id",
-            "order",
-            name="uq_scenario_step_order",
-        ),
-    )
-
-# типизированный вероятностный вопрос ответ
-class ScenarioEvaluation(Base):
-    __tablename__ = "scenario_evaluations"
-
-    id = Column(
-        BigInteger,
-        primary_key=True,
-        index=True,
-    )
-
-    scenario_id = Column(
-        BigInteger,
-        ForeignKey(
-            "scenarios.id",
-            ondelete="CASCADE",
-        ),
-        nullable=False,
-        index=True,
-    )
-
-    question = Column(
-        Text,
-        nullable=False,
-    )
-
-    type = Column(
-        String(50),
-        nullable=False,
-    )
-
-    choices = Column(
-        JSONB,
-        nullable=True,
-    )
-
-    scenario = relationship(
-        "Scenario",
-        back_populates="evaluations",
-    )
+#     __table_args__ = (
+#         UniqueConstraint(
+#             "scenario_id",
+#             "order",
+#             name="uq_scenario_step_order",
+#         ),
+#     )
 
 
-class ScenarioTransition(Base):
-    __tablename__ = "scenario_transitions"
+# class ScenarioTransitionCondition(Base):
+#     __tablename__ = "scenario_transition_conditions"
 
-    id = Column(
-        BigInteger,
-        primary_key=True,
-        index=True,
-    )
+#     id = Column(
+#         BigInteger,
+#         primary_key=True,
+#         index=True,
+#     )
 
-    from_step_id = Column(
-        BigInteger,
-        ForeignKey(
-            "scenario_steps.id",
-            ondelete="CASCADE",
-        ),
-        nullable=False,
-        index=True,
-    )
+#     transition_id = Column(
+#         BigInteger,
+#         ForeignKey(
+#             "scenario_transitions.id",
+#             ondelete="CASCADE",
+#         ),
+#         nullable=False,
+#         index=True,
+#     )
 
-    to_step_id = Column(
-        BigInteger,
-        ForeignKey(
-            "scenario_steps.id",
-            ondelete="SET NULL",
-        ),
-        nullable=True,
-        index=True,
-    )
+#     evaluation_id = Column(
+#         BigInteger,
+#         ForeignKey(
+#             "scenario_evaluations.id",
+#             ondelete="CASCADE",
+#         ),
+#         nullable=False,
+#         index=True,
+#     )
 
-    # name = Column(
-    #     String(255),
-    #     nullable=False,
-    # )
+#     operator = Column(
+#         String(50),
+#         nullable=False,
+#     )
 
-    conditions = Column(
-        JSONB,
-        nullable=True,
-        default=None,
-    )
+#     value = Column(
+#         String(255),
+#         nullable=False,
+#     )
 
-    # priority = Column(
-    #     Integer,
-    #     nullable=False,
-    #     default=0,
-    #     server_default="0",
-    # )
+#     min_probability = Column(
+#         Float,
+#         nullable=True,
+#     )
 
-    from_step = relationship(
-        "ScenarioStep",
-        foreign_keys=[from_step_id],
-        back_populates="outgoing_transitions",
-    )
+#     transition = relationship(
+#         "ScenarioTransition",
+#         back_populates="conditions",
+#     )
 
-    to_step = relationship(
-        "ScenarioStep",
-        foreign_keys=[to_step_id],
-        back_populates="incoming_transitions",
-    )
+#     evaluation = relationship(
+#         "ScenarioEvaluation",
+#     )
 
 
-class ThreadScenario(Base):
-    __tablename__ = "thread_scenarios"
+# # типизированный вероятностный вопрос ответ
+# class ScenarioEvaluation(Base):
+#     __tablename__ = "scenario_evaluations"
 
-    id = Column(
-        BigInteger,
-        primary_key=True,
-        index=True,
-    )
+#     id = Column(
+#         BigInteger,
+#         primary_key=True,
+#         index=True,
+#     )
 
-    thread_id = Column(
-        BigInteger,
-        ForeignKey(
-            "threads.id",
-            ondelete="CASCADE",
-        ),
-        nullable=False,
-        index=True,
-    )
-    scenario_id = Column(
-        BigInteger,
-        ForeignKey(
-            "scenarios.id",
-            ondelete="CASCADE",
-        ),
-        nullable=False,
-        index=True,
-    )
+#     scenario_id = Column(
+#         BigInteger,
+#         ForeignKey(
+#             "scenarios.id",
+#             ondelete="CASCADE",
+#         ),
+#         nullable=False,
+#         index=True,
+#     )
 
-    current_step_id = Column(
-        BigInteger,
-        ForeignKey(
-            "scenario_steps.id",
-            ondelete="SET NULL",
-        ),
-        nullable=True,
-        index=True,
-    )
+#     question = Column(
+#         Text,
+#         nullable=False,
+#     )
 
-    status = Column(
-        String(50),
-        nullable=False,
-        default=ScenarioStatus.ACTIVE.value,
-        server_default=ScenarioStatus.ACTIVE.value,
-        # index=True,
-    )
+#     type = Column(
+#         String(50),
+#         nullable=False,
+#     )
 
-    state = Column(
-        JSON,
-        nullable=False,
-        default=dict,
-    )
+#     choices = Column(
+#         JSONB,
+#         nullable=True,
+#     )
 
-    started_at = Column(
-        TIMESTAMP(timezone=True),
-        nullable=True,
-        default=None,
-    )
+#     scenario = relationship(
+#         "Scenario",
+#         back_populates="evaluations",
+#     )
 
-    completed_at = Column(
-        TIMESTAMP(timezone=True),
-        nullable=True,
-        default=None,
-    )
 
-    updated_at = Column(
-        TIMESTAMP(timezone=True),
-        nullable=True,
-        default=None,
-    )
+# class ScenarioTransition(Base):
+#     __tablename__ = "scenario_transitions"
 
-    thread = relationship(
-        "Thread",
-        back_populates="thread_scenarios",
-    )
+#     id = Column(
+#         BigInteger,
+#         primary_key=True,
+#         index=True,
+#     )
 
-    scenario = relationship(
-        "Scenario",
-        back_populates="thread_scenarios",
-    )
+#     from_step_id = Column(
+#         BigInteger,
+#         ForeignKey(
+#             "scenario_steps.id",
+#             ondelete="CASCADE",
+#         ),
+#         nullable=False,
+#         index=True,
+#     )
 
-    current_step = relationship(
-        "ScenarioStep",
-        foreign_keys=[current_step_id],
-    )
+#     to_step_id = Column(
+#         BigInteger,
+#         ForeignKey(
+#             "scenario_steps.id",
+#             ondelete="SET NULL",
+#         ),
+#         nullable=True,
+#         index=True,
+#     )
 
-    __table_args__ = (
-        UniqueConstraint(
-            "thread_id",
-            "scenario_id",
-            name="uq_thread_scenario",
-        ),
-    )
+#     # name = Column(
+#     #     String(255),
+#     #     nullable=False,
+#     # )
+
+#     # conditions = Column(
+#     #     JSONB,
+#     #     nullable=True,
+#     #     default=None,
+#     # )
+
+#     # priority = Column(
+#     #     Integer,
+#     #     nullable=False,
+#     #     default=0,
+#     #     server_default="0",
+#     # )
+
+#     from_step = relationship(
+#         "ScenarioStep",
+#         foreign_keys=[from_step_id],
+#         back_populates="outgoing_transitions",
+#     )
+
+#     to_step = relationship(
+#         "ScenarioStep",
+#         foreign_keys=[to_step_id],
+#         back_populates="incoming_transitions",
+#     )
+
+#     conditions = relationship(
+#         "ScenarioTransitionCondition",
+#         back_populates="transition",
+#         cascade="all, delete-orphan",
+#     )
+
+
+# class ThreadScenario(Base):
+#     __tablename__ = "thread_scenarios"
+
+#     id = Column(
+#         BigInteger,
+#         primary_key=True,
+#         index=True,
+#     )
+
+#     thread_id = Column(
+#         BigInteger,
+#         ForeignKey(
+#             "threads.id",
+#             ondelete="CASCADE",
+#         ),
+#         nullable=False,
+#         index=True,
+#     )
+#     scenario_id = Column(
+#         BigInteger,
+#         ForeignKey(
+#             "scenarios.id",
+#             ondelete="CASCADE",
+#         ),
+#         nullable=False,
+#         index=True,
+#     )
+
+#     current_step_id = Column(
+#         BigInteger,
+#         ForeignKey(
+#             "scenario_steps.id",
+#             ondelete="SET NULL",
+#         ),
+#         nullable=True,
+#         index=True,
+#     )
+
+#     status = Column(
+#         String(50),
+#         nullable=False,
+#         default=ScenarioStatus.ACTIVE.value,
+#         server_default=ScenarioStatus.ACTIVE.value,
+#         # index=True,
+#     )
+
+#     state = Column(
+#         JSON,
+#         nullable=False,
+#         default=dict,
+#     )
+
+#     started_at = Column(
+#         TIMESTAMP(timezone=True),
+#         nullable=True,
+#         default=None,
+#     )
+
+#     completed_at = Column(
+#         TIMESTAMP(timezone=True),
+#         nullable=True,
+#         default=None,
+#     )
+
+#     updated_at = Column(
+#         TIMESTAMP(timezone=True),
+#         nullable=True,
+#         default=None,
+#     )
+
+#     thread = relationship(
+#         "Thread",
+#         back_populates="thread_scenarios",
+#     )
+
+#     scenario = relationship(
+#         "Scenario",
+#         back_populates="thread_scenarios",
+#     )
+
+#     current_step = relationship(
+#         "ScenarioStep",
+#         foreign_keys=[current_step_id],
+#     )
+
+#     __table_args__ = (
+#         UniqueConstraint(
+#             "thread_id",
+#             "scenario_id",
+#             name="uq_thread_scenario",
+#         ),
+#     )
 
 ############ end new idea
 
@@ -630,6 +814,21 @@ class Thread(Base):
                       nullable=False,
                       default=LanguageEnum.ENGLISH,
                       server_default='English')
+
+    coffee_state = Column(JSONB,
+                          nullable=True,
+                          default=None)
+
+    # coffee_state = {
+    #     'status': '', # возможно Enum, статус задачи/сценария
+    #     'logs': {
+    #         'step_1': '',
+    #         'step_2': '',
+    #         'step_3': '',
+    #         'step_4': '',
+    #     },
+    #     'current_step': '',
+    # }
     
     account = relationship("Account", back_populates="threads")
     insta_user = relationship("InstaUser", back_populates="threads")
@@ -640,12 +839,12 @@ class Thread(Base):
         cascade="all, delete-orphan"
     )
 
-    scenario_threads = relationship(
-        "ScenarioThread",
-        back_populates="thread",
-        cascade="all, delete-orphan",
-        lazy="selectin",
-    )
+    # thread_scenarios = relationship(
+    #     "ThreadScenario",
+    #     back_populates="thread",
+    #     cascade="all, delete-orphan",
+    #     lazy="selectin",
+    # )
 
 
 # class ScenarioThread(Base):

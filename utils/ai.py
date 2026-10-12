@@ -260,7 +260,7 @@ async def generate_new_message_to_thread(account_info: str,
         "как реальный ответ в диалоге. НЕ создавай выжимку, резюме или пересказ переписки — "
         "твой ответ должен быть репликой, будто ты сама пишешь собеседнику прямо сейчас. "
         "Контекст переписки и новые сообщения приведены ниже только для понимания ситуации — "
-        "не пересказывай их, а ответь на них.\n\nЕсли новые сообщения не переданы - значит они уже учтены в контексте переписки"
+        "не пересказывай их, а ответь на них.\n\n"
         "(формат новых сообщений: {текст сообщения} | {время сообщения} | {отправитель}).\n\n"
         "user - это собеседник, assistant - это девушка, которая общается с user`ом\n"
         "Ты генерируешь сообщение от лица assistant\n"
@@ -536,3 +536,189 @@ async def ai_test_photo(photo_url: str):
         print('ERROR WITH TRY TRANSTALE THROUGH DEEPSEEK')
         print(ex)
         return None
+
+
+async def generate_new_message_to_thread_coffee_scenario(account_info: str,
+                                         thread: Thread,
+                                         step_instruction: str,
+                                         new_messages: str ):
+    model = thread.ai_model or 'anthropic/claude-sonnet-5'
+    ai_temperature = thread.ai_temperature or 0.5
+
+    ai_router = openrouter_client
+
+    if model == AIModelEnum.QWEN_ORCA:
+        ai_router = orcarouter_client
+
+    print(f'using model {model} for generating...\ntemperature ai - {ai_temperature}')
+
+    system_content = f'{PREFIX_SYSTEM_PROMPT}\n{account_info}.\n\n'
+
+
+    system_content += (
+        "Твоя единственная задача — сгенерировать ОДНО сообщение для отправки собеседнику в Instagram Direct, "
+        "как реальный ответ в диалоге. НЕ создавай выжимку, резюме или пересказ переписки — "
+        "твой ответ должен быть репликой, будто ты сама пишешь собеседнику прямо сейчас. "
+        "Контекст переписки и новые сообщения приведены ниже только для понимания ситуации — "
+        "не пересказывай их, а ответь на них.\n\nЕсли новые сообщения не переданы - значит они уже учтены в контексте переписки"
+        "(формат новых сообщений: {текст сообщения} | {время сообщения} | {отправитель}).\n\n"
+        "user - это собеседник, assistant - это девушка, которая общается с user`ом\n"
+        "Ты генерируешь сообщение от лица assistant\n"
+
+        "ВАЖНО ПРО ВРЕМЯ: у тебя есть собственный часовой пояс и локация, соответствующие месту "
+        "рождения/проживания твоей личности, указанному в описании выше. Упоминай время суток, время "
+        "дня, планы на вечер/утро, режим дня и подобное ТОЛЬКО если это естественно вытекает из контекста "
+        "переписки (например, собеседник спросил, который у тебя час, или ты упоминаешь, что делаешь "
+        "сейчас). Если время не упомянуто и не следует из диалога — не придумывай и не вставляй его "
+        "искусственно. Если всё же упоминаешь — ориентируйся на реальное текущее время в твоём часовом "
+        "поясе (по локации личности), а не на московское или иное время по умолчанию."
+    )
+    user_content = (
+        # f"Контекст переписки:\n{thread_context}\n\n"
+        f"Новые сообщения:\n{new_messages}\n\n"
+        f"Напиши ТОЛЬКО текст своего следующего сообщения собеседнику "
+        f"без пояснений и без пересказа переписки."
+        f"Сообщение должно быть написано на языке - {thread.language}"
+        f'При генерации содержимого сообщения учти следующую инструкцию - {step_instruction}'
+    )
+
+    _messages =[
+            {
+                "role": "system",
+                "content": system_content
+            },
+            {
+                "role": "user",
+                "content": user_content
+            }
+        ]
+
+    response = await ai_router.chat.completions.create(
+        model=model,
+        messages=_messages,
+        timeout=30.0,
+        temperature=ai_temperature,
+    )
+
+    if response.choices:
+        result = response.choices[0].message.content
+        print('ответ нейронки',result)
+    else:
+        result = ''
+    
+    return result.strip()
+
+
+async def generate_caption_to_coffee_scenario_photo(account_info: str,
+                                                    thread: Thread,
+                                                    new_messages: str,
+                                                    purpose: str | None = None):
+    model = 'anthropic/claude-sonnet-5'
+    # ai_temperature = thread.ai_temperature or 0.5
+
+    ai_router = openrouter_client
+
+    if model == AIModelEnum.QWEN_ORCA:
+        ai_router = orcarouter_client
+
+    print(f'using model {model} for generating...\n')
+
+    system_content = f'{PREFIX_SYSTEM_PROMPT}\n{account_info}.\n\n'
+
+
+    sub_system_prompt = ''
+
+    if purpose:
+        match purpose:
+            case 'before':
+                sub_system_prompt = "Ты должен сгенерировать сообщение перед отправкой фотографии. На фотографии будет уставшая девушка(ты). "
+            case 'after':
+                sub_system_prompt = 'Ты должен сгенерировать сообщение перед отправкой фотографии. На фотографии будет довольная(благодарная) девушка(ты) со стаканчиком кофе.'
+
+    system_content += (
+        "Твоя единственная задача — сгенерировать ОДНО сообщение для отправки собеседнику в Instagram Direct, "
+        "как реальный ответ в диалоге. НЕ создавай выжимку, резюме или пересказ переписки — "
+        "твой ответ должен быть репликой, будто ты сама пишешь собеседнику прямо сейчас. "
+        "Контекст переписки и новые сообщения приведены ниже только для понимания ситуации — "
+        "не пересказывай их, а ответь на них.\n\nЕсли новые сообщения не переданы - значит они уже учтены в контексте переписки"
+        "(формат новых сообщений: {текст сообщения} | {время сообщения} | {отправитель}).\n\n"
+        "user - это собеседник, assistant - это девушка, которая общается с user`ом\n"
+        "Ты генерируешь сообщение от лица assistant\n"
+    )
+
+    if sub_system_prompt:
+        system_content += f"{sub_system_prompt}. Конкретную формулировку подписи придумай на основе предыдущих сообщений в чате."
+    
+    user_content = (
+        # f"Контекст переписки:\n{thread_context}\n\n"
+        f"Новые сообщения:\n{new_messages}\n\n"
+        f"Напиши ТОЛЬКО текст своего следующего сообщения собеседнику "
+        f"без пояснений и без пересказа переписки."
+        f"Сообщение должно быть написано на языке - {thread.language}"
+        # f'При генерации содержимого сообщения учти следующую инструкцию - {step_instruction}'
+    )
+
+    _messages =[
+            {
+                "role": "system",
+                "content": system_content
+            },
+            {
+                "role": "user",
+                "content": user_content
+            }
+        ]
+
+    response = await ai_router.chat.completions.create(
+        model=model,
+        messages=_messages,
+        timeout=30.0,
+    )
+
+    if response.choices:
+        result = response.choices[0].message.content
+        print('ответ нейронки',result)
+    else:
+        result = ''
+    
+    return result.strip()
+
+
+# choice_prompt = '''Проанализируй сообщения и верни ОДНО слово из перечня [positive, negative, undefined].
+#                     Слово выбирается следующим образом: есть вопрос - {question}\n
+#                     Варианты ответа "positive": {positive}, "negative": {negative}, "undefined": {undefined}.
+#                     Выбери наиболее подходящий ответ и верни соответствующее слово.'''
+choice_prompt = '''Проанализируй сообщения и верни ОДНО слово из перечня [positive, undefined].
+                    Слово выбирается следующим образом: есть вопрос - {question}\n
+                    Варианты ответа "positive": {positive}, "undefined": {undefined}.
+                    Выбери наиболее подходящий ответ и верни соответствующее слово.'''
+
+
+
+async def like_jev_ai_request(system_prompt_kwargs: dict,
+                              user_prompt: str):
+    system_prompt = choice_prompt.format(**system_prompt_kwargs)
+
+    model = 'deepseek/deepseek-v4-flash-0731'
+    _messages =[
+            {
+                "role": "system",
+                "content": system_prompt
+            },
+            {
+                "role": "user",
+                "content": user_prompt
+            }
+        ]
+    response = await deepseek_client.chat.completions.create(
+        model=model,
+        messages=_messages,
+        timeout=100.0,
+    )
+    if response.choices:
+        result = response.choices[0].message.content
+        print('ответ нейронки',result)
+    else:
+        result = ''
+    
+    return result.strip()

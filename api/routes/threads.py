@@ -7,7 +7,7 @@ from fastapi import (APIRouter,
 from sqlalchemy import select, update, and_, func
 from sqlalchemy.orm import joinedload
 
-from db.queries import (execute_and_catch_db_error)
+from db.queries import (execute_and_catch_db_error, get_account_scenario_data_by_id)
 
 from db.base import (Message,
                      Thread,
@@ -28,6 +28,7 @@ from utils.dependencies import (admin_dependency,
                                 session_dependency)
 from utils.base import (generate_valid_insta_url,
                         generate_valid_media_url)
+from utils.scenarios import base_coffee_state
 
 from config import ADMIN_URL, ID_LIST_FOR_PERMISSION
 
@@ -702,3 +703,45 @@ async def edit_language_by_thread_id(data: EditThreadLanguageSchema,
         'thread_id': data.thread_id,
         'language': thread.language,
     }
+
+
+@thread_router.patch("/activate_coffee_scenario_by_thread_id")
+async def edit_language_by_thread_id(data: EditThreadFullParseSchema,
+                                     admin: admin_dependency,
+                                     session: session_dependency):
+    admin_id, is_main_admin = admin
+
+    query = (
+        select(Thread)
+        .where(
+            Thread.id == data.thread_id,
+        )
+    )
+
+    result = await execute_and_catch_db_error(session.execute(query),
+                                              session)
+    
+    thread: Thread = result.scalar_one_or_none()
+
+    if not thread:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Thread not found')
+
+    if not is_main_admin:
+        if thread.account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+
+    account_photos = await get_account_scenario_data_by_id(thread.account_id,
+                                                           session)
+
+    if not account_photos:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Account photos not found')
+
+    # thread.language = data.language
+    json_coffee_state = json.dumps(base_coffee_state)
+    thread.coffee_state = json_coffee_state
+
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)

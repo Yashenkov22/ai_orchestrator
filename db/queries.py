@@ -15,7 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from arq import ArqRedis
 
-from db.base import Account, Admin, Message, Thread, InstaUser, Attachment
+from db.base import Account, Admin, Message, Thread, InstaUser, Attachment, CoffeeScenarioPhoto
 
 # from utils.ai import (ai_extract_user_info,
 #                       generate_thread_context,
@@ -23,7 +23,7 @@ from db.base import Account, Admin, Message, Thread, InstaUser, Attachment
 #                       ai_translate_message)
 # from utils.base import RATIO_LEN_LIMIT, RATIO_LIMIT, generate_valid_media_url, moscow_tz, russian_ratio, try_translate_text, get_raw_messages_log_and_new_last_message_id, try_update_thread_memory
 from utils.exc import DB_ERROR_EXCEPTION, ChatNotFound, NotAccessToChat
-from utils.enums import MessageStatusEnum, ThreadColorEnum, AIModelEnum
+from utils.enums import MessageStatusEnum, ThreadColorEnum, AIModelEnum, MessageTypeEnum
 # from utils.tasks import get_raw_messages_log_and_new_last_message_id, try_update_thread_memory
 # from websocket.redis_listener import publish_event
 # from websocket.base import manager
@@ -921,5 +921,40 @@ async def get_message_slice(offset: int,
     
     messages = await execute_and_catch_db_error(session.execute(query),
                                                session)
+    
+    return messages.scalars().all()
+
+
+async def get_N_last_messages(message_count: int,
+                              thread_id: int,
+                              session: AsyncSession):
+    query = (
+        select(Message)\
+        .where(
+            Message.thread_id == thread_id,
+            Message.status == MessageStatusEnum.APPROVED,
+            Message.type == MessageTypeEnum.TEXT,
+        )
+        .order_by(Message.id.desc())
+        .limit(message_count)
+    )
+    
+    messages = await execute_and_catch_db_error(session.execute(query),
+                                                session)
+    
+    return messages.scalars().all()
+
+
+async def get_account_scenario_data_by_id(account_id: int,
+                                          session: AsyncSession):
+    query = (
+        select(CoffeeScenarioPhoto)\
+        .where(
+            CoffeeScenarioPhoto.account_id == account_id,
+        )
+    )
+    
+    messages = await execute_and_catch_db_error(session.execute(query),
+                                                session)
     
     return messages.scalars().all()
