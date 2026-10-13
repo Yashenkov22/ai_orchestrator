@@ -1,4 +1,5 @@
-from .tasks import (background_ai_generation)
+from .tasks import (background_ai_generation,
+                    background_coffee_scenario)
 from background.base import (redis_settings,
                              _redis_pool,
                              get_redis_background_pool)
@@ -37,6 +38,7 @@ async def shutdown(ctx):
 class WorkerSettings:
     functions = [
         background_ai_generation,
+        background_coffee_scenario,
         ]
     on_startup = startup
     on_shutdown = shutdown

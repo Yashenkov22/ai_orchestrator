@@ -103,13 +103,14 @@ async def get_request_to_jev_ai(state,
 
 
 async def route_jev_coffee_scenario(thread: Thread,
-                                    coffee_scenario_data: dict,
+                                    coffee_state: CoffeeStateSchema,
+                                    last_messages: list[Message],
                                     session: AsyncSession):
     state = 'Тебе даны последние сообщения из переписки с пользователем. Ты общаешься от лица assistant, пользователь — от лица user. Вот сообщения: {}'
     
-    coffee_state: CoffeeStateSchema = coffee_scenario_data.get('coffee_state')
+    # coffee_state: CoffeeStateSchema = coffee_scenario_data.get('coffee_state')
 
-    last_messages = coffee_scenario_data.get('last_messages')
+    # last_messages = coffee_scenario_data.get('last_messages')
 
     current_step = coffee_state.current_step
 
@@ -119,7 +120,7 @@ async def route_jev_coffee_scenario(thread: Thread,
     
     match current_step:
         case 1:
-            # _state = state.format(raw_messages_log)
+            _state = state.format(raw_messages_log)
             # _state += '\nХочу написать от лица assistant в следующем сообщении, что я(assistant) устала на работе(от работы)'
             # questions = {
             #     "question_1": Choice(
@@ -148,33 +149,33 @@ async def route_jev_coffee_scenario(thread: Thread,
                 'positive': "Да, уместно",
                 # 'negative': "Такая реплика неуместна в контексте этой переписки",
                 # 'have_question': 'Есть сообщение(я) от user, по типу "Как дела", без ответа',
-                'undefined': "Не могу определить",
+                'negative': "Нет, не уместно",
             }
 
             nual_question_kwargs = {
-                'question': 'Есть ли сообщение(я) от user, по типу "Как дела", без ответа?',
+                'question': 'Есть ли сообщение(я) от user`а где он спрашивает как дела у assistant, которые остались без ответа?',
                 'positive': "Да, есть",
                 # 'negative': "Такая реплика неуместна в контексте этой переписки",
                 # 'have_question': 'Есть сообщение(я) от user, по типу "Как дела", без ответа',
-                'undefined': "Не могу определить",
+                'negative': "Нет, таких сообщений нет",
             }
 
             choice_answer = await like_jev_ai_request(system_prompt_kwargs=choice_question_kwargs,
-                                                   user_prompt=state)
+                                                   user_prompt=_state)
 
             nual_answer = await like_jev_ai_request(system_prompt_kwargs=nual_question_kwargs,
-                                                   user_prompt=state)
+                                                   user_prompt=_state)
             # print(' -> jev answer', jev_answer)
             
             choice_result = choice_answer.lower()
 
             nual_result = nual_answer.lower()
 
-            if choice_result not in {'positive', 'undefined'}:
+            if choice_result not in {'positive', 'negative'}:
                 print(f'error with validate like jev answer - {choice_result}')
                 raise
 
-            if nual_result not in {'positive', 'undefined'}:
+            if nual_result not in {'positive', 'negative'}:
                 print(f'error with validate like jev answer - {nual_result}')
                 raise
 
@@ -315,7 +316,7 @@ async def route_jev_coffee_scenario(thread: Thread,
 
             # print(f' -> last messages log\n{raw_messages_log}')
 
-            # _state = state.format(raw_messages_log)
+            _state = state.format(raw_messages_log)
             # state += '\nХочу узнать как собеседник(user) отреагировал на последние сообщения от assistant\nВ частности, на вопрос от assistant про кофе(если такой был)'
             # questions = {
             #     "question_1": Choice(
@@ -360,21 +361,21 @@ async def route_jev_coffee_scenario(thread: Thread,
                 'question': 'Как собеседник отреагировал на вопрос assistant <Сможет ли он угостить assistant кофе>?',
                 'positive': "Положительно",
                 # 'negative': "Негативно",
-                'undefined': "Не могу определить",
+                'negative': "Отрицательно",
             }
 
             nual_question_kwargs = {
                 'question': 'Есть ли в переданных сообщениях вопрос от assistant про кофе?',
                 'positive': "Да, есть",
                 # 'negative': "Негативно",
-                'undefined': "Не могу определить",
+                'negative': "Нет, такого вопроса",
             }
 
             choice_answer = await like_jev_ai_request(system_prompt_kwargs=choice_question_kwargs,
-                                                      user_prompt=state)
+                                                      user_prompt=_state)
 
             nual_answer = await like_jev_ai_request(system_prompt_kwargs=nual_question_kwargs,
-                                                      user_prompt=state)
+                                                      user_prompt=_state)
 
             # print(' -> jev answer', jev_answer)
 
@@ -382,10 +383,10 @@ async def route_jev_coffee_scenario(thread: Thread,
 
             choice_result = choice_answer.lower()
 
-            if nual_result not in {'positive', 'undefined'}:
+            if nual_result not in {'positive', 'negative'}:
                 print(f'error with validate like jev answer - {nual_result}')
                 raise
-            if choice_result not in {'positive', 'undefined'}:
+            if choice_result not in {'positive', 'negative'}:
                 print(f'error with validate like jev answer - {choice_result}')
                 raise
 
@@ -394,7 +395,7 @@ async def route_jev_coffee_scenario(thread: Thread,
                     'current_step': current_step,
                     'action': False,
                 }
-            if choice_question_kwargs != 'positive':
+            if choice_result != 'positive':
                 return {
                     'current_step': current_step,
                     'action': False,

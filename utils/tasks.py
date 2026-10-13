@@ -2051,9 +2051,6 @@ async def try_add_messages(message_data: dict,
     messages = message_data.get('messages')
     insert_messages = []
     message_ids_for_translate = []
-    memory_updated = None
-
-    unread_messages_text = ''
 
     if thread_id and messages:
         for message in reversed(messages):
@@ -2079,76 +2076,65 @@ async def try_add_messages(message_data: dict,
                                   attachments=[Attachment(media_type=t, media_url=u) for t, u in message.get("media_files", [])])
             insert_messages.append(new_message)
 
-            if new_message.text:
-                _text = f'{new_message.text} | {new_message.created_at} | {new_message.sender}'
-                unread_messages_text += _text
-
         if insert_messages:
             session.add_all(insert_messages)
 
             await execute_and_catch_db_error(session.flush(),
                                              session,
                                              with_rollback=True)
-            
-            # new_generated_message = None
 
+            bg_task_already_exists = False
+            
+            if thread.coffee_state is not None:
+                # coffee_state = thread.coffee_state # json или None
+                coffee_state = get_coffee_state(thread)
+
+                # if not coffee_state:
+                #     return
+                
+                # if not isinstance(coffee_state, dict):
+                #     coffee_state = json.loads(coffee_state)
+            
+                # coffee_state = CoffeeStateSchema.model_validate(coffee_state)
+
+                if coffee_state.status == CoffeeStatusEnum.ACTIVE:
+                    
+                    if coffee_state.is_scenario_step:
+                        # bg job for coffee scenario
+                        job = await redis_pool.enqueue_job(
+                            'background_coffee_scenario',
+                            thread.id,
+                            _queue_name='arq:ai',
+                        )
+                        bg_task_already_exists = True
+                    else:
+                        # bg job for basic behavior
+                        job = await redis_pool.enqueue_job(
+                            'background_ai_generation',
+                            thread.id,
+                            True, # switch_to_scenario_step
+                            _queue_name='arq:ai',
+                        )
+                        bg_task_already_exists = True
+                elif coffee_state.status == CoffeeStatusEnum.MODERATING:
+                    bg_task_already_exists = True
+                    
             if thread.color_level in (ThreadColorEnum.YELLOW, ThreadColorEnum.GREY) and thread.is_pinned:
 
-                job = await redis_pool.enqueue_job(
-                    'background_ai_generation',
-                    thread.id,
-                    _queue_name='arq:ai',
-                )
-                # проверить и если нужно обновить контекст 
-                # и json о юзере, обновить last_message_id в Thread
-                # memory_updated = await try_update_thread_memory(thread,
-                #                                                 session,
-                #                                                 redis_pool)
-                # print(f'is memory updated - {memory_updated}')
+                if not bg_task_already_exists:
+                    job = await redis_pool.enqueue_job(
+                        'background_ai_generation',
+                        thread.id,
+                        _queue_name='arq:ai',
+                    )
 
-                # messages_for_raw_log = await get_new_thread_messages(thread_id=thread.id,
-                #                                                      last_message_id=thread.last_message_id,
-                #                                                      session=session)
-                # raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(messages_for_raw_log)
-
-                # generated_text = await generate_new_message_to_thread(account_info=thread.account.information,
-                #                                                       thread=thread,
-                #                                                       thread_context=thread.context,
-                #                                                       new_messages=raw_messages_log)
-                
-                # insert_data = {
-                #     'sender': 'assistant',
-                #     'created_at': datetime.now(tz=timezone.utc),
-                #     'updated_at': datetime.now(tz=timezone.utc),
-                #     'thread_id': thread.id,
-                #     'text': generated_text,
-                #     'status': MessageStatusEnum.PENDING,
-                # }
-
-                # new_generated_message = Message(**insert_data)
-
-                # session.add(new_generated_message)
-
-            # thread.context = new_context
             thread.is_unread = sender == 'user'
             thread.timestamp_last_seen_message = ts
-            # thread.user_information = new_user_information
 
             await execute_and_catch_db_error(session.commit(),
                                              session,
                                              with_rollback=True)
 
-            # if memory_updated:
-            #     job = await redis_pool.enqueue_job(
-            #         'translate_user_information_by_thread_id',
-            #         thread.id,
-            #         _queue_name='arq:utils',
-            #     )
-
-            # publish update to redis
-            # thread updated
-            # publish new messages to thread page
-            # new messages(create message [many])
             payload = {
                 'account_id': thread.account_id,
             }
@@ -2211,30 +2197,6 @@ async def try_add_messages(message_data: dict,
             await publish_event(redis_pool,
                     type='Thread detail updated',
                     payload=payload)
-
-            # publish update to redis
-            # new message generated
-            # publish new message to thread page
-            # new message(ai generate)
-            # if new_generated_message:
-            #     payload = {
-            #         'thread_id': new_generated_message.thread_id,
-            #     }
-            #     message_payload = {
-            #         'id': str(new_generated_message.id),
-            #         'role': new_generated_message.sender,
-            #         'content': new_generated_message.text,
-            #         'translated_content': new_generated_message.translated_text or '',
-            #         'ts': new_generated_message.created_at.strftime("%Y-%d-%m %H:%M") if new_generated_message.created_at else "",
-            #         "modStatus": new_generated_message.status,
-            #         'attachment': None,
-
-            #     }
-            #     payload['message'] = message_payload
-
-            #     await publish_event(redis_pool,
-            #             type='message created',
-            #             payload=payload)
 
             return True
 
@@ -2349,3 +2311,21 @@ async def need_run_coffee_scenario(thread: Thread,
             'coffee_state': coffee_state,
             'last_messages': last_N_messages,
         }
+
+
+def get_coffee_state(thread: Thread) -> CoffeeStateSchema:
+        coffee_state = thread.coffee_state # json или None
+
+        if not coffee_state:
+            return
+        
+        try:
+            if not isinstance(coffee_state, dict):
+                coffee_state = json.loads(coffee_state)
+            
+            coffee_state = CoffeeStateSchema.model_validate(coffee_state)
+            
+            return coffee_state
+        except Exception as ex:
+            print('error with try validate', ex)
+            return

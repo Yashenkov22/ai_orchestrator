@@ -237,7 +237,9 @@ async def generate_new_message_to_thread(account_info: str,
 
     if model == AIModelEnum.QWEN_ORCA:
         ai_router = orcarouter_client
-    
+
+    elif model == AIModelEnum.DEEPSEEK_LATEST:
+        ai_router = deepseek_client
 
     # model = 'anthropic/claude-sonnet-5'
     # ai_temperature = 0.5
@@ -368,7 +370,7 @@ async def generate_new_message_to_thread(account_info: str,
 
     if response.choices:
         result = response.choices[0].message.content
-        # print('ответ нейронки',result)
+        print('ответ нейронки(обычный)',result)
     else:
         result = ''
     
@@ -602,7 +604,7 @@ async def generate_new_message_to_thread_coffee_scenario(account_info: str,
 
     if response.choices:
         result = response.choices[0].message.content
-        print('ответ нейронки',result)
+        print('ответ нейронки(сценарий)',result)
     else:
         result = ''
     
@@ -613,7 +615,7 @@ async def generate_caption_to_coffee_scenario_photo(account_info: str,
                                                     thread: Thread,
                                                     new_messages: str,
                                                     purpose: str | None = None):
-    model = 'anthropic/claude-sonnet-5'
+    model = thread.ai_model
     # ai_temperature = thread.ai_temperature or 0.5
 
     ai_router = openrouter_client
@@ -688,11 +690,29 @@ async def generate_caption_to_coffee_scenario_photo(account_info: str,
 #                     Слово выбирается следующим образом: есть вопрос - {question}\n
 #                     Варианты ответа "positive": {positive}, "negative": {negative}, "undefined": {undefined}.
 #                     Выбери наиболее подходящий ответ и верни соответствующее слово.'''
-choice_prompt = '''Проанализируй сообщения и верни ОДНО слово из перечня [positive, undefined].
-                    Слово выбирается следующим образом: есть вопрос - {question}\n
-                    Варианты ответа "positive": {positive}, "undefined": {undefined}.
-                    Выбери наиболее подходящий ответ и верни соответствующее слово.'''
+# choice_prompt = '''Проанализируй сообщения и верни ОДНО слово из перечня [positive, undefined].
+#                     Слово выбирается следующим образом: есть вопрос - {question}\n
+#                     Варианты ответа "positive": {positive}, "undefined": {undefined}.
+#                     Выбери наиболее подходящий ответ и верни соответствующее слово.'''
 
+choice_prompt = '''
+Проанализируй переданные сообщения переписки и ответь на вопрос.
+
+Вопрос: {question}
+
+Варианты классификации:
+
+* positive — {positive}
+* negative — {negative}
+
+Правила:
+
+1. Анализируй содержание сообщений с учётом последовательности переписки и ролей участников.
+2. Выбирай positive, только если условие явно подтверждается сообщениями.
+3. Выбирай negative, если условие явно НЕ подтверждается сообщениями.
+4. Не придумывай отсутствующие сообщения, вопросы или реакции.
+5. Верни только одно слово: positive или negative. Не добавляй пояснений.
+'''
 
 
 async def like_jev_ai_request(system_prompt_kwargs: dict,
@@ -713,6 +733,7 @@ async def like_jev_ai_request(system_prompt_kwargs: dict,
     response = await deepseek_client.chat.completions.create(
         model=model,
         messages=_messages,
+        temperature=0,
         timeout=100.0,
     )
     if response.choices:

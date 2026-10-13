@@ -22,7 +22,7 @@ from utils.schemas import (AttachmentListSchema,
                            EditThreadFullParseSchema, EditThreadLanguageSchema,
                            EditThreadNotesSchema,
                            EditThreadPinMarkSchema,
-                           EditThreadUnreadMarkSchema,
+                           EditThreadUnreadMarkSchema, ListThreadElementSchema,
                            ThreadSchema)
 from utils.dependencies import (admin_dependency,
                                 session_dependency)
@@ -31,6 +31,7 @@ from utils.base import (generate_valid_insta_url,
 from utils.scenarios import base_coffee_state
 
 from config import ADMIN_URL, ID_LIST_FOR_PERMISSION
+from utils.tasks import get_coffee_state
 
 
 
@@ -38,7 +39,8 @@ thread_router = APIRouter(tags=['Treads'],
                           prefix='/threads')
 
 # @thread_router.get("/threads")
-@thread_router.get("/list")
+@thread_router.get("/list",
+                   response_model=list[ListThreadElementSchema])
 async def get_threads(admin: admin_dependency,
                       session: session_dependency):
     admin_id, is_main_admin = admin
@@ -55,7 +57,7 @@ async def get_threads(admin: admin_dependency,
             Thread.is_unread.desc(),
             Thread.timestamp_last_seen_message.desc(),
         )\
-        .where(Account.is_hidden == False)
+        # .where(Account.is_hidden == False)
     )
 
     if not is_main_admin:
@@ -78,12 +80,13 @@ async def get_threads(admin: admin_dependency,
             'color_level': t.color_level,
             'is_pinned': t.is_pinned,
             'is_approved': t.is_approved,
-            'is_banned': t.is_blocked,
+            'is_blocked': t.is_blocked,
             'proccess_block': t.proccess_block,
             "last_activity": (
                 t.timestamp_last_seen_message.strftime("%Y-%d-%m %H:%M")
                 if t.timestamp_last_seen_message else ""
             ),
+            'coffee_state': get_coffee_state(t)
         })
     return thread_list
 
@@ -91,7 +94,7 @@ async def get_threads(admin: admin_dependency,
 # @thread_router.get("/accounts/{account_id}/threads",
 #                  response_model=list[ThreadSchema])
 @thread_router.get("/{account_id}/threads",
-                 response_model=list[ThreadSchema])
+                 response_model=list[ListThreadElementSchema])
 async def get_threads_by_account_id(account_id: int,
                                     admin: admin_dependency,
                                     session: session_dependency):
@@ -120,7 +123,7 @@ async def get_threads_by_account_id(account_id: int,
     thread_list = []
 
     for t in threads:
-        thread_list.append(ThreadSchema(**{
+        thread_list.append(ListThreadElementSchema(**{
             "id": t.id,
             'account_id': t.account_id,
             "account_name": t.account.view_name or t.account.username,
@@ -135,6 +138,7 @@ async def get_threads_by_account_id(account_id: int,
                 t.timestamp_last_seen_message.strftime("%Y-%d-%m %H:%M")
                 if t.timestamp_last_seen_message else ""
             ),
+            'coffee_state': get_coffee_state(t),
         }))
     return thread_list
 
@@ -233,7 +237,8 @@ async def get_threads(admin: admin_dependency,
             'insta_link': generate_valid_insta_url(thread.insta_user.username),
             'username': thread.insta_user.username,
             'full_name': thread.insta_user.full_name,
-        }
+        },
+        'coffee_state': get_coffee_state(thread),
     }
     
     thread_info['context'] = thread.context or ''

@@ -139,6 +139,18 @@ class AddMessageSchema(BaseMessageSchema):
     pass
 
 
+class CoffeeLogStepSchema(BaseModel):
+    status: str = Field(default=CoffeeStepLogSchema.WAITING)
+    result: str | None = Field(default=None)
+
+
+class CoffeeStateSchema(BaseModel):
+    status: CoffeeStatusEnum
+    current_step: int
+    is_scenario_step: bool
+    logs: dict[str, CoffeeLogStepSchema] # key - step_1/2/3/4
+
+
 class DetailMessageSchema(BaseMessageSchema):
     id: int
     chat_id: int
@@ -235,6 +247,7 @@ class PatchHiddenMarkAccountSchema(BaseModel):
 
 class ThreadSchema(BaseModel):
     id: int
+    account_id: int | None
     account_name: str
     user_name: str
     has_unread: bool
@@ -331,6 +344,7 @@ class DetailThreadSchema(BaseModel):
     notes: str | None
     messages: list[MessageSchema]
     oldest_message_id: int | None
+    coffee_state: CoffeeStateSchema | None
 
 
 class UpdateProfileDataSchema(BaseModel):
@@ -411,19 +425,6 @@ class AddNewTransitionSchema(BaseModel):
     evaluation_conditions: list[EvaluationCondition]
 
 
-class CoffeeLogStepSchema(BaseModel):
-    status: str = Field(default=CoffeeStepLogSchema.WAITING)
-    result: str | None = Field(default=None)
-
-
-class CoffeeStateSchema(BaseModel):
-    status: CoffeeStatusEnum
-    current_step: int
-    is_scenario_step: bool
-    logs: dict[str, CoffeeLogStepSchema] # key - step_1/2/3/4
-
-
-
 class CoffeeScenarioPhotoSchema(BaseModel):
     account_id: int
     purpose: str
@@ -434,3 +435,8 @@ class DetailCofeeScenarioPhotoSchema(BaseModel):
     id: int
     media_url: str
     purpose: Literal['before', 'after']
+
+
+
+class ListThreadElementSchema(ThreadSchema):
+    coffee_state: CoffeeStateSchema | None
