@@ -19,10 +19,10 @@ from config import AI_API_TOKEN, DEEPSEEK_API_TOKEN, AI_ORCA_API_TOKEN
 #     api_key=DEEPSEEK_API_TOKEN,
 #     base_url="https://api.deepseek.com"   # было https://openrouter.ai/api/v1
 # )
-deepseek_client = AsyncOpenAI(
-    api_key=AI_API_TOKEN,
-    base_url="https://openrouter.ai/api/v1"
-)
+# deepseek_client = AsyncOpenAI(
+#     api_key=AI_API_TOKEN,
+#     base_url="https://openrouter.ai/api/v1"
+# )
 
 openrouter_client = AsyncOpenAI(
     api_key=AI_API_TOKEN,
@@ -40,8 +40,8 @@ async def generate_thread_context(thread_context: str | None,
     print('запрос к нейронке...')
     
     # if for_db:
-    model="deepseek/deepseek-v4-flash-0731"
-    _client = deepseek_client
+    model=AIModelEnum.DEEPSEEK_LATEST
+    _client = openrouter_client
     system_content = (
         # "Ты выполняешь ТОЛЬКО одну техническую функцию: сжимаешь длительную переписку в Instagram Direct "
         # "в краткую фактическую выжимку для внутреннего использования в диалоговой системе. "
@@ -141,8 +141,10 @@ async def ai_translate_message(text: str):
         )
         user_content = text
 
-        response = await deepseek_client.chat.completions.create(
-            model="deepseek/deepseek-v4-flash-0731",
+        model = AIModelEnum.DEEPSEEK_LATEST
+
+        response = await openrouter_client.chat.completions.create(
+            model=model,
             messages=[
                 {
                     "role": "system",
@@ -197,8 +199,10 @@ async def ai_translate_user_information(text: str):
         """
         user_content = text
 
-        response = await deepseek_client.chat.completions.create(
-            model="deepseek/deepseek-v4-flash-0731",
+        model = AIModelEnum.DEEPSEEK_LATEST
+
+        response = await openrouter_client.chat.completions.create(
+            model=model,
             messages=[
                 {
                     "role": "system",
@@ -459,8 +463,10 @@ async def ai_extract_user_info(text: str, existing_info: dict | None = None) -> 
         f"Верни обновлённый JSON-профиль."
     )
 
-    response = await deepseek_client.chat.completions.create(
-        model="deepseek/deepseek-v4-flash-0731",
+    model = AIModelEnum.DEEPSEEK_LATEST
+
+    response = await openrouter_client.chat.completions.create(
+        model=model,
         messages=[
             {"role": "system", "content": system_content},
             {"role": "user", "content": user_content},
