@@ -8,7 +8,7 @@ from utils.ai import generate_new_message_to_thread_coffee_scenario, like_jev_ai
 from utils.enums import CoffeeStepTypeSchema
 from utils.schemas import CoffeeStateSchema
 
-from typesafe_sdk import AsyncTypeSafeClient, Choice, Noul
+# from typesafe_sdk import AsyncTypeSafeClient, Choice, Noul
 
 from utils.base import get_raw_messages_log_and_new_last_message_id
 
@@ -83,16 +83,16 @@ coffee_scenario = {
 
 
 
-async def get_request_to_jev_ai(state,
-                                questions):
-    async with AsyncTypeSafeClient(api_key=TYPESAFE_API_KEY,
-                                   base_url='https://jev-ai.pro/api') as client:
-        response = await client.system_one(
-            state=state,
-            questions=questions,
-        )
+# async def get_request_to_jev_ai(state,
+#                                 questions):
+#     async with AsyncTypeSafeClient(api_key=TYPESAFE_API_KEY,
+#                                    base_url='https://jev-ai.pro/api') as client:
+#         response = await client.system_one(
+#             state=state,
+#             questions=questions,
+#         )
 
-    return response.answers
+#     return response.answers
 
 
 
