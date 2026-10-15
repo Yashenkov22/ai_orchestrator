@@ -164,7 +164,7 @@ def russian_ratio(text):
 
 def generate_valid_media_url(url: str | None):
     if url is not None and not url.startswith('http'):
-        url = f'{ADMIN_URL}{url}'
+        url = f'{ADMIN_URL}/{url}'
 
     if isinstance(url, str):
         url = url.replace('./','')

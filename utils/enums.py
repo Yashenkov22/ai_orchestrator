@@ -135,6 +135,7 @@ class CoffeeStatusEnum(str, Enum):
     PAUSE = 'in pause'
     COMPLETED = "completed"
     CANCELLED = "cancelled"
+    PREPARING = 'preparing'
 
 
 class CoffeeStepLogSchema(str, Enum):
@@ -147,4 +148,5 @@ class CoffeeStepTypeSchema(str, Enum):
     TEXT_MESSAGE = 'text'
     PHOTO_MESSAGE = 'photo'
     MODERATING = 'moderating'
+    PREPARING = 'preparing'
     

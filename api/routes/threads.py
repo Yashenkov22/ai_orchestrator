@@ -7,13 +7,14 @@ from fastapi import (APIRouter,
 from sqlalchemy import select, update, and_, func
 from sqlalchemy.orm import joinedload
 
-from db.queries import (execute_and_catch_db_error, get_account_scenario_data_by_id)
+from db.queries import (execute_and_catch_db_error, get_N_last_messages, get_account_scenario_data_by_id)
 
 from db.base import (Message,
                      Thread,
                      Account,
                      Attachment)
 
+from utils.ai import generate_new_message_to_thread
 from utils.schemas import (AttachmentListSchema,
                            DetailThreadSchema,
                            EditThreadAIModelSchema,
@@ -25,10 +26,11 @@ from utils.schemas import (AttachmentListSchema,
                            EditThreadUnreadMarkSchema, ListThreadElementSchema,
                            ThreadSchema)
 from utils.dependencies import (admin_dependency,
-                                session_dependency)
+                                session_dependency,
+                                arq_dependency)
 from utils.enums import CoffeeStatusEnum
 from utils.base import (generate_valid_insta_url,
-                        generate_valid_media_url)
+                        generate_valid_media_url, get_raw_messages_log_and_new_last_message_id)
 from utils.scenarios import base_coffee_state
 
 from config import ADMIN_URL, ID_LIST_FOR_PERMISSION
@@ -713,12 +715,13 @@ async def edit_language_by_thread_id(data: EditThreadLanguageSchema,
 
 @thread_router.post("/activate_coffee_scenario_by_thread_id")
 async def create_scenario_thread_by_thread_id(data: EditThreadFullParseSchema,
+                                              redis_pool: arq_dependency,
                                               admin: admin_dependency,
                                               session: session_dependency):
     if data.marker != 'activate':
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail='Wrong request')
-    
+
     admin_id, is_main_admin = admin
 
     query = (
@@ -758,6 +761,14 @@ async def create_scenario_thread_by_thread_id(data: EditThreadFullParseSchema,
     await execute_and_catch_db_error(session.commit(),
                                      session,
                                      with_rollback=True)
+
+    job = await redis_pool.enqueue_job(
+        'background_coffee_scenario',
+        thread.id,
+        _queue_name='arq:ai',
+    )
+
+    print(f' -> bg task after createing scenario - {job.job_id}...')
 
 
 

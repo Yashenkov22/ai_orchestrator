@@ -931,7 +931,7 @@ async def background_coffee_scenario(cxt,
             print(' -> NOT COFFEE STATE!!!')
             return
 
-        last_messages = await get_N_last_messages(message_count=20,
+        last_messages = await get_N_last_messages(message_count=50,
                                                   thread_id=thread.id,
                                                   session=_session)
 
@@ -941,7 +941,7 @@ async def background_coffee_scenario(cxt,
                                                                _session)        
         action_marker = jev_step_action_data.get('action')
 
-        if coffee_state.current_step == 4:
+        if coffee_state.current_step == 5:
             if coffee_state.status != CoffeeStatusEnum.MODERATING:
                 if action_marker:
                     coffee_state.status = CoffeeStatusEnum.MODERATING
@@ -976,13 +976,24 @@ async def background_coffee_scenario(cxt,
                                                                            thread,
                                                                            thread.account,
                                                                            coffee_photos)
-            
             generated_text, attachment = genarated_message_data
 
             current_step = coffee_state.current_step
 
-            if current_step in (2, 5):
-                print(' -> inside current_step in (2, 5)...')
+            if current_step == 1:
+                print('last basic behaivor before scenario step_2...')
+
+                raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(last_messages)
+
+                generated_text = await generate_new_message_to_thread(account_info=thread.account.information,
+                                                                    thread=thread,
+                                                                    thread_context=thread.context,
+                                                                    new_messages=raw_messages_log)
+                # switch step to step_2
+                pass
+
+            elif current_step == 3:
+                print(' -> inside current_step 3...')
                 purpose = attachment.pop('purpose')
                 generated_text = await generate_caption_to_coffee_scenario_photo(account_info=thread.account.information,
                                                                                  thread=thread,
@@ -1077,7 +1088,7 @@ async def background_coffee_scenario(cxt,
         except Exception as ex:
             print(ex)
 
-        if current_step != 3:
+        if current_step != 4:
             coffee_state.is_scenario_step = not is_scenario_step
         
         if current_step < 6:

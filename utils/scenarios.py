@@ -39,8 +39,62 @@ base_coffee_state = {
     'is_scenario_step': True,
 }
 
+# coffee_scenario = {
+
+#     'step_1': {
+#         'type': CoffeeStepTypeSchema.TEXT_MESSAGE,
+#         'instruction': '''
+#             Напиши, что ты устала. Сделай это с легким намеком на то, что впереди еще дела, а у тебя уже нет сил.
+#             Конкретную формулировку выбери самостоятельно в зависимости от контекста переписки:
+#             насколько сильно ты устала и от чего именно.
+#         '''
+#     },
+#     'step_2': {
+#         'type': CoffeeStepTypeSchema.PHOTO_MESSAGE,
+#         'instruction': '''
+#             Отправь подготовленное фото «Кофе-до».
+#         '''
+#     },
+#     'step_3': {
+#         'type': CoffeeStepTypeSchema.TEXT_MESSAGE,
+#         'instruction': '''
+#             Узнай, сможет ли он угостить(оплатить) тебя кофе. Подразумевается, что ты и собеседник в разных городах.
+#         '''
+#     },
+#     'step_4': {
+#         'type': CoffeeStepTypeSchema.MODERATING,
+#         'instruction': '''
+#             Ожидание модерации, куда скинуть на кофе.
+#         '''
+#     },
+
+
+
+
+
+
+#     'step_5': {
+#         'type': CoffeeStepTypeSchema.TEXT_MESSAGE,
+#         'instruction': '''
+#             Поблагодари собеседника, скажи что скоро отправишь фото.
+#         '''
+#     },
+#     'step_6': {
+#         'type': CoffeeStepTypeSchema.PHOTO_MESSAGE,
+#         'instruction': '''
+#             Отправь подготовленное фото «Кофе-после».
+#         '''
+#     },
+# }
+
 coffee_scenario = {
     'step_1': {
+        'type': CoffeeStepTypeSchema.PREPARING,
+        'instruction': '''
+            Проверь, есть ли в чате 50+ текстовых сообщений. До этого момента обычное общение.
+        '''
+    },
+    'step_2': {
         'type': CoffeeStepTypeSchema.TEXT_MESSAGE,
         'instruction': '''
             Напиши, что ты устала. Сделай это с легким намеком на то, что впереди еще дела, а у тебя уже нет сил.
@@ -48,34 +102,22 @@ coffee_scenario = {
             насколько сильно ты устала и от чего именно.
         '''
     },
-    'step_2': {
+    'step_3': {
         'type': CoffeeStepTypeSchema.PHOTO_MESSAGE,
         'instruction': '''
             Отправь подготовленное фото «Кофе-до».
         '''
     },
-    'step_3': {
+    'step_4': {
         'type': CoffeeStepTypeSchema.TEXT_MESSAGE,
         'instruction': '''
             Узнай, сможет ли он угостить(оплатить) тебя кофе. Подразумевается, что ты и собеседник в разных городах.
         '''
     },
-    'step_4': {
+    'step_5': {
         'type': CoffeeStepTypeSchema.MODERATING,
         'instruction': '''
             Ожидание модерации, куда скинуть на кофе.
-        '''
-    },
-    'step_5': {
-        'type': CoffeeStepTypeSchema.TEXT_MESSAGE,
-        'instruction': '''
-            Поблагодари собеседника, скажи что скоро отправишь фото.
-        '''
-    },
-    'step_6': {
-        'type': CoffeeStepTypeSchema.PHOTO_MESSAGE,
-        'instruction': '''
-            Отправь подготовленное фото «Кофе-после».
         '''
     },
 }
@@ -120,6 +162,20 @@ async def route_jev_coffee_scenario(thread: Thread,
     
     match current_step:
         case 1:
+            message_limit = 50
+
+            if len(last_messages) < message_limit:
+                    return {
+                        'current_step': current_step,
+                        'action': False,
+                    }
+            else:
+                    return {
+                        'current_step': current_step,
+                        'action': True,
+                        'last_messages': raw_messages_log,
+                    }
+        case 2:
             _state = state.format(raw_messages_log)
             # _state += '\nХочу написать от лица assistant в следующем сообщении, что я(assistant) устала на работе(от работы)'
             # questions = {
@@ -225,7 +281,7 @@ async def route_jev_coffee_scenario(thread: Thread,
             #             'action': False,
             #             'last_messages': raw_messages_log,
             #         }
-        case 2:
+        case 3:
             # raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(last_messages)
             # _state = state.format(raw_messages_log)
             # state += '\nХочу узнать как собеседник отреагировал на мое последнее сообщение(сообщение от assistant)'
@@ -268,7 +324,7 @@ async def route_jev_coffee_scenario(thread: Thread,
             #             'action': False,
             #         }
             # pass
-        case 3:
+        case 4:
             # после отправки фото "До кофе"
             # raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(last_messages)
             # _state = state.format(raw_messages_log)
@@ -311,7 +367,7 @@ async def route_jev_coffee_scenario(thread: Thread,
                 #         'current_step': current_step,
                 #         'action': False,
                 #     }
-        case 4:
+        case 5:
             # raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(last_messages)
 
             # print(f' -> last messages log\n{raw_messages_log}')
@@ -481,6 +537,11 @@ async def do_current_step_coffee_scenario(jev_data: dict,
          print(' -> waiting for moderate thread...')
          # send notification(ws event to frontend)
          pass
+    elif scenario_step_type == CoffeeStepTypeSchema.PREPARING:
+        return (
+            None,
+            None,
+            )
 
     
     return (
