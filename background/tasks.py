@@ -15,8 +15,9 @@ from sqlalchemy import select, and_, text
 
 from sqlalchemy.dialects.postgresql import JSONB
 
-from db.base import Account, Thread, Message
-from db.queries import (execute_and_catch_db_error, get_all_message_count,
+from config import ADMIN_URL, GENERATE_PHOTO_CAPTION
+from db.base import Account, Attachment, Thread, Message
+from db.queries import (execute_and_catch_db_error, get_N_last_messages, get_account_scenario_data_by_id, get_all_message_count,
                         get_message_by_id,
                         get_account_by_id, get_message_slice,
                         get_messages_only_by_id, get_new_thread_messages,
@@ -29,12 +30,14 @@ from utils.base import (try_block_thread,
                         try_start_profile,
                         try_stop_profile,
                         try_connect_to_main_instagram_page)
-from utils.tasks import (get_raw_messages_log_and_new_last_message_id, parse_thread_playwright,
+from utils.scenarios import do_current_step_coffee_scenario, route_jev_coffee_scenario, coffee_scenario
+from utils.schemas import CoffeeLogStepSchema, CoffeeStateSchema
+from utils.tasks import (get_coffee_state, get_raw_messages_log_and_new_last_message_id, need_run_coffee_scenario, parse_thread_playwright,
                          playwright_send_message,
                          test_playwright,
                          try_update_thread_memory)
-from utils.ai import ai_translate_message, ai_translate_user_information, generate_new_message_to_thread
-from utils.enums import MessageStatusEnum, MessageTypeEnum
+from utils.ai import ai_translate_message, ai_translate_user_information, generate_caption_to_coffee_scenario_photo, generate_new_message_to_thread
+from utils.enums import CoffeeStatusEnum, CoffeeStepLogSchema, MessageStatusEnum, MessageTypeEnum
 
 from websocket.redis_listener import publish_event
 
@@ -806,7 +809,9 @@ async def organize_new_message_types(cxt):
 
 
 async def background_ai_generation(cxt,
-                                   thread_id: int):
+                                   thread_id: int,
+                                   switch_to_scenario_step: bool = False):
+    print(' -> running basic bg ai background...')
     sessionmaker= cxt['sessionmaker']
     redis_pool = cxt['redis_pool']
 
@@ -819,16 +824,19 @@ async def background_ai_generation(cxt,
                                                         _session,
                                                         redis_pool)
         print(f'is memory updated - {memory_updated}')
+        print('basic behaivor...')
 
-        messages_for_raw_log = await get_new_thread_messages(thread_id=thread.id,
-                                                                last_message_id=thread.last_message_id,
-                                                                session=_session)
+        messages_for_raw_log = await get_N_last_messages(message_count=20,
+                                                         thread_id=thread.id,
+                                                         session=_session)
         raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(messages_for_raw_log)
 
         generated_text = await generate_new_message_to_thread(account_info=thread.account.information,
-                                                                thread=thread,
-                                                                thread_context=thread.context,
-                                                                new_messages=raw_messages_log)
+                                                              thread=thread,
+                                                              thread_context=thread.context,
+                                                              new_messages=raw_messages_log)
+
+        message_type = MessageTypeEnum.TEXT
         
         insert_data = {
             'sender': 'assistant',
@@ -836,6 +844,7 @@ async def background_ai_generation(cxt,
             'updated_at': datetime.now(tz=timezone.utc),
             'thread_id': thread.id,
             'text': generated_text,
+            'type': message_type,
             'status': MessageStatusEnum.PENDING,
         }
 
@@ -843,10 +852,27 @@ async def background_ai_generation(cxt,
 
         _session.add(new_generated_message)
 
-        await execute_and_catch_db_error(_session.commit(),
-                                         _session,
-                                         with_rollback=True)
+        await execute_and_catch_db_error(_session.flush(),
+                                         _session)
 
+        if switch_to_scenario_step:
+            coffee_state = get_coffee_state(thread)            
+            coffee_state.is_scenario_step = True
+            thread.coffee_state = coffee_state.model_dump(mode="json")
+
+            payload = {
+                'thread_id': thread_id,
+            }
+            payload['coffee_state'] = thread.coffee_state
+
+            await publish_event(redis_pool,
+                    type='thread coffee state changed',
+                    payload=payload)
+
+        await execute_and_catch_db_error(_session.commit(),
+                                        _session,
+                                        with_rollback=True)
+        
     if new_generated_message:
         payload = {
             'thread_id': new_generated_message.thread_id,
@@ -867,9 +893,219 @@ async def background_ai_generation(cxt,
                 type='message created',
                 payload=payload)
 
+    if switch_to_scenario_step and new_generated_message:
+        job = await redis_pool.enqueue_job(
+            'send_message_to_thread',
+            thread.account_id,
+            new_generated_message.id,
+            _queue_name='arq:messages',
+        )
+
     if memory_updated:
         job = await redis_pool.enqueue_job(
             'translate_user_information_by_thread_id',
             thread.id,
             _queue_name='arq:utils',
         )
+
+
+async def background_coffee_scenario(cxt,
+                                     thread_id: int):
+    print(' -> running coffee bg ai background...')
+    sessionmaker= cxt['sessionmaker']
+    redis_pool = cxt['redis_pool']
+
+    async with sessionmaker() as _session:
+        _session: AsyncSession
+        thread = await get_thread_by_id(thread_id,
+                                        _session)
+
+        memory_updated = await try_update_thread_memory(thread,
+                                                        _session,
+                                                        redis_pool)
+        print(f'is memory updated - {memory_updated}')
+
+        coffee_state = get_coffee_state(thread)
+
+        if not coffee_state:
+            print(' -> NOT COFFEE STATE!!!')
+            return
+
+        last_messages = await get_N_last_messages(message_count=20,
+                                                  thread_id=thread.id,
+                                                  session=_session)
+
+        jev_step_action_data = await route_jev_coffee_scenario(thread,
+                                                               coffee_state,
+                                                               last_messages,
+                                                               _session)        
+        action_marker = jev_step_action_data.get('action')
+
+        if coffee_state.current_step == 4:
+            if coffee_state.status != CoffeeStatusEnum.MODERATING:
+                if action_marker:
+                    coffee_state.status = CoffeeStatusEnum.MODERATING
+                else:
+                    coffee_state.status = CoffeeStatusEnum.CANCELLED
+
+                thread.coffee_state = coffee_state.model_dump(mode="json")
+
+                # ws event for coffee_state
+                payload = {
+                    'thread_id': thread_id,
+                }
+                payload['coffee_state'] = thread.coffee_state
+
+                await publish_event(redis_pool,
+                        type='thread coffee state changed',
+                        payload=payload)
+
+                await execute_and_catch_db_error(_session.commit(),
+                                                _session,
+                                                with_rollback=True)
+            else:
+                print(' -> thread waiting moderating...')
+            #ws event
+            return
+
+        if action_marker:
+            print('inside action...')
+            coffee_photos = await get_account_scenario_data_by_id(thread.account_id,
+                                                                  _session)
+            genarated_message_data = await do_current_step_coffee_scenario(jev_step_action_data,
+                                                                           thread,
+                                                                           thread.account,
+                                                                           coffee_photos)
+            
+            generated_text, attachment = genarated_message_data
+
+            current_step = coffee_state.current_step
+
+            if current_step in (2, 5):
+                print(' -> inside current_step in (2, 5)...')
+                purpose = attachment.pop('purpose')
+                generated_text = await generate_caption_to_coffee_scenario_photo(account_info=thread.account.information,
+                                                                                 thread=thread,
+                                                                                 new_messages=last_messages,
+                                                                                 purpose=purpose)
+
+        else:
+            print('basic behaivor...')
+
+            raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(last_messages)
+
+            generated_text = await generate_new_message_to_thread(account_info=thread.account.information,
+                                                                  thread=thread,
+                                                                  thread_context=thread.context,
+                                                                  new_messages=raw_messages_log)
+            attachment = None
+
+        message_type = MessageTypeEnum.TEXT
+        
+        if attachment:
+            message_type = attachment.get('media_type')
+        
+        insert_data = {
+            'sender': 'assistant',
+            'created_at': datetime.now(tz=timezone.utc),
+            'updated_at': datetime.now(tz=timezone.utc),
+            'thread_id': thread.id,
+            'text': generated_text,
+            'type': message_type,
+            'status': MessageStatusEnum.PENDING,
+        }
+
+        new_generated_message = Message(**insert_data)
+
+        _session.add(new_generated_message)
+
+        await execute_and_catch_db_error(_session.flush(),
+                                         _session)
+
+        if attachment:
+            message_id = new_generated_message.id
+
+            attachment.pop('purpose', None)
+
+            attachment.update({'message_id': message_id})
+
+            new_attachment = Attachment(**attachment)
+            _session.add(new_attachment)
+
+        await execute_and_catch_db_error(_session.commit(),
+                                        _session,
+                                        with_rollback=True)
+        
+    if new_generated_message:
+        payload = {
+            'thread_id': new_generated_message.thread_id,
+        }
+        message_payload = {
+            'id': str(new_generated_message.id),
+            'role': new_generated_message.sender,
+            'content': new_generated_message.text,
+            'translated_content': new_generated_message.translated_text or '',
+            'ts': new_generated_message.created_at.strftime("%Y-%d-%m %H:%M") if new_generated_message.created_at else "",
+            "modStatus": new_generated_message.status,
+            'attachment': attachment,
+
+        }
+        payload['message'] = message_payload
+
+        await publish_event(redis_pool,
+                type='message created',
+                payload=payload)
+
+    if memory_updated:
+        job = await redis_pool.enqueue_job(
+            'translate_user_information_by_thread_id',
+            thread.id,
+            _queue_name='arq:utils',
+        )
+
+    if action_marker:
+        current_step = coffee_state.current_step
+        is_scenario_step = coffee_state.is_scenario_step
+        print(f' -> тип шага - {is_scenario_step}')
+
+        try:
+            step_instruction = coffee_scenario.get(f'step_{current_step}').get('instruction')
+            result_log = f'''Инструкция шага: {step_instruction}\n
+                            Отправленное сообщение - {ADMIN_URL}/messages/message_{new_generated_message.id}'''
+            coffee_state.logs[f'step_{current_step}'] = CoffeeLogStepSchema(status=CoffeeStepLogSchema.COMPLETED,
+                                                                            result=result_log)
+        except Exception as ex:
+            print(ex)
+
+        if current_step != 3:
+            coffee_state.is_scenario_step = not is_scenario_step
+        
+        if current_step < 6:
+            coffee_state.current_step += 1
+
+        async with sessionmaker() as _session:
+            _session: AsyncSession
+            thread: Thread = await _session.merge(thread)
+            thread.coffee_state = coffee_state.model_dump(mode="json")
+
+            await execute_and_catch_db_error(_session.commit(),
+                                             _session,
+                                             with_rollback=True)
+
+        payload = {
+            'thread_id': thread_id,
+        }
+        payload['coffee_state'] = thread.coffee_state
+
+        await publish_event(redis_pool,
+                type='thread coffee state changed',
+                payload=payload)
+
+    job = await redis_pool.enqueue_job(
+        'send_message_to_thread',
+        thread.account_id,
+        new_generated_message.id,
+        _queue_name='arq:messages',
+    )
+
+    print(' -> auto send task running...')

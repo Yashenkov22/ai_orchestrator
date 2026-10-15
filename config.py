@@ -86,3 +86,8 @@ if ID_LIST_FOR_PERMISSION:
         for x in ID_LIST_FOR_PERMISSION.split(",")
         if x.strip()
     ]
+
+
+TYPESAFE_API_KEY = os.environ.get('TYPESAFE_API_KEY')
+
+GENERATE_PHOTO_CAPTION = 'GENERATE_PHOTO_CAPTION'

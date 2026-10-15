@@ -20,7 +20,7 @@ from sqlalchemy.orm import selectinload
 from db.queries import (execute_and_catch_db_error,
                         get_account_by_id, get_message_only_by_id, get_thread_only_by_id, get_threads_by_color, try_update_message_text)
 
-from db.base import Account, Thread
+from db.base import Account, Thread, CoffeeScenarioPhoto
 
 from db.queries import get_message_by_id
 
@@ -39,7 +39,9 @@ from utils.base import (generate_valid_media_url,
                         try_stop_profile)
 
 from config import SECRET_API, UPLOAD_DIR
-from utils.tasks import try_update_thread_memory
+# from utils.scenarios import run_coffee_scenario
+from utils.schemas import CoffeeScenarioPhotoSchema
+from utils.tasks import need_run_coffee_scenario, try_update_thread_memory
 from websocket.redis_listener import publish_event
 
 
@@ -389,3 +391,60 @@ async def generate_thread_memories(admin: admin_dependency,
     # task_counter += 1
 
     # return f'{task_counter} background tasks was running...'
+
+@utils_router.get("/test_jev")
+async def test_jev(admin: admin_dependency,
+                   session: session_dependency):
+    thread = await get_thread_only_by_id(1259,
+                                         session)
+    _dict = await need_run_coffee_scenario(thread,
+                                   session)
+
+    # last_messages = _dict.get('last_messages')
+
+    # await run_coffee_scenario(thread,
+    #                           _dict,
+    #                           session)
+
+
+
+@utils_router.get("/add_coffee_scenario_photo")
+async def add_coffee_scenario_photo(data: CoffeeScenarioPhotoSchema,
+                                    admin: admin_dependency,
+                                    session: session_dependency):
+    account_query = (
+        select(Account)\
+        .where(
+            Account.id == data.account_id,
+        )
+    )
+
+    res = await execute_and_catch_db_error(session.execute(account_query),
+                                           session)
+    
+    account: Account = res.scalar_one_or_none()
+
+    if not account:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Account not found by given account_id')
+    # CoffeeScenarioPhoto
+    insert_data = {
+        'purpose': data.purpose,
+        'photo_url': data.photo.get('media_url'),
+        'account_id': data.account_id,
+    }
+
+    new_coffee_photo = CoffeeScenarioPhoto(**insert_data)
+
+    session.add(new_coffee_photo)
+
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)
+
+    return {
+        'id': new_coffee_photo.id,
+        'purpose': new_coffee_photo.purpose,
+        'photo_url': new_coffee_photo.photo_url,
+        'account_id': new_coffee_photo.account_id,
+    }

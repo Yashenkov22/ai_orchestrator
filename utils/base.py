@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from playwright.async_api import async_playwright
 
 from config import ADMIN_URL, LIMIT_FOR_RAW_LOG_MESSAGES, X_TOKEN, VISION_BROWSER_HOST, VISION_BROWSER_PORT, TRANSLATOR_LINK
-# from db.base import Thread, Message
+from db.base import Message
 # from db.queries import get_new_thread_messages
 # from utils.ai import ai_extract_user_info, generate_thread_context
 
@@ -60,6 +60,30 @@ PREFIX_SYSTEM_PROMPT = 'I am uploading a complete personality profile to you. Yo
 #     Language.ITALIAN: "it",
 #     Language.HINDI: "hi",
 # }
+
+{
+    1: 'Узнай у собеседника, сможет ли он прислать тебе фото',
+    2: 'Если да - узнать куда ему будет удобно отправить. Если нет - напиши ответ, исходя из переписки. Конец сценария',
+    3: 'Если шаг 2 выполенен - отправь фото с благодарностью. Конец сценария',
+}
+
+{
+    1: {
+        'action': 'Узнай у собеседника, сможет ли он прислать тебе фото',
+        'status': '',
+        'result': '',
+    },
+    2: {
+        'action': 'Если да - узнать куда ему будет удобно отправить. Если нет - напиши ответ, исходя из переписки. Конец сценария',
+        'status': '',
+        'result': '',
+    },
+    3: {
+        'action': 'Если шаг 2 выполенен - отправь фото с благодарностью. Конец сценария',
+        'status': '',
+        'result': '',
+    },
+}
 
 
 LANGUAGE_LIST = [
@@ -140,7 +164,7 @@ def russian_ratio(text):
 
 def generate_valid_media_url(url: str | None):
     if url is not None and not url.startswith('http'):
-        url = f'{ADMIN_URL}{url}'
+        url = f'{ADMIN_URL}/{url}'
 
     if isinstance(url, str):
         url = url.replace('./','')
@@ -449,3 +473,25 @@ def is_video_thumbnail_response(response) -> bool:
         return False
 
     return 'igd_messenger_video_thumbnail' in decoded
+
+
+
+async def get_raw_messages_log_and_new_last_message_id(messages: list[Message]):
+    unread_messages_text = ''
+    user_message_text_only = ''
+
+    new_last_message_id = None
+
+    for message in messages:
+        _text = f'{message.text} | {message.created_at} | {message.sender}\n'
+        unread_messages_text += _text
+        new_last_message_id = message.id
+
+        if message.sender == 'user':
+            user_message_text_only += _text
+    
+    return (
+        unread_messages_text,
+        user_message_text_only,
+        new_last_message_id,
+    )

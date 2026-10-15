@@ -4,16 +4,17 @@ from fastapi import (APIRouter,
                      HTTPException,
                      status)
 
-from sqlalchemy import func, select, exists, and_
-from sqlalchemy.orm import  aliased
+from sqlalchemy import delete, func, select, exists, and_
+from sqlalchemy.orm import  aliased, selectinload
 
 from db.queries import (execute_and_catch_db_error,
                         get_account_by_username)
 
 from db.base import (Thread,
-                     Account)
+                     Account,
+                     CoffeeScenarioPhoto)
 
-from utils.schemas import (PatchAccountSchema,
+from utils.schemas import (CreateCoffeeScenarioPhotoSchema, DetailCofeeScenarioPhotoSchema, PatchAccountSchema,
                            NewAccountSchema, PatchHiddenMarkAccountSchema,
                            PatchInformationAccountSchema,
                            PatchPhotoAccountSchema, PatchViewNameAccountSchema,
@@ -124,6 +125,46 @@ async def get_accounts(admin: admin_dependency,
     ]
     
     return accounts
+
+
+
+@account_router.get("/get_coffee_scenario_photo_list",
+                    response_model=list[DetailCofeeScenarioPhotoSchema])
+async def create_coffee_scenario_photo(account_id: int,
+                                       admin: admin_dependency,
+                                       session: session_dependency):
+    admin_id, is_main_admin = admin
+
+    if not is_main_admin:
+        if account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                                detail='Dont have permissions')
+
+    query = (
+        select(Account)
+        .options(
+            selectinload(Account.coffee_photos)
+        )
+        .where(
+            Account.id == account_id
+        )
+    )
+
+    res = await execute_and_catch_db_error(
+        session.execute(query),
+        session
+    )
+
+    account: Account = res.scalar_one_or_none()
+
+    if not account:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Account not found')
+
+    for photo in account.coffee_photos:
+        photo.media_url = generate_valid_media_url(photo.media_url)
+
+    return account.coffee_photos
 
 
 # new
@@ -504,3 +545,81 @@ async def edit_hidden_mark_by_account_id(data: PatchHiddenMarkAccountSchema,
         'account_id': account.id,
         'parse_whole_thread_list': account.parse_whole_thread_list,
     }
+
+
+@account_router.post("/create_coffee_scenario_photo")
+async def create_coffee_scenario_photo(data: CreateCoffeeScenarioPhotoSchema,
+                                       admin: admin_dependency,
+                                       session: session_dependency):
+    admin_id, is_main_admin = admin
+
+    if not is_main_admin:
+        if data.account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                                detail='Dont have permissions')
+
+    query = (
+        select(
+            Account
+        )\
+        .where(
+            Account.id == data.account_id
+        )
+    )
+
+    res = await execute_and_catch_db_error(session.execute(query),
+                                           session)
+    
+    account: Account = res.scalar_one_or_none()
+
+    if not account:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Account not found')
+    
+    # account.photo_url = data.media_url
+    insert_data = {
+        'account_id': data.account_id,
+        'media_url': data.media_url,
+        'purpose': data.purpose
+    }
+
+    scenario_photo = CoffeeScenarioPhoto(**insert_data)
+
+    session.add(scenario_photo)
+
+    await execute_and_catch_db_error(session.flush(),
+                                     session,
+                                     with_rollback=True)
+
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)
+    return {
+        'id': scenario_photo.id,
+        'purpose': scenario_photo.purpose,
+        'media_url': generate_valid_media_url(scenario_photo.media_url),
+    }
+
+
+
+@account_router.delete("/delete_coffee_scenario_photo")
+async def delete_coffee_scenario_photo(photo_id: int,
+                                     admin: admin_dependency,
+                                     session: session_dependency):
+    admin_id, is_main_admin = admin
+    
+    delete_query = (
+        delete(
+            CoffeeScenarioPhoto
+        )\
+        .where(
+            CoffeeScenarioPhoto.id == photo_id
+        )
+    )
+
+    await execute_and_catch_db_error(session.execute(delete_query),
+                                     session)
+    
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)

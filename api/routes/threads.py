@@ -7,7 +7,7 @@ from fastapi import (APIRouter,
 from sqlalchemy import select, update, and_, func
 from sqlalchemy.orm import joinedload
 
-from db.queries import (execute_and_catch_db_error)
+from db.queries import (execute_and_catch_db_error, get_account_scenario_data_by_id)
 
 from db.base import (Message,
                      Thread,
@@ -22,14 +22,17 @@ from utils.schemas import (AttachmentListSchema,
                            EditThreadFullParseSchema, EditThreadLanguageSchema,
                            EditThreadNotesSchema,
                            EditThreadPinMarkSchema,
-                           EditThreadUnreadMarkSchema,
+                           EditThreadUnreadMarkSchema, ListThreadElementSchema,
                            ThreadSchema)
 from utils.dependencies import (admin_dependency,
                                 session_dependency)
+from utils.enums import CoffeeStatusEnum
 from utils.base import (generate_valid_insta_url,
                         generate_valid_media_url)
+from utils.scenarios import base_coffee_state
 
 from config import ADMIN_URL, ID_LIST_FOR_PERMISSION
+from utils.tasks import get_coffee_state
 
 
 
@@ -37,7 +40,8 @@ thread_router = APIRouter(tags=['Treads'],
                           prefix='/threads')
 
 # @thread_router.get("/threads")
-@thread_router.get("/list")
+@thread_router.get("/list",
+                   response_model=list[ListThreadElementSchema])
 async def get_threads(admin: admin_dependency,
                       session: session_dependency):
     admin_id, is_main_admin = admin
@@ -77,12 +81,13 @@ async def get_threads(admin: admin_dependency,
             'color_level': t.color_level,
             'is_pinned': t.is_pinned,
             'is_approved': t.is_approved,
-            'is_banned': t.is_blocked,
+            'is_blocked': t.is_blocked,
             'proccess_block': t.proccess_block,
             "last_activity": (
                 t.timestamp_last_seen_message.strftime("%Y-%d-%m %H:%M")
                 if t.timestamp_last_seen_message else ""
             ),
+            'coffee_state': get_coffee_state(t)
         })
     return thread_list
 
@@ -90,7 +95,7 @@ async def get_threads(admin: admin_dependency,
 # @thread_router.get("/accounts/{account_id}/threads",
 #                  response_model=list[ThreadSchema])
 @thread_router.get("/{account_id}/threads",
-                 response_model=list[ThreadSchema])
+                 response_model=list[ListThreadElementSchema])
 async def get_threads_by_account_id(account_id: int,
                                     admin: admin_dependency,
                                     session: session_dependency):
@@ -119,7 +124,7 @@ async def get_threads_by_account_id(account_id: int,
     thread_list = []
 
     for t in threads:
-        thread_list.append(ThreadSchema(**{
+        thread_list.append(ListThreadElementSchema(**{
             "id": t.id,
             'account_id': t.account_id,
             "account_name": t.account.view_name or t.account.username,
@@ -134,6 +139,7 @@ async def get_threads_by_account_id(account_id: int,
                 t.timestamp_last_seen_message.strftime("%Y-%d-%m %H:%M")
                 if t.timestamp_last_seen_message else ""
             ),
+            'coffee_state': get_coffee_state(t),
         }))
     return thread_list
 
@@ -232,7 +238,8 @@ async def get_threads(admin: admin_dependency,
             'insta_link': generate_valid_insta_url(thread.insta_user.username),
             'username': thread.insta_user.username,
             'full_name': thread.insta_user.full_name,
-        }
+        },
+        'coffee_state': get_coffee_state(thread),
     }
     
     thread_info['context'] = thread.context or ''
@@ -702,3 +709,100 @@ async def edit_language_by_thread_id(data: EditThreadLanguageSchema,
         'thread_id': data.thread_id,
         'language': thread.language,
     }
+
+
+@thread_router.post("/activate_coffee_scenario_by_thread_id")
+async def create_scenario_thread_by_thread_id(data: EditThreadFullParseSchema,
+                                              admin: admin_dependency,
+                                              session: session_dependency):
+    if data.marker != 'activate':
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail='Wrong request')
+    
+    admin_id, is_main_admin = admin
+
+    query = (
+        select(Thread)
+        .where(
+            Thread.id == data.thread_id,
+        )
+    )
+
+    result = await execute_and_catch_db_error(session.execute(query),
+                                              session)
+    
+    thread: Thread = result.scalar_one_or_none()
+
+    if not thread:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Thread not found')
+
+    if not is_main_admin:
+        if thread.account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+
+    if thread.coffee_state is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail='Scenario already exists')
+
+    account_photos = await get_account_scenario_data_by_id(thread.account_id,
+                                                           session)
+
+    if not account_photos:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Account photos not found')
+
+    json_coffee_state = json.dumps(base_coffee_state)
+    thread.coffee_state = json_coffee_state
+
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)
+
+
+
+@thread_router.post("/edit_coffee_scenario_by_thread_id")
+async def edit_scenario_thread_by_thread_id(data: EditThreadFullParseSchema,
+                                            admin: admin_dependency,
+                                            session: session_dependency):
+    admin_id, is_main_admin = admin
+
+    query = (
+        select(Thread)
+        .where(
+            Thread.id == data.thread_id,
+        )
+    )
+
+    result = await execute_and_catch_db_error(session.execute(query),
+                                              session)
+    
+    thread: Thread = result.scalar_one_or_none()
+
+    if not thread:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Thread not found')
+
+    if not is_main_admin:
+        if thread.account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+
+    coffee_state = get_coffee_state(thread)
+
+    if data.marker == 'pause':
+        coffee_state.status = CoffeeStatusEnum.PAUSE
+        coffee_state = coffee_state.model_dump(mode="json")
+    elif data.marker == 'activate':
+        coffee_state.status = CoffeeStatusEnum.ACTIVE
+        coffee_state = coffee_state.model_dump(mode="json")
+    elif data.marker == 'complete':
+        coffee_state.status = CoffeeStatusEnum.COMPLETED
+        coffee_state = coffee_state.model_dump(mode="json")
+    elif data.marker == 'delete':
+        coffee_state = None
+
+    thread.coffee_state = coffee_state
+
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)

@@ -108,3 +108,43 @@ class LanguageEnum(str, Enum):
     URDU = "Urdu"
     VIETNAMESE = "Vietnamese"
     ZULU = "Zulu"
+
+
+class ScenarioStatus(str, Enum):
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
+class ScenarioEvaluationType(str, Enum):
+    NOAL = "noal"
+    CHOICE = "choice"
+    SCORE = 'score'
+
+class ScenarioConditionOperator(str, Enum):
+    # AI отдаёт вероятности числами — сравниваем только численно
+    GREATER = "gt"
+    GREATER_OR_EQUAL = "gte"
+    LESS = "lt"
+    LESS_OR_EQUAL = "lte"
+
+
+class CoffeeStatusEnum(str, Enum):
+    ACTIVE = "active"
+    MODERATING = 'moderating'
+    PAUSE = 'in pause'
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
+class CoffeeStepLogSchema(str, Enum):
+    WAITING = 'waiting'
+    COMPLETED = 'completed'
+    CANCELLED = "cancelled"
+
+
+class CoffeeStepTypeSchema(str, Enum):
+    TEXT_MESSAGE = 'text'
+    PHOTO_MESSAGE = 'photo'
+    MODERATING = 'moderating'
+    
