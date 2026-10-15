@@ -7,6 +7,7 @@ from fastapi import (APIRouter,
 from sqlalchemy import select, update, and_, func
 from sqlalchemy.orm import joinedload
 
+from background.base import acquire_task_lock
 from db.queries import (execute_and_catch_db_error, get_N_last_messages, get_account_scenario_data_by_id)
 
 from db.base import (Message,
@@ -762,15 +763,20 @@ async def create_scenario_thread_by_thread_id(data: EditThreadFullParseSchema,
                                      session,
                                      with_rollback=True)
 
-    _job_id = f'lock:send_message:{thread.id}'
-    job = await redis_pool.enqueue_job(
-        'background_coffee_scenario',
-        thread.id,
-        _queue_name='arq:ai',
-        _job_id=_job_id,
-    )
+    _key = f'lock:send_message:thread:{thread.id}'
+    task_lock = acquire_task_lock(_key)
+    
+    if task_lock:
+        _job_id = f'lock:send_message:{thread.id}'
+        job = await redis_pool.enqueue_job(
+            'background_coffee_scenario',
+            thread.id,
+            (_key, task_lock),
+            _queue_name='arq:ai',
+            _job_id=_job_id,
+        )
 
-    print(f' -> bg task after createing scenario - {job.job_id}...')
+        print(f' -> bg task after createing scenario - {job.job_id}...')
 
 
 
