@@ -2098,24 +2098,29 @@ async def try_add_messages(message_data: dict,
                 # coffee_state = CoffeeStateSchema.model_validate(coffee_state)
 
                 if coffee_state.status == CoffeeStatusEnum.ACTIVE:
-                    
-                    if coffee_state.is_scenario_step:
-                        # bg job for coffee scenario
-                        job = await redis_pool.enqueue_job(
-                            'background_coffee_scenario',
-                            thread.id,
-                            _queue_name='arq:ai',
-                        )
+                    if not any(msg for msg in messages if msg.get('type','') == MessageTypeEnum.TEXT):
                         bg_task_already_exists = True
+                    
+                    elif coffee_state.is_scenario_step:
+                        # check only text message for scenario step
+                            # bg job for coffee scenario
+                            if not bg_task_already_exists:
+                                job = await redis_pool.enqueue_job(
+                                    'background_coffee_scenario',
+                                    thread.id,
+                                    _queue_name='arq:ai',
+                                )
+                                bg_task_already_exists = True
                     else:
                         # bg job for basic behavior
-                        job = await redis_pool.enqueue_job(
-                            'background_ai_generation',
-                            thread.id,
-                            True, # switch_to_scenario_step
-                            _queue_name='arq:ai',
-                        )
-                        bg_task_already_exists = True
+                        if not bg_task_already_exists:
+                            job = await redis_pool.enqueue_job(
+                                'background_ai_generation',
+                                thread.id,
+                                True, # switch_to_scenario_step
+                                _queue_name='arq:ai',
+                            )
+                            bg_task_already_exists = True
                 elif coffee_state.status == CoffeeStatusEnum.MODERATING:
                     bg_task_already_exists = True
                     

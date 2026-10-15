@@ -132,6 +132,7 @@ class ScenarioConditionOperator(str, Enum):
 class CoffeeStatusEnum(str, Enum):
     ACTIVE = "active"
     MODERATING = 'moderating'
+    PAUSE = 'in pause'
     COMPLETED = "completed"
     CANCELLED = "cancelled"
 

@@ -19,10 +19,10 @@ from config import AI_API_TOKEN, DEEPSEEK_API_TOKEN, AI_ORCA_API_TOKEN
 #     api_key=DEEPSEEK_API_TOKEN,
 #     base_url="https://api.deepseek.com"   # было https://openrouter.ai/api/v1
 # )
-deepseek_client = AsyncOpenAI(
-    api_key=AI_API_TOKEN,
-    base_url="https://openrouter.ai/api/v1"
-)
+# deepseek_client = AsyncOpenAI(
+#     api_key=AI_API_TOKEN,
+#     base_url="https://openrouter.ai/api/v1"
+# )
 
 openrouter_client = AsyncOpenAI(
     api_key=AI_API_TOKEN,
@@ -40,8 +40,9 @@ async def generate_thread_context(thread_context: str | None,
     print('запрос к нейронке...')
     
     # if for_db:
-    model="deepseek/deepseek-v4-flash-0731"
-    _client = deepseek_client
+    # model="deepseek/deepseek-v4-flash-0731"
+    model = AIModelEnum.DEEPSEEK_LATEST
+    _client = openrouter_client
     system_content = (
         # "Ты выполняешь ТОЛЬКО одну техническую функцию: сжимаешь длительную переписку в Instagram Direct "
         # "в краткую фактическую выжимку для внутреннего использования в диалоговой системе. "
@@ -202,8 +203,11 @@ async def ai_translate_user_information(text: str):
         """
         user_content = text
 
-        response = await deepseek_client.chat.completions.create(
-            model="deepseek/deepseek-v4-flash-0731",
+        model = AIModelEnum.DEEPSEEK_LATEST
+        _client = openrouter_client
+
+        response = await _client.chat.completions.create(
+            model=model,
             messages=[
                 {
                     "role": "system",
@@ -238,8 +242,8 @@ async def generate_new_message_to_thread(account_info: str,
     if model == AIModelEnum.QWEN_ORCA:
         ai_router = orcarouter_client
 
-    elif model == AIModelEnum.DEEPSEEK_LATEST:
-        ai_router = deepseek_client
+    # elif model == AIModelEnum.DEEPSEEK_LATEST:
+    #     ai_router = deepseek_client
 
     # model = 'anthropic/claude-sonnet-5'
     # ai_temperature = 0.5
@@ -466,8 +470,11 @@ async def ai_extract_user_info(text: str, existing_info: dict | None = None) -> 
         f"Верни обновлённый JSON-профиль."
     )
 
-    response = await deepseek_client.chat.completions.create(
-        model="deepseek/deepseek-v4-flash-0731",
+    model = AIModelEnum.DEEPSEEK_LATEST
+    _client = openrouter_client
+
+    response = await _client.chat.completions.create(
+        model=model,
         messages=[
             {"role": "system", "content": system_content},
             {"role": "user", "content": user_content},
@@ -553,6 +560,8 @@ async def generate_new_message_to_thread_coffee_scenario(account_info: str,
         ai_router = orcarouter_client
 
     print(f'using model {model} for generating...\ntemperature ai - {ai_temperature}')
+
+    print(f' -> api key using - {AI_API_TOKEN}')
 
     system_content = f'{PREFIX_SYSTEM_PROMPT}\n{account_info}.\n\n'
 
@@ -679,7 +688,7 @@ async def generate_caption_to_coffee_scenario_photo(account_info: str,
 
     if response.choices:
         result = response.choices[0].message.content
-        print('ответ нейронки',result)
+        print('ответ нейронки(caption)',result)
     else:
         result = ''
     
@@ -719,7 +728,12 @@ async def like_jev_ai_request(system_prompt_kwargs: dict,
                               user_prompt: str):
     system_prompt = choice_prompt.format(**system_prompt_kwargs)
 
-    model = 'deepseek/deepseek-v4-flash-0731'
+    print(f'api key using - {AI_API_TOKEN}')
+
+    model = AIModelEnum.DEEPSEEK_LATEST
+    _client = openrouter_client
+
+    # model = 'deepseek/deepseek-v4-flash-0731'
     _messages =[
             {
                 "role": "system",
@@ -730,7 +744,7 @@ async def like_jev_ai_request(system_prompt_kwargs: dict,
                 "content": user_prompt
             }
         ]
-    response = await deepseek_client.chat.completions.create(
+    response = await _client.chat.completions.create(
         model=model,
         messages=_messages,
         temperature=0,
@@ -739,6 +753,7 @@ async def like_jev_ai_request(system_prompt_kwargs: dict,
     if response.choices:
         result = response.choices[0].message.content
         print('ответ нейронки',result)
+        # print(' -> full response', response)
     else:
         result = ''
     

@@ -860,6 +860,15 @@ async def background_ai_generation(cxt,
             coffee_state.is_scenario_step = True
             thread.coffee_state = coffee_state.model_dump(mode="json")
 
+            payload = {
+                'thread_id': thread_id,
+            }
+            payload['coffee_state'] = thread.coffee_state
+
+            await publish_event(redis_pool,
+                    type='thread coffee state changed',
+                    payload=payload)
+
         await execute_and_catch_db_error(_session.commit(),
                                         _session,
                                         with_rollback=True)
@@ -916,8 +925,6 @@ async def background_coffee_scenario(cxt,
                                                         redis_pool)
         print(f'is memory updated - {memory_updated}')
 
-        # coffee_scenario_data = await need_run_coffee_scenario(thread,
-        #                                                       _session)
         coffee_state = get_coffee_state(thread)
 
         if not coffee_state:
@@ -928,12 +935,6 @@ async def background_coffee_scenario(cxt,
                                                   thread_id=thread.id,
                                                   session=_session)
 
-        # action_marker = None
-
-        # if coffee_scenario_data is not None:
-        # coffee_state: CoffeeStateSchema = coffee_scenario_data.get('coffee_state')
-            # проверка на чередование сценария и обычного поведения
-        # if coffee_state.is_scenario_step:
         jev_step_action_data = await route_jev_coffee_scenario(thread,
                                                                coffee_state,
                                                                last_messages,
@@ -949,6 +950,16 @@ async def background_coffee_scenario(cxt,
 
                 thread.coffee_state = coffee_state.model_dump(mode="json")
 
+                # ws event for coffee_state
+                payload = {
+                    'thread_id': thread_id,
+                }
+                payload['coffee_state'] = thread.coffee_state
+
+                await publish_event(redis_pool,
+                        type='thread coffee state changed',
+                        payload=payload)
+
                 await execute_and_catch_db_error(_session.commit(),
                                                 _session,
                                                 with_rollback=True)
@@ -956,7 +967,6 @@ async def background_coffee_scenario(cxt,
                 print(' -> thread waiting moderating...')
             #ws event
             return
-        
 
         if action_marker:
             print('inside action...')
@@ -969,12 +979,7 @@ async def background_coffee_scenario(cxt,
             
             generated_text, attachment = genarated_message_data
 
-            # coffee_state: CoffeeStateSchema = coffee_scenario_data.get('coffee_state')
             current_step = coffee_state.current_step
-            # last_messages = jev_step_action_data.get('last_messages')
-
-            print(f' -> current step {current_step}, type - {type(current_step)}')
-
 
             if current_step in (2, 5):
                 print(' -> inside current_step in (2, 5)...')
@@ -986,12 +991,7 @@ async def background_coffee_scenario(cxt,
 
         else:
             print('basic behaivor...')
-            # messages_for_raw_log = await get_new_thread_messages(thread_id=thread.id,
-            #                                                      last_message_id=thread.last_message_id,
-            #                                                      session=_session)
-            # messages_for_raw_log = await get_N_last_messages(message_count=20,
-            #                                                  thread_id=thread.id,
-            #                                                  session=_session)
+
             raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(last_messages)
 
             generated_text = await generate_new_message_to_thread(account_info=thread.account.information,
@@ -1056,20 +1056,18 @@ async def background_coffee_scenario(cxt,
                 type='message created',
                 payload=payload)
 
-    # if memory_updated:
-    #     job = await redis_pool.enqueue_job(
-    #         'translate_user_information_by_thread_id',
-    #         thread.id,
-    #         _queue_name='arq:utils',
-    #     )
+    if memory_updated:
+        job = await redis_pool.enqueue_job(
+            'translate_user_information_by_thread_id',
+            thread.id,
+            _queue_name='arq:utils',
+        )
 
     if action_marker:
-        # coffee_state: CoffeeStateSchema = coffee_scenario_data.get('coffee_state')
         current_step = coffee_state.current_step
         is_scenario_step = coffee_state.is_scenario_step
         print(f' -> тип шага - {is_scenario_step}')
 
-        # if action_marker:
         try:
             step_instruction = coffee_scenario.get(f'step_{current_step}').get('instruction')
             result_log = f'''Инструкция шага: {step_instruction}\n
@@ -1084,12 +1082,6 @@ async def background_coffee_scenario(cxt,
         
         if current_step < 6:
             coffee_state.current_step += 1
-        else:
-            coffee_state.status = CoffeeStatusEnum.COMPLETED
-                # авто отправка и после переключение шага сценария ?
-        # else:
-        #     if not is_scenario_step:
-        #         coffee_state.is_scenario_step = not is_scenario_step
 
         async with sessionmaker() as _session:
             _session: AsyncSession
@@ -1099,6 +1091,15 @@ async def background_coffee_scenario(cxt,
             await execute_and_catch_db_error(_session.commit(),
                                              _session,
                                              with_rollback=True)
+
+        payload = {
+            'thread_id': thread_id,
+        }
+        payload['coffee_state'] = thread.coffee_state
+
+        await publish_event(redis_pool,
+                type='thread coffee state changed',
+                payload=payload)
 
     job = await redis_pool.enqueue_job(
         'send_message_to_thread',

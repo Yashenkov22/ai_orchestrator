@@ -26,6 +26,7 @@ from utils.schemas import (AttachmentListSchema,
                            ThreadSchema)
 from utils.dependencies import (admin_dependency,
                                 session_dependency)
+from utils.enums import CoffeeStatusEnum
 from utils.base import (generate_valid_insta_url,
                         generate_valid_media_url)
 from utils.scenarios import base_coffee_state
@@ -57,7 +58,7 @@ async def get_threads(admin: admin_dependency,
             Thread.is_unread.desc(),
             Thread.timestamp_last_seen_message.desc(),
         )\
-        # .where(Account.is_hidden == False)
+        .where(Account.is_hidden == False)
     )
 
     if not is_main_admin:
@@ -710,10 +711,14 @@ async def edit_language_by_thread_id(data: EditThreadLanguageSchema,
     }
 
 
-@thread_router.patch("/activate_coffee_scenario_by_thread_id")
-async def edit_language_by_thread_id(data: EditThreadFullParseSchema,
-                                     admin: admin_dependency,
-                                     session: session_dependency):
+@thread_router.post("/activate_coffee_scenario_by_thread_id")
+async def create_scenario_thread_by_thread_id(data: EditThreadFullParseSchema,
+                                              admin: admin_dependency,
+                                              session: session_dependency):
+    if data.marker != 'activate':
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail='Wrong request')
+    
     admin_id, is_main_admin = admin
 
     query = (
@@ -736,6 +741,10 @@ async def edit_language_by_thread_id(data: EditThreadFullParseSchema,
         if thread.account_id not in ID_LIST_FOR_PERMISSION:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
 
+    if thread.coffee_state is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail='Scenario already exists')
+
     account_photos = await get_account_scenario_data_by_id(thread.account_id,
                                                            session)
 
@@ -743,9 +752,56 @@ async def edit_language_by_thread_id(data: EditThreadFullParseSchema,
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail='Account photos not found')
 
-    # thread.language = data.language
     json_coffee_state = json.dumps(base_coffee_state)
     thread.coffee_state = json_coffee_state
+
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)
+
+
+
+@thread_router.post("/edit_coffee_scenario_by_thread_id")
+async def edit_scenario_thread_by_thread_id(data: EditThreadFullParseSchema,
+                                            admin: admin_dependency,
+                                            session: session_dependency):
+    admin_id, is_main_admin = admin
+
+    query = (
+        select(Thread)
+        .where(
+            Thread.id == data.thread_id,
+        )
+    )
+
+    result = await execute_and_catch_db_error(session.execute(query),
+                                              session)
+    
+    thread: Thread = result.scalar_one_or_none()
+
+    if not thread:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Thread not found')
+
+    if not is_main_admin:
+        if thread.account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+
+    coffee_state = get_coffee_state(thread)
+
+    if data.marker == 'pause':
+        coffee_state.status = CoffeeStatusEnum.PAUSE
+        coffee_state = coffee_state.model_dump(mode="json")
+    elif data.marker == 'activate':
+        coffee_state.status = CoffeeStatusEnum.ACTIVE
+        coffee_state = coffee_state.model_dump(mode="json")
+    elif data.marker == 'complete':
+        coffee_state.status = CoffeeStatusEnum.COMPLETED
+        coffee_state = coffee_state.model_dump(mode="json")
+    elif data.marker == 'delete':
+        coffee_state = None
+
+    thread.coffee_state = coffee_state
 
     await execute_and_catch_db_error(session.commit(),
                                      session,

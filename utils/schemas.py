@@ -284,6 +284,7 @@ class EditThreadAITemperatureSchema(BaseModel):
 
 class EditThreadFullParseSchema(BaseModel):
     thread_id: int
+    marker: Literal['activate', 'pause', 'delete', 'complete']
 
 
 class EditThreadLanguageSchema(BaseModel):
