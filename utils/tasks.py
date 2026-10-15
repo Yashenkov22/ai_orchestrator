@@ -2105,20 +2105,24 @@ async def try_add_messages(message_data: dict,
                         # check only text message for scenario step
                             # bg job for coffee scenario
                             if not bg_task_already_exists:
+                                _job_id = f'lock:send_message:{thread.id}'
                                 job = await redis_pool.enqueue_job(
                                     'background_coffee_scenario',
                                     thread.id,
                                     _queue_name='arq:ai',
+                                    _job_id=_job_id,
                                 )
                                 bg_task_already_exists = True
                     else:
                         # bg job for basic behavior
                         if not bg_task_already_exists:
+                            _job_id = f'lock:send_message:{thread.id}'
                             job = await redis_pool.enqueue_job(
                                 'background_ai_generation',
                                 thread.id,
                                 True, # switch_to_scenario_step
                                 _queue_name='arq:ai',
+                                _job_id=_job_id,
                             )
                             bg_task_already_exists = True
                 elif coffee_state.status == CoffeeStatusEnum.MODERATING:
@@ -2127,10 +2131,12 @@ async def try_add_messages(message_data: dict,
             if thread.color_level in (ThreadColorEnum.YELLOW, ThreadColorEnum.GREY) and thread.is_pinned:
 
                 if not bg_task_already_exists:
+                    _job_id = f'lock:send_message:{thread.id}'
                     job = await redis_pool.enqueue_job(
                         'background_ai_generation',
                         thread.id,
                         _queue_name='arq:ai',
+                        _job_id=_job_id,
                     )
 
             thread.is_unread = sender == 'user'
