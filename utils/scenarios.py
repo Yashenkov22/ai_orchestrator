@@ -521,8 +521,6 @@ async def do_current_step_coffee_scenario(jev_data: dict,
         match current_step:
             case 3:
                 purpose = 'before'
-            # case 4:
-            #     purpose = 'after'
 
         photo_urls = [photo.media_url for photo in coffee_photos if photo.purpose == purpose]
         shuffle(photo_urls)
@@ -535,15 +533,16 @@ async def do_current_step_coffee_scenario(jev_data: dict,
         }
 
     elif scenario_step_type == CoffeeStepTypeSchema.MODERATING:
-         print(' -> waiting for moderate thread...')
-         # send notification(ws event to frontend)
-         pass
+        print(' -> waiting for moderate thread...')
+        return (
+            None,
+            None,
+        )
     elif scenario_step_type == CoffeeStepTypeSchema.PREPARING:
         return (
             None,
             None,
             )
-
     
     return (
         message_text,
