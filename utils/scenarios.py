@@ -165,6 +165,7 @@ async def route_jev_coffee_scenario(thread: Thread,
             message_limit = 50
 
             if len(last_messages) < message_limit:
+                    print(f' -> меньше {message_limit} сообщений в шаге 1 !')
                     return {
                         'current_step': current_step,
                         'action': False,
@@ -518,10 +519,10 @@ async def do_current_step_coffee_scenario(jev_data: dict,
     elif scenario_step_type == CoffeeStepTypeSchema.PHOTO_MESSAGE:
         message_text = ''
         match current_step:
-            case 2:
+            case 3:
                 purpose = 'before'
-            case 4:
-                purpose = 'after'
+            # case 4:
+            #     purpose = 'after'
 
         photo_urls = [photo.media_url for photo in coffee_photos if photo.purpose == purpose]
         shuffle(photo_urls)
