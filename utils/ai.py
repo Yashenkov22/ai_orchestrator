@@ -752,7 +752,7 @@ async def like_jev_ai_request(system_prompt_kwargs: dict,
     )
     if response.choices:
         result = response.choices[0].message.content
-        print('ответ нейронки',result)
+        print('ответ нейронки(маршрутизатор сценария)',result)
         # print(' -> full response', response)
     else:
         result = ''

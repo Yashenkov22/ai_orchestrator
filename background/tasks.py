@@ -826,7 +826,7 @@ async def background_ai_generation(cxt,
         # print(f'is memory updated - {memory_updated}')
         print('basic behaivor...')
 
-        messages_for_raw_log = await get_N_last_messages(message_count=20,
+        messages_for_raw_log = await get_N_last_messages(message_count=50,
                                                         thread_id=thread.id,
                                                         session=_session)
         raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(messages_for_raw_log)
@@ -931,9 +931,9 @@ async def background_coffee_scenario(cxt,
             print(' -> NOT COFFEE STATE!!!')
             return
 
-        last_messages = await get_N_last_messages(message_count=50,
-                                                thread_id=thread.id,
-                                                session=_session)
+        last_messages = await get_N_last_messages(message_count=100,
+                                                  thread_id=thread.id,
+                                                  session=_session)
 
         jev_step_action_data = await route_jev_coffee_scenario(thread,
                                                             coffee_state,
@@ -943,10 +943,10 @@ async def background_coffee_scenario(cxt,
 
         if coffee_state.current_step == 5:
             if coffee_state.status != CoffeeStatusEnum.MODERATING:
-                if action_marker:
-                    coffee_state.status = CoffeeStatusEnum.MODERATING
-                else:
-                    coffee_state.status = CoffeeStatusEnum.CANCELLED
+                # if action_marker:
+                coffee_state.status = CoffeeStatusEnum.MODERATING
+                # else:
+                #     coffee_state.status = CoffeeStatusEnum.CANCELLED
 
                 thread.coffee_state = coffee_state.model_dump(mode="json")
 

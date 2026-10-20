@@ -158,11 +158,11 @@ async def route_jev_coffee_scenario(thread: Thread,
 
     print(f'route step {current_step} with jev...')
 
-    raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(last_messages)
+    raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(last_messages[:50])
     
     match current_step:
         case 1:
-            message_limit = 50
+            message_limit = 100
 
             if len(last_messages) < message_limit:
                     print(f' -> меньше {message_limit} сообщений в шаге 1 !')
@@ -201,20 +201,50 @@ async def route_jev_coffee_scenario(thread: Thread,
             # jev_answer = await get_request_to_jev_ai(_state,
             #                                          questions)
             
+            # choice_question_kwargs = {
+            #     'question': 'Уместно ли в следующем сообщении написать от лица assistant, что assistant устала от работы(на работе)?',
+            #     'positive': "Да, уместно",
+            #     # 'negative': "Такая реплика неуместна в контексте этой переписки",
+            #     # 'have_question': 'Есть сообщение(я) от user, по типу "Как дела", без ответа',
+            #     'negative': "Нет, не уместно",
+            # }
+
+            # nual_question_kwargs = {
+            #     'question': 'Есть ли сообщение(я) от user`а где он спрашивает как дела у assistant, которые остались без ответа?',
+            #     'positive': "Да, есть",
+            #     # 'negative': "Такая реплика неуместна в контексте этой переписки",
+            #     # 'have_question': 'Есть сообщение(я) от user, по типу "Как дела", без ответа',
+            #     'negative': "Нет, таких сообщений нет",
+            # }
             choice_question_kwargs = {
-                'question': 'Уместно ли в следующем сообщении написать от лица assistant, что assistant устала от работы(на работе)?',
-                'positive': "Да, уместно",
-                # 'negative': "Такая реплика неуместна в контексте этой переписки",
-                # 'have_question': 'Есть сообщение(я) от user, по типу "Как дела", без ответа',
-                'negative': "Нет, не уместно",
+                'question': (
+                    'Можно ли естественно продолжить эту переписку сообщением от '
+                    'assistant о том, что она устала после работы?'
+                ),
+                'positive': (
+                    'Да, такое сообщение можно естественно и правдоподобно '
+                    'вписать в переписку.'
+                ),
+                'negative': (
+                    'Нет, такое сообщение явно противоречит контексту переписки '
+                    'или предыдущим сообщениям assistant.'
+                ),
             }
 
             nual_question_kwargs = {
-                'question': 'Есть ли сообщение(я) от user`а где он спрашивает как дела у assistant, которые остались без ответа?',
-                'positive': "Да, есть",
-                # 'negative': "Такая реплика неуместна в контексте этой переписки",
-                # 'have_question': 'Есть сообщение(я) от user, по типу "Как дела", без ответа',
-                'negative': "Нет, таких сообщений нет",
+                'question': (
+                    'Есть ли в переписке вопрос пользователя о самочувствии, '
+                    'настроении или делах assistant, на который assistant ещё '
+                    'не ответила по существу? Учитывай смысл вопроса, а не только '
+                    'его точную формулировку.'
+                ),
+                'positive': (
+                    'Да, есть хотя бы один такой вопрос.'
+                ),
+                'negative': (
+                    'Нет, все подобные вопросы отсутствуют или уже получили '
+                    'ответ по существу.'
+                ),
             }
 
             choice_answer = await like_jev_ai_request(system_prompt_kwargs=choice_question_kwargs,
@@ -222,7 +252,6 @@ async def route_jev_coffee_scenario(thread: Thread,
 
             nual_answer = await like_jev_ai_request(system_prompt_kwargs=nual_question_kwargs,
                                                    user_prompt=_state)
-            # print(' -> jev answer', jev_answer)
             
             choice_result = choice_answer.lower()
 
@@ -230,12 +259,18 @@ async def route_jev_coffee_scenario(thread: Thread,
 
             if choice_result not in {'positive', 'negative'}:
                 print(f'error with validate like jev answer - {choice_result}')
-                raise
+                return {
+                    'current_step': current_step,
+                    'action': False,
+                }
 
             if nual_result not in {'positive', 'negative'}:
                 print(f'error with validate like jev answer - {nual_result}')
-                raise
-
+                return {
+                    'current_step': current_step,
+                    'action': False,
+                }
+            
             if choice_result == 'positive':
                     return {
                         'current_step': current_step,

@@ -1177,7 +1177,17 @@ async def process_thread(
         )
         return await try_add_messages(messages_data, thread, _session, redis)
     else:
-        print(f"No matching data found for thread {thread_key}")
+        # add extra check for coffee scenario - send message if last message was from user (like reactions) without answer
+        # maybe check time (типа ответить только не раньше 10 минут с момента последнего неотвечанного сообщения)
+        if thread.coffee_state is not None:
+            coffee_state = get_coffee_state(thread)
+
+            if coffee_state.status == CoffeeStatusEnum.ACTIVE:
+                # check last thread message (from user or not)
+                pass
+        #
+        else:        
+            print(f"No matching data found for thread {thread_key}")
 
 
 async def get_inbox_tabs(page):
