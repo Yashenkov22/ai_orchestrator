@@ -1,5 +1,6 @@
 from .tasks import (background_ai_generation,
-                    background_coffee_scenario)
+                    background_coffee_scenario,
+                    background_how_are_you_generation)
 from background.base import (redis_settings,
                              _redis_pool,
                              get_redis_background_pool)
@@ -39,6 +40,7 @@ class WorkerSettings:
     functions = [
         background_ai_generation,
         background_coffee_scenario,
+        background_how_are_you_generation,
         ]
     on_startup = startup
     on_shutdown = shutdown

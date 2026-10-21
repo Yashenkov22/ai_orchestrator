@@ -1,8 +1,7 @@
 from .tasks import (send_message_to_thread,
                     try_start_stop_vision_profile_by_account_id,
                     parse_thread,
-                    try_block_thread_by_account_id,
-                    background_how_are_you_generation)
+                    try_block_thread_by_account_id)
 from background.base import (redis_settings,
                              _redis_pool,
                              get_redis_background_pool)
@@ -43,7 +42,6 @@ class WorkerSettings:
         send_message_to_thread,
         try_start_stop_vision_profile_by_account_id,
         try_block_thread_by_account_id,
-        background_how_are_you_generation,
         ]
     on_startup = startup
     on_shutdown = shutdown
