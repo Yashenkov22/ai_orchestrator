@@ -2,7 +2,7 @@ import json
 import time
 
 from math import ceil
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 
 from asyncio import sleep
@@ -196,7 +196,8 @@ async def start_task_for_check_unaswer_coffee_threads(cxt):
         coffee_state = get_coffee_state(thread)
 
         if coffee_state.status == CoffeeStatusEnum.ACTIVE:
-            if last_message.sender == 'user' and last_message.type != MessageTypeEnum.TEXT:
+            threshold = datetime.now(timezone.utc) - timedelta(minutes=10)
+            if last_message.sender == 'user' and last_message.created_at < threshold:
                 job = await _redis_pool.enqueue_job(
                     'background_how_are_you_generation',
                     thread.id,
@@ -204,7 +205,7 @@ async def start_task_for_check_unaswer_coffee_threads(cxt):
                 )
                 print('THREAD JOB FOR CHECK UNANSWER THREAD RUNNING...', job.job_id)
             else:
-                print(' -> последнее сообщение не от юзера или текстовое !')
+                print(f' -> последнее сообщение не от юзера или новее {last_message.created_at} !')
         else:
             print(f' -> сценарий не активен в чате {thread.id} - status {coffee_state.status} !')
 
