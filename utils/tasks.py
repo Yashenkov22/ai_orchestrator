@@ -1176,25 +1176,25 @@ async def process_thread(
             messages, thread, user_insta_id, thread_key
         )
         return await try_add_messages(messages_data, thread, _session, redis)
-    else:
-        # add extra check for coffee scenario - send message if last message was from user (like reactions) without answer
-        # maybe check time (типа ответить только не раньше 10 минут с момента последнего неотвечанного сообщения)
-        if thread.coffee_state is not None:
-            coffee_state = get_coffee_state(thread)
+    else:        
+        print(f"No matching data found for thread {thread_key}")
+    # else:
+    #     # add extra check for coffee scenario - send message if last message was from user (like reactions) without answer
+    #     # maybe check time (типа ответить только не раньше 10 минут с момента последнего неотвечанного сообщения)
+    #     if thread.coffee_state is not None:
+    #         coffee_state = get_coffee_state(thread)
 
-            if coffee_state.status == CoffeeStatusEnum.ACTIVE:
-                # check last thread message (from user or not)
-                last_message: Message = await get_last_non_text_message_by_thread_id(thread.id,
-                                                                                     _session)
+    #         if coffee_state.status == CoffeeStatusEnum.ACTIVE:
+    #             # check last thread message (from user or not)
+    #             last_message: Message = await get_last_non_text_message_by_thread_id(thread.id,
+    #                                                                                  _session)
 
-                if last_message.sender == 'user' and last_message.type != MessageTypeEnum.TEXT:
-                    job = await redis.enqueue_job(
-                        'background_how_are_you_generation',
-                        thread.id,
-                        _queue_name='arq:ai',
-                    )
-        else:        
-            print(f"No matching data found for thread {thread_key}")
+    #             if last_message.sender == 'user' and last_message.type != MessageTypeEnum.TEXT:
+    #                 job = await redis.enqueue_job(
+    #                     'background_how_are_you_generation',
+    #                     thread.id,
+    #                     _queue_name='arq:ai',
+    #                 )
 
 
 async def get_inbox_tabs(page):
@@ -2107,6 +2107,8 @@ async def try_add_messages(message_data: dict,
 
                 if coffee_state.status == CoffeeStatusEnum.ACTIVE:
                     if not any(msg for msg in messages if msg.get('type','') == MessageTypeEnum.TEXT):
+                        bg_task_already_exists = True
+                    if all(msg for msg in messages if msg.get('sender','') == 'user'):
                         bg_task_already_exists = True
                     
                     elif coffee_state.is_scenario_step:

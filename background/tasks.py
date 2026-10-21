@@ -11,7 +11,7 @@ from arq import Retry
 
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, text
+from sqlalchemy import select, and_, text, func
 
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -149,6 +149,64 @@ async def start_polling_request_messages_for_accounts(cxt):
                 )
 
                 print('ACCOUNT PARSE JOB RUNNING...', job)
+
+
+async def start_task_for_check_unaswer_coffee_threads(cxt):
+    print('TASK FOR CHECK UNASWER COFFEE STATE THREADS FROM ARQ ✅')
+
+    last_message_subquery = (
+        select(
+            Message.thread_id,
+            func.max(Message.id).label("last_message_id")
+        )
+        .where(Message.status == 'approved')
+        .group_by(Message.thread_id)
+        .subquery()
+    )
+
+    # Основной запрос
+
+    query = (
+        select(Thread, Message)
+        .where(Thread.coffee_state.is_not(None))
+        .outerjoin(
+            last_message_subquery,
+            last_message_subquery.c.thread_id == Thread.id
+        )
+        .outerjoin(
+            Message,
+            Message.id == last_message_subquery.c.last_message_id
+        )
+    )
+
+    sessionmaker= cxt['sessionmaker']
+    _redis_pool = get_redis_pool()
+        
+    async with sessionmaker() as _session:
+        _session: AsyncSession
+        result = await execute_and_catch_db_error(_session.execute(query),
+                                                    _session)
+        threads: list[Thread] = result.all()
+
+
+    for thread, last_message in threads:
+        thread: Thread
+        last_message: Message
+
+        coffee_state = get_coffee_state(thread)
+
+        if coffee_state.status == CoffeeStatusEnum.ACTIVE:
+            if last_message.sender == 'user' and last_message.type != MessageTypeEnum.TEXT:
+                job = await _redis_pool.enqueue_job(
+                    'background_how_are_you_generation',
+                    thread.id,
+                    _queue_name='arq:ai',
+                )
+                print('THREAD JOB FOR CHECK UNANSWER THREAD RUNNING...', job.job_id)
+            else:
+                print(' -> последнее сообщение не от юзера или текстовое !')
+        else:
+            print(f' -> сценарий не активен в чате {thread.id} - status {coffee_state.status} !')
 
 
 async def parse_account(cxt,
@@ -920,12 +978,14 @@ async def background_how_are_you_generation(cxt,
         thread = await get_thread_by_id(thread_id,
                                         _session)
 
-        print('basic behaivor...')
+        print('how are you behaivor ...')
 
         messages_for_raw_log = await get_N_last_messages(message_count=50,
                                                         thread_id=thread.id,
                                                         session=_session)
         raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(messages_for_raw_log)
+
+        # print(raw_messages_log)
 
         generated_text = await generate_how_are_you_message_to_thread(account_info=thread.account.information,
                                                                       thread=thread,

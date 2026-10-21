@@ -88,6 +88,26 @@ async def test_arq(admin: admin_dependency,
     print('success!!!')
 
 
+
+@auth_router.get('/create_unaswer_thread_task')
+async def test_arq(admin: admin_dependency,
+                   session: session_dependency):
+    
+    func_name = 'start_task_for_check_unaswer_coffee_threads'
+
+    job = scheduler.add_job(background_task_wrapper,
+                            trigger='interval',
+                            minutes=60,
+                            id='start_task_for_check_unaswer_coffee_threads',
+                            jobstore='sqlalchemy',
+                            coalesce=True,
+                            args=(func_name, ),
+                            kwargs={'_queue_name': 'arq:polling'})
+    
+    print(job)
+    print('success!!!')
+
+
 @auth_router.get('/test_arq2')
 async def test_arq(admin: admin_dependency,
                    session: session_dependency):

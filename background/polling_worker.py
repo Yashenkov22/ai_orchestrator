@@ -3,14 +3,15 @@ from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 
 from background.base import (redis_settings,
                              _redis_pool,
-                             get_redis_background_pool)
+                             get_redis_background_pool,)
 
 from db.base import session
 
 from .tasks import (start_polling_for_accounts,
                     start_polling_request_messages_for_accounts,
                     parse_account,
-                    parse_thread)
+                    parse_thread,
+                    start_task_for_check_unaswer_coffee_threads)
 
 from config import REDIS_HOST, REDIS_PASSWORD, JOB_STORE_URL
 
@@ -42,6 +43,7 @@ class WorkerSettings:
         start_polling_for_accounts,
         start_polling_request_messages_for_accounts,
         parse_account,
+        start_task_for_check_unaswer_coffee_threads,
         # parse_thread,
     ]
     on_startup = startup

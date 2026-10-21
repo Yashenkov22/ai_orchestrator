@@ -448,3 +448,13 @@ async def add_coffee_scenario_photo(data: CoffeeScenarioPhotoSchema,
         'photo_url': new_coffee_photo.photo_url,
         'account_id': new_coffee_photo.account_id,
     }
+
+
+@utils_router.get("/run_unaswer_thread_task")
+async def add_coffee_scenario_photo(admin: admin_dependency,
+                                    arq_redis: arq_dependency,
+                                    session: session_dependency):
+    job = await arq_redis.enqueue_job(
+        'start_task_for_check_unaswer_coffee_threads',
+        _queue_name='arq:polling',
+    )
