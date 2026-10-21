@@ -97,7 +97,7 @@ async def test_arq(admin: admin_dependency,
 
     job = scheduler.add_job(background_task_wrapper,
                             trigger='interval',
-                            minutes=60,
+                            minutes=10,
                             id='start_task_for_check_unaswer_coffee_threads',
                             jobstore='sqlalchemy',
                             coalesce=True,

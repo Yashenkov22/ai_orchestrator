@@ -918,7 +918,7 @@ async def process_threads(
             #     print('тут 22',last_message_ts, _last_activity, current_thread.timestamp_last_seen_message)
 
             if last_message_ts <= current_thread.timestamp_last_seen_message:
-                print('SKIP THIS THREAD CAUSE LAST MESSAGE IN RESPONSE EQUAL WITH LAST MESSAGE FROM DB')
+                # print('SKIP THIS THREAD CAUSE LAST MESSAGE IN RESPONSE EQUAL WITH LAST MESSAGE FROM DB')
                 continue
             else:
                 # current_thread.is_unread = True
