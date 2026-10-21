@@ -381,6 +381,70 @@ async def generate_new_message_to_thread(account_info: str,
     return result.strip()
 
 
+async def generate_how_are_you_message_to_thread(account_info: str,
+                                                 thread: Thread,
+                                                 thread_context: str | None,
+                                                 new_messages: str | None):
+    model = thread.ai_model or 'anthropic/claude-sonnet-5'
+    ai_temperature = thread.ai_temperature or 0.5
+
+    ai_router = openrouter_client
+
+    if model == AIModelEnum.QWEN_ORCA:
+        ai_router = orcarouter_client
+
+    print(f'using model {model} for generating...\ntemperature ai - {ai_temperature}')
+
+    system_content = f'{PREFIX_SYSTEM_PROMPT}\n{account_info}.\n\n'
+
+
+    system_content += (
+        "Твоя единственная задача — сгенерировать ОДНО сообщение для отправки собеседнику в Instagram Direct, "
+        "как реальный ответ в диалоге. НЕ создавай выжимку, резюме или пересказ переписки — "
+        "твой ответ должен быть репликой, будто ты сама пишешь собеседнику прямо сейчас. "
+        "Контекст переписки и новые сообщения приведены ниже только для понимания ситуации — "
+        "не пересказывай их, а ответь на них.\n\n"
+        "(формат новых сообщений: {текст сообщения} | {время сообщения} | {отправитель}).\n\n"
+        "user - это собеседник, assistant - это девушка, которая общается с user`ом\n"
+        "Ты генерируешь сообщение от лица assistant\n"
+    )
+
+    user_content = (
+        f"Контекст переписки:\n{thread_context}\n\n"
+        f"Новые сообщения:\n{new_messages}\n\n"
+        "Узнай, как дела у собеседника."
+        f"Напиши ТОЛЬКО текст своего следующего сообщения собеседнику "
+        f"без пояснений и без пересказа переписки."
+        f"Сообщение должно быть написано на языке - {thread.language}"
+    )
+
+    _messages =[
+            {
+                "role": "system",
+                "content": system_content
+            },
+            {
+                "role": "user",
+                "content": user_content
+            }
+        ]
+
+    response = await ai_router.chat.completions.create(
+        model=model,
+        messages=_messages,
+        timeout=30.0,
+        temperature=ai_temperature,
+    )
+
+    if response.choices:
+        result = response.choices[0].message.content
+        print('ответ нейронки(обычный)',result)
+    else:
+        result = ''
+    
+    return result.strip()
+
+
 
 async def ai_extract_user_info(text: str, existing_info: dict | None = None) -> dict:
     print('запрос к нейронке для извлечения профиля собеседника...')

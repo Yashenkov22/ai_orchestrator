@@ -958,3 +958,26 @@ async def get_account_scenario_data_by_id(account_id: int,
                                                 session)
     
     return messages.scalars().all()
+
+
+async def get_last_non_text_message_by_thread_id(thread_id: int,
+                                                 _session: AsyncSession):
+    query = (
+        select(
+            Message,
+        )\
+        .where(
+            Message.thread_id == thread_id
+        )\
+        .order_by(
+            Message.id.desc()
+        )\
+        .limit(1)
+    )
+
+    last_message = await execute_and_catch_db_error(_session.execute(query),
+                                                    _session)
+
+    last_message = last_message.scalar_one_or_none()
+
+    return last_message

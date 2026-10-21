@@ -25,7 +25,7 @@ from playwright.async_api import async_playwright
 
 from background.base import acquire_task_lock
 from db.queries import (check_insta_user, check_new_messages_in_thread,
-                        check_thread_in_db, get_N_last_messages, get_all_threads_by_account, get_message_count_after_last_message_id, get_message_only_by_id, get_new_thread_messages, get_thread_by_id,
+                        check_thread_in_db, get_N_last_messages, get_all_threads_by_account, get_last_non_text_message_by_thread_id, get_message_count_after_last_message_id, get_message_only_by_id, get_new_thread_messages, get_thread_by_id,
                         try_add_insta_user,
                         # try_add_messages,
                         try_add_new_thread,
@@ -1184,8 +1184,15 @@ async def process_thread(
 
             if coffee_state.status == CoffeeStatusEnum.ACTIVE:
                 # check last thread message (from user or not)
-                pass
-        #
+                last_message: Message = await get_last_non_text_message_by_thread_id(thread.id,
+                                                                                     _session)
+
+                if last_message.sender == 'user' and last_message.type != MessageTypeEnum.TEXT:
+                    job = await redis.enqueue_job(
+                        'background_how_are_you_generation',
+                        thread.id,
+                        _queue_name='arq:ai',
+                    )
         else:        
             print(f"No matching data found for thread {thread_key}")
 

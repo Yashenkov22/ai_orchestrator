@@ -36,7 +36,7 @@ from utils.tasks import (get_coffee_state, get_raw_messages_log_and_new_last_mes
                          playwright_send_message,
                          test_playwright,
                          try_update_thread_memory)
-from utils.ai import ai_translate_message, ai_translate_user_information, generate_caption_to_coffee_scenario_photo, generate_new_message_to_thread
+from utils.ai import ai_translate_message, ai_translate_user_information, generate_caption_to_coffee_scenario_photo, generate_how_are_you_message_to_thread, generate_new_message_to_thread
 from utils.enums import CoffeeStatusEnum, CoffeeStepLogSchema, MessageStatusEnum, MessageTypeEnum
 
 from websocket.redis_listener import publish_event
@@ -907,6 +907,82 @@ async def background_ai_generation(cxt,
     #         thread.id,
     #         _queue_name='arq:utils',
     #     )
+
+
+async def background_how_are_you_generation(cxt,
+                                            thread_id: int):
+    print(' -> running HOW ARE YOU ai background...')
+    sessionmaker= cxt['sessionmaker']
+    redis_pool = cxt['redis_pool']
+
+    async with sessionmaker() as _session:
+        _session: AsyncSession
+        thread = await get_thread_by_id(thread_id,
+                                        _session)
+
+        print('basic behaivor...')
+
+        messages_for_raw_log = await get_N_last_messages(message_count=50,
+                                                        thread_id=thread.id,
+                                                        session=_session)
+        raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(messages_for_raw_log)
+
+        generated_text = await generate_how_are_you_message_to_thread(account_info=thread.account.information,
+                                                                      thread=thread,
+                                                                      thread_context=thread.context,
+                                                                      new_messages=raw_messages_log)
+
+        message_type = MessageTypeEnum.TEXT
+        
+        insert_data = {
+            'sender': 'assistant',
+            'created_at': datetime.now(tz=timezone.utc),
+            'updated_at': datetime.now(tz=timezone.utc),
+            'thread_id': thread.id,
+            'text': generated_text,
+            'type': message_type,
+            'status': MessageStatusEnum.PENDING,
+        }
+
+        new_generated_message = Message(**insert_data)
+
+        _session.add(new_generated_message)
+
+        await execute_and_catch_db_error(_session.flush(),
+                                        _session)
+
+        await execute_and_catch_db_error(_session.commit(),
+                                        _session,
+                                        with_rollback=True)
+        
+    if new_generated_message:
+        payload = {
+            'thread_id': new_generated_message.thread_id,
+        }
+        message_payload = {
+            'id': str(new_generated_message.id),
+            'role': new_generated_message.sender,
+            'content': new_generated_message.text,
+            'translated_content': new_generated_message.translated_text or '',
+            'ts': new_generated_message.created_at.strftime("%Y-%d-%m %H:%M") if new_generated_message.created_at else "",
+            "modStatus": new_generated_message.status,
+            'attachment': None,
+
+        }
+        payload['message'] = message_payload
+
+        await publish_event(redis_pool,
+                type='message created',
+                payload=payload)
+
+    if new_generated_message:
+        job = await redis_pool.enqueue_job(
+            'send_message_to_thread',
+            thread.account_id,
+            new_generated_message.id,
+            _queue_name='arq:messages',
+        )
+
 
 
 async def background_coffee_scenario(cxt,
