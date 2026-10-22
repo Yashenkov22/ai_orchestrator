@@ -4,7 +4,7 @@ from fastapi import (APIRouter,
                      HTTPException,
                      status)
 
-from sqlalchemy import select, update, and_, func
+from sqlalchemy import select, update, and_, func, null
 from sqlalchemy.orm import joinedload
 
 from background.base import acquire_task_lock
@@ -812,7 +812,7 @@ async def edit_scenario_thread_by_thread_id(data: EditThreadFullParseSchema,
         coffee_state.status = CoffeeStatusEnum.COMPLETED
         coffee_state = coffee_state.model_dump(mode="json")
     elif data.marker == 'delete':
-        coffee_state = None
+        coffee_state = null()
 
     thread.coffee_state = coffee_state
 
