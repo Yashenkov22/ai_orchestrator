@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, text, func
 
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import contains_eager, joinedload
 
 from config import ADMIN_URL, GENERATE_PHOTO_CAPTION
 from db.base import Account, Attachment, Thread, Message
@@ -164,11 +165,14 @@ async def start_task_for_check_unaswer_coffee_threads(cxt):
         .subquery()
     )
 
-    # Основной запрос
-
     query = (
         select(Thread, Message)
-        .where(Thread.coffee_state.is_not(None))
+        .join(Thread.account)  # INNER JOIN: треды без аккаунта отсекутся
+        .where(
+            Thread.coffee_state.is_not(None),
+            Thread.coffee_state != text("'null'::jsonb"),
+            Account.is_active.is_(True),
+        )
         .outerjoin(
             last_message_subquery,
             last_message_subquery.c.thread_id == Thread.id
@@ -177,6 +181,7 @@ async def start_task_for_check_unaswer_coffee_threads(cxt):
             Message,
             Message.id == last_message_subquery.c.last_message_id
         )
+        .options(contains_eager(Thread.account))
     )
 
     sessionmaker= cxt['sessionmaker']
@@ -203,9 +208,9 @@ async def start_task_for_check_unaswer_coffee_threads(cxt):
                     thread.id,
                     _queue_name='arq:ai',
                 )
-                print('THREAD JOB FOR CHECK UNANSWER THREAD RUNNING...', job.job_id)
+                print(f'THREAD JOB FOR CHECK UNANSWER  FOR THREAD {thread.id} RUNNING...',)
             else:
-                print(f' -> последнее сообщение не от юзера или новее {last_message.created_at} !')
+                print(f' -> последнее сообщение не от юзера или новее {last_message.created_at}  {last_message.id}!')
         else:
             print(f' -> сценарий не активен в чате {thread.id} - status {coffee_state.status} !')
 
@@ -393,7 +398,7 @@ async def send_message_to_thread(cxt,
             if folder_id and profile_id:
                 #try start profile
                 actived_profile = await try_start_profile(folder_id,
-                                                        profile_id)
+                                                          profile_id)
                 
                 print(actived_profile)
                 
@@ -912,7 +917,7 @@ async def background_ai_generation(cxt,
         _session.add(new_generated_message)
 
         await execute_and_catch_db_error(_session.flush(),
-                                        _session)
+                                         _session)
 
         if switch_to_scenario_step:
             coffee_state = get_coffee_state(thread)            

@@ -216,20 +216,20 @@ async def route_jev_coffee_scenario(thread: Thread,
             #     # 'have_question': 'Есть сообщение(я) от user, по типу "Как дела", без ответа',
             #     'negative': "Нет, таких сообщений нет",
             # }
-            choice_question_kwargs = {
-                'question': (
-                    'Можно ли естественно продолжить эту переписку сообщением от '
-                    'assistant о том, что она устала?'
-                ),
-                'positive': (
-                    'Да, такое сообщение можно естественно и правдоподобно '
-                    'вписать в переписку.'
-                ),
-                'negative': (
-                    'Нет, такое сообщение явно противоречит контексту переписки '
-                    'или предыдущим сообщениям assistant.'
-                ),
-            }
+            # choice_question_kwargs = {
+            #     'question': (
+            #         'Можно ли естественно продолжить эту переписку сообщением от '
+            #         'assistant о том, что она устала?'
+            #     ),
+            #     'positive': (
+            #         'Да, такое сообщение можно естественно и правдоподобно '
+            #         'вписать в переписку.'
+            #     ),
+            #     'negative': (
+            #         'Нет, такое сообщение явно противоречит контексту переписки '
+            #         'или предыдущим сообщениям assistant.'
+            #     ),
+            # }
 
             nual_question_kwargs = {
                 'question': (
@@ -247,22 +247,22 @@ async def route_jev_coffee_scenario(thread: Thread,
                 ),
             }
 
-            choice_answer = await like_jev_ai_request(system_prompt_kwargs=choice_question_kwargs,
-                                                   user_prompt=_state)
+            # choice_answer = await like_jev_ai_request(system_prompt_kwargs=choice_question_kwargs,
+            #                                        user_prompt=_state)
 
             nual_answer = await like_jev_ai_request(system_prompt_kwargs=nual_question_kwargs,
                                                    user_prompt=_state)
             
-            choice_result = choice_answer.lower()
+            # choice_result = choice_answer.lower()
 
             nual_result = nual_answer.lower()
 
-            if choice_result not in {'positive', 'negative'}:
-                print(f'error with validate like jev answer - {choice_result}')
-                return {
-                    'current_step': current_step,
-                    'action': False,
-                }
+            # if choice_result not in {'positive', 'negative'}:
+            #     print(f'error with validate like jev answer - {choice_result}')
+            #     return {
+            #         'current_step': current_step,
+            #         'action': False,
+            #     }
 
             if nual_result not in {'positive', 'negative'}:
                 print(f'error with validate like jev answer - {nual_result}')
@@ -271,13 +271,13 @@ async def route_jev_coffee_scenario(thread: Thread,
                     'action': False,
                 }
             
-            if choice_result == 'positive':
-                    return {
-                        'current_step': current_step,
-                        'action': True,
-                        'last_messages': raw_messages_log,
-                    }
-            elif nual_result == 'positive':
+            # if choice_result == 'positive':
+            #         return {
+            #             'current_step': current_step,
+            #             'action': True,
+            #             'last_messages': raw_messages_log,
+            #         }
+            if nual_result == 'positive':
                     return {
                         'current_step': current_step,
                         'action': True,

@@ -13,14 +13,14 @@ from fastapi import (APIRouter,
                      HTTPException,
                      status)
 
-from sqlalchemy import select
+from sqlalchemy import func, select, text
 
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import contains_eager, selectinload
 
 from db.queries import (execute_and_catch_db_error,
                         get_account_by_id, get_message_only_by_id, get_thread_only_by_id, get_threads_by_color, try_update_message_text)
 
-from db.base import Account, Thread, CoffeeScenarioPhoto
+from db.base import Account, Message, Thread, CoffeeScenarioPhoto
 
 from db.queries import get_message_by_id
 
@@ -28,7 +28,7 @@ from utils.ai import ai_extract_user_info, ai_test_photo, ai_translate_message
 from utils.dependencies import (admin_dependency,
                                 session_dependency,
                                 arq_dependency)
-from utils.enums import MessageStatusEnum, ThreadColorEnum, AIModelEnum, LanguageEnum
+from utils.enums import CoffeeStatusEnum, MessageStatusEnum, ThreadColorEnum, AIModelEnum, LanguageEnum
 from auth.schemas import SecretShcema
 
 from utils.base import (generate_valid_media_url,
@@ -41,7 +41,7 @@ from utils.base import (generate_valid_media_url,
 from config import SECRET_API, UPLOAD_DIR
 # from utils.scenarios import run_coffee_scenario
 from utils.schemas import CoffeeScenarioPhotoSchema
-from utils.tasks import need_run_coffee_scenario, try_update_thread_memory
+from utils.tasks import get_coffee_state, need_run_coffee_scenario, try_update_thread_memory
 from websocket.redis_listener import publish_event
 
 
@@ -458,3 +458,61 @@ async def add_coffee_scenario_photo(admin: admin_dependency,
         'start_task_for_check_unaswer_coffee_threads',
         _queue_name='arq:polling',
     )
+
+
+
+# @utils_router.get("/test_records")
+# async def add_coffee_scenario_photo(admin: admin_dependency,
+#                                     arq_redis: arq_dependency,
+#                                     session: session_dependency):
+#     last_message_subquery = (
+#         select(
+#             Message.thread_id,
+#             func.max(Message.id).label("last_message_id")
+#         )
+#         .where(Message.status == 'approved')
+#         .group_by(Message.thread_id)
+#         .subquery()
+#     )
+
+#     # Основной запрос
+
+#     query = (
+#         select(Thread, Message)
+#         .join(Thread.account)  # INNER JOIN: треды без аккаунта отсекутся
+#         .where(
+#             Thread.coffee_state.is_not(None),
+#             Thread.coffee_state != text("'null'::jsonb"),
+#             Account.is_active.is_(True),
+#         )
+#         .outerjoin(
+#             last_message_subquery,
+#             last_message_subquery.c.thread_id == Thread.id
+#         )
+#         .outerjoin(
+#             Message,
+#             Message.id == last_message_subquery.c.last_message_id
+#         )
+#         .options(contains_eager(Thread.account))
+#     )
+
+#     # async with sessionmaker() as _session:
+#     #     _session: AsyncSession
+#     result = await execute_and_catch_db_error(session.execute(query),
+#                                                 session)
+#     threads: list[Thread] = result.all()
+
+#     print('22')
+
+#     print(len(threads))
+
+#     for thread, last_message in threads:
+#         # print(thread.id)
+#         coffee_state = get_coffee_state(thread)
+#         # print(' -> ', thread.__dict__, last_message.__dict__)
+#         try:
+#             if coffee_state.status == CoffeeStatusEnum.ACTIVE:
+#                 pass
+#         except Exception as ex:
+#             print(ex)
+#             print(thread.id)
