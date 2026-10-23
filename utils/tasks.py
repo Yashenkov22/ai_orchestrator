@@ -2106,7 +2106,10 @@ async def try_add_messages(message_data: dict,
                 coffee_state = get_coffee_state(thread)
 
                 if coffee_state.status == CoffeeStatusEnum.ACTIVE:
-                    if all(msg for msg in messages if msg.get('type','') != MessageTypeEnum.TEXT):
+                    has_text_user_messages = any(msg.get('type', '') == MessageTypeEnum.TEXT and msg.get('sender', '') == 'user'  \
+                                                 for msg in messages)
+                    
+                    if not has_text_user_messages:
                         bg_task_already_exists = True
                     
                     elif coffee_state.is_scenario_step:

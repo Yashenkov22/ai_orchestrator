@@ -28,7 +28,7 @@ from utils.ai import ai_extract_user_info, ai_test_photo, ai_translate_message
 from utils.dependencies import (admin_dependency,
                                 session_dependency,
                                 arq_dependency)
-from utils.enums import CoffeeStatusEnum, MessageStatusEnum, ThreadColorEnum, AIModelEnum, LanguageEnum
+from utils.enums import CoffeeStatusEnum, MessageStatusEnum, MessageTypeEnum, ThreadColorEnum, AIModelEnum, LanguageEnum
 from auth.schemas import SecretShcema
 
 from utils.base import (generate_valid_media_url,
@@ -516,3 +516,27 @@ async def add_coffee_scenario_photo(admin: admin_dependency,
 #         except Exception as ex:
 #             print(ex)
 #             print(thread.id)
+# @utils_router.get("/test_func")
+# async def test_func(admin: admin_dependency,
+#                     arq_redis: arq_dependency,
+#                     session: session_dependency):
+#     messages = [
+#     {'id': 'mid.$cAEBSoTb6H-GnleC5p2hZIrl8Nd2R', 'sender': 'user',
+#      'type': MessageTypeEnum.TEXT, 'timestamp': '1792688350044',
+#      'text': 'sorry, missed it', 'media_files': []},
+#     {'id': 'mid.$cAEBSoTb6H-GnleD1q2hZIrm2Kf8S', 'sender': 'assistant',
+#      'type': MessageTypeEnum.SYSTEM, 'timestamp': '1792688340901',
+#      'text': 'You missed an audio call', 'media_files': []},
+# ]
+#     # if all(msg for msg in messages if msg.get('type','') != MessageTypeEnum.TEXT):
+#     #     print('skip task')
+#     # else:
+#     #     print('run task')
+
+#     has_text_message = any(msg.get('type', '') == MessageTypeEnum.TEXT and msg.get('sender', '') == 'user'  for msg in messages)
+
+#     if not has_text_message:
+#         print('skip task')
+#         # bg_task_already_exists = True
+#     else:
+#         print('run task')

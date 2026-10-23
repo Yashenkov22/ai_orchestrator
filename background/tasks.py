@@ -248,7 +248,7 @@ async def parse_account(cxt,
             profile_port = await try_get_profile_port(folder_id,
                                                       profile_id)
 
-        await sleep(5)
+        await sleep(3)
         
         async with sessionmaker() as _session:
             await test_playwright(account,
@@ -429,7 +429,7 @@ async def send_message_to_thread(cxt,
                                         type='Message updated',
                                         payload=payload)
                     
-                    await sleep(5)
+                    await sleep(2)
 
                     attachments = message.attachments
 
@@ -1227,7 +1227,7 @@ async def background_coffee_scenario(cxt,
         except Exception as ex:
             print(ex)
 
-        if current_step != 4:
+        if current_step != 4 or current_step != 1:
             coffee_state.is_scenario_step = not is_scenario_step
         
         if current_step < 6:
