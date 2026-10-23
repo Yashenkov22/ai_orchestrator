@@ -1227,7 +1227,7 @@ async def background_coffee_scenario(cxt,
         except Exception as ex:
             print(ex)
 
-        if current_step != 4 or current_step != 1:
+        if current_step not in (1,4):
             coffee_state.is_scenario_step = not is_scenario_step
         
         if current_step < 6:
