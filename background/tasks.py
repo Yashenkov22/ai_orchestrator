@@ -1073,23 +1073,9 @@ async def background_coffee_scenario(cxt,
             print(' -> NOT COFFEE STATE!!!')
             return
 
-        last_messages = await get_N_last_messages(message_count=100,
-                                                  thread_id=thread.id,
-                                                  session=_session)
-
-        jev_step_action_data = await route_jev_coffee_scenario(thread,
-                                                            coffee_state,
-                                                            last_messages,
-                                                            _session)        
-        action_marker = jev_step_action_data.get('action')
-
         if coffee_state.current_step == 5:
             if coffee_state.status != CoffeeStatusEnum.MODERATING:
-                # if action_marker:
                 coffee_state.status = CoffeeStatusEnum.MODERATING
-                # else:
-                #     coffee_state.status = CoffeeStatusEnum.CANCELLED
-
                 thread.coffee_state = coffee_state.model_dump(mode="json")
 
                 # ws event for coffee_state
@@ -1107,42 +1093,51 @@ async def background_coffee_scenario(cxt,
                                                 with_rollback=True)
             else:
                 print(' -> thread waiting moderating...')
-            #ws event
             return
+
+        last_messages = await get_N_last_messages(message_count=100,
+                                                  thread_id=thread.id,
+                                                  session=_session)
+
+        jev_step_action_data = await route_jev_coffee_scenario(thread,
+                                                               coffee_state,
+                                                               last_messages,
+                                                               _session)
+        action_marker = jev_step_action_data.get('action')
 
         if action_marker:
             print('inside action...')
             coffee_photos = await get_account_scenario_data_by_id(thread.account_id,
                                                                   _session)
             genarated_message_data = await do_current_step_coffee_scenario(jev_step_action_data,
-                                                                        thread,
-                                                                        thread.account,
-                                                                        coffee_photos)
+                                                                           thread,
+                                                                           thread.account,coffee_state,
+                                                                           coffee_photos)
             generated_text, attachment = genarated_message_data
 
-            current_step = coffee_state.current_step
+            # current_step = coffee_state.current_step
 
-            if current_step == 1:
-                print('last basic behaivor before scenario step_2...')
+            # if current_step == 1:
+            #     print('last basic behaivor before scenario step_2...')
 
-                raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(last_messages)
+            #     raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(last_messages)
 
-                generated_text = await generate_new_message_to_thread(account_info=thread.account.information,
-                                                                    thread=thread,
-                                                                    thread_context=thread.context,
-                                                                    new_messages=raw_messages_log)
-            elif current_step == 3:
-                print(' -> inside current_step 3...')
-                purpose = attachment.pop('purpose')
-                generated_text = await generate_caption_to_coffee_scenario_photo(account_info=thread.account.information,
-                                                                                thread=thread,
-                                                                                new_messages=last_messages,
-                                                                                purpose=purpose)
+            #     generated_text = await generate_new_message_to_thread(account_info=thread.account.information,
+            #                                                         thread=thread,
+            #                                                         thread_context=thread.context,
+            #                                                         new_messages=raw_messages_log)
+            # elif current_step == 3:
+            #     print(' -> inside current_step 3...')
+            #     purpose = attachment.pop('purpose')
+            #     generated_text = await generate_caption_to_coffee_scenario_photo(account_info=thread.account.information,
+            #                                                                     thread=thread,
+            #                                                                     new_messages=last_messages,
+            #                                                                     purpose=purpose)
 
         else:
             print('basic behaivor...')
 
-            raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(last_messages)
+            raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(last_messages[:50])
 
             generated_text = await generate_new_message_to_thread(account_info=thread.account.information,
                                                                 thread=thread,
@@ -1222,6 +1217,7 @@ async def background_coffee_scenario(cxt,
             step_instruction = coffee_scenario.get(f'step_{current_step}').get('instruction')
             result_log = f'''Инструкция шага: {step_instruction}\n
                             Отправленное сообщение - {ADMIN_URL}/messages/message_{new_generated_message.id}'''
+            # можно формировать CoffeeLogStepSchema раньше и передавать сюда уже готовый объект
             coffee_state.logs[f'step_{current_step}'] = CoffeeLogStepSchema(status=CoffeeStepLogSchema.COMPLETED,
                                                                             result=result_log)
         except Exception as ex:

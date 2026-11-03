@@ -174,6 +174,16 @@ class CoffeeScenarioPhoto(Base):
         nullable=False
     )
 
+    name = Column(
+        String(2048),
+        nullable=True,
+        default=None,
+    )
+
+    description = Column(Text,
+                         nullable=True,
+                         default=None)
+
     account = relationship(
         "Account",
         back_populates="coffee_photos"
@@ -298,6 +308,9 @@ class Message(Base):
                 primary_key=True,
                 index=True)
     #
+    message_id = Column(String,
+                  nullable=True,
+                  default=None)
     created_at = Column(TIMESTAMP(timezone=True),
                         nullable=True,
                         default=None)

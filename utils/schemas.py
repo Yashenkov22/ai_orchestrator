@@ -139,16 +139,22 @@ class AddMessageSchema(BaseMessageSchema):
     pass
 
 
+class FirstScenarioStepSchema(BaseModel):
+    last_send_time: datetime | None = Field(default=None)
+    photo_list: list | None = Field(default=None)
+
+
 class CoffeeLogStepSchema(BaseModel):
     status: str = Field(default=CoffeeStepLogSchema.WAITING)
     result: str | None = Field(default=None)
+    # photo_data: FirstScenarioStepSchema | None = Field(default=None)
 
 
 class CoffeeStateSchema(BaseModel):
     status: CoffeeStatusEnum
     current_step: int
     is_scenario_step: bool
-    logs: dict[str, CoffeeLogStepSchema] # key - step_1/2/3/4
+    logs: dict[str, CoffeeLogStepSchema] # key - step_1/2/3/4 or preparing_data
 
 
 class DetailMessageSchema(BaseMessageSchema):
