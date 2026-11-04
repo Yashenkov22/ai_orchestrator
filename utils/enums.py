@@ -49,6 +49,8 @@ class ThreadColorEnum(str, Enum):
 
 class AIModelEnum(str, Enum):
     CLAUDE_SONNET_5 = 'anthropic/claude-sonnet-5'
+    CLAUDE_SONNET_4_6 = 'anthropic/claude-sonnet-4.6'
+    CLAUDE_SONNET_4_5 = 'anthropic/claude-sonnet-4.5'
     CLAUDE_OPUS_4_8 = 'anthropic/claude-opus-4.8'
     CLAUDE_OPUS_4_6 = 'anthropic/claude-opus-4.6'
     DEEPSEEK_LATEST = "deepseek/deepseek-v4.1-flash"

@@ -24,7 +24,7 @@ from db.base import Account, Message, Thread, CoffeeScenarioPhoto
 
 from db.queries import get_message_by_id
 
-from utils.ai import ai_extract_user_info, ai_test_photo, ai_translate_message
+from utils.ai import ai_extract_user_info, ai_test_photo, ai_translate_message, get_balance, get_key_status
 from utils.dependencies import (admin_dependency,
                                 session_dependency,
                                 arq_dependency)
@@ -540,3 +540,41 @@ async def add_coffee_scenario_photo(admin: admin_dependency,
 #         # bg_task_already_exists = True
 #     else:
 #         print('run task')
+
+@utils_router.get("/test_get_data")
+async def test_get_data(admin: admin_dependency,
+                                    arq_redis: arq_dependency,
+                                    session: session_dependency):
+    # import requests
+
+    # response = requests.get(
+    # url="https://openrouter.ai/api/v1/key",
+    # headers={
+    #     "Authorization": f"Bearer <OPENROUTER_API_KEY>"
+    # }
+    # )
+
+    status = await get_key_status()
+    print(status)
+
+    # print(status)
+
+    # print(f"Лимит ключа: {status['limit']}")
+    # print(f"Расходы: {status['usage']}")
+    # print(f"Расходы BYOK: {status['byok_usage']}")
+
+    # for budget in status["budgets"]:
+    #     print(
+    #         f"{budget['scope']}: потрачено ${budget['spend_usd']} "
+    #         f"из ${budget['limit_usd']}, осталось ${budget['remaining_usd']}, "
+    #         f"сброс: {budget['resets_at'] or 'нет'}"
+    #     )
+
+@utils_router.get("/get_balance")
+async def get_openrouter_balance(admin: admin_dependency,
+                      arq_redis: arq_dependency,
+                      session: session_dependency):
+    balance = await get_balance()
+    pretty_balance = f"Баланс: ${balance['balance']:.2f}"
+    # print(f"Баланс: ${balance['balance']:.2f}")
+    return pretty_balance

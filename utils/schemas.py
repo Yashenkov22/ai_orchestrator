@@ -154,7 +154,7 @@ class CoffeeStateSchema(BaseModel):
     status: CoffeeStatusEnum
     current_step: int
     is_scenario_step: bool
-    logs: dict[str, CoffeeLogStepSchema] # key - step_1/2/3/4 or preparing_data
+    logs: dict[str, CoffeeLogStepSchema | dict] # key - step_1/2/3/4 or preparing_data
 
 
 class DetailMessageSchema(BaseMessageSchema):
@@ -447,3 +447,9 @@ class DetailCofeeScenarioPhotoSchema(BaseModel):
 
 class ListThreadElementSchema(ThreadSchema):
     coffee_state: CoffeeStateSchema | None
+
+
+class GeneratedAnswerSchema(BaseModel):
+    text: str | None = Field(default=None)
+    attachment: dict | None = Field(default=None)
+    home_photo_id : int | None = Field(default=None)

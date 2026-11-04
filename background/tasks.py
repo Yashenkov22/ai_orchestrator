@@ -32,7 +32,7 @@ from utils.base import (try_block_thread,
                         try_stop_profile,
                         try_connect_to_main_instagram_page)
 from utils.scenarios import do_current_step_coffee_scenario, route_jev_coffee_scenario, coffee_scenario
-from utils.schemas import CoffeeLogStepSchema, CoffeeStateSchema
+from utils.schemas import CoffeeLogStepSchema, CoffeeStateSchema, GeneratedAnswerSchema
 from utils.tasks import (get_coffee_state, get_raw_messages_log_and_new_last_message_id, need_run_coffee_scenario, parse_thread_playwright,
                          playwright_send_message,
                          test_playwright,
@@ -1104,16 +1104,20 @@ async def background_coffee_scenario(cxt,
                                                                last_messages,
                                                                _session)
         action_marker = jev_step_action_data.get('action')
+        raw_messages_log = jev_step_action_data.get('last_messages')
 
         if action_marker:
             print('inside action...')
             coffee_photos = await get_account_scenario_data_by_id(thread.account_id,
                                                                   _session)
-            genarated_message_data = await do_current_step_coffee_scenario(jev_step_action_data,
-                                                                           thread,
-                                                                           thread.account,coffee_state,
-                                                                           coffee_photos)
-            generated_text, attachment = genarated_message_data
+            generated_message_data: GeneratedAnswerSchema = await do_current_step_coffee_scenario(jev_step_action_data,
+                                                                                                  thread,
+                                                                                                  thread.account,
+                                                                                                  coffee_state,
+                                                                                                  coffee_photos)
+            # generated_text, attachment = generated_message_data
+            # generated_text = generated_message_data.text
+            # attachment = generated_message_data.attachment
 
             # current_step = coffee_state.current_step
 
@@ -1137,15 +1141,16 @@ async def background_coffee_scenario(cxt,
         else:
             print('basic behaivor...')
 
-            raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(last_messages[:50])
-
             generated_text = await generate_new_message_to_thread(account_info=thread.account.information,
-                                                                thread=thread,
-                                                                thread_context=thread.context,
-                                                                new_messages=raw_messages_log)
-            attachment = None
+                                                                  thread=thread,
+                                                                  thread_context=thread.context,
+                                                                  new_messages=raw_messages_log)
+            generated_message_data = GeneratedAnswerSchema(text=generated_text)
 
         message_type = MessageTypeEnum.TEXT
+
+        generated_text = generated_message_data.text
+        attachment = generated_message_data.attachment
         
         if attachment:
             message_type = attachment.get('media_type')
@@ -1213,15 +1218,22 @@ async def background_coffee_scenario(cxt,
         is_scenario_step = coffee_state.is_scenario_step
         print(f' -> тип шага - {is_scenario_step}')
 
-        try:
-            step_instruction = coffee_scenario.get(f'step_{current_step}').get('instruction')
-            result_log = f'''Инструкция шага: {step_instruction}\n
-                            Отправленное сообщение - {ADMIN_URL}/messages/message_{new_generated_message.id}'''
-            # можно формировать CoffeeLogStepSchema раньше и передавать сюда уже готовый объект
-            coffee_state.logs[f'step_{current_step}'] = CoffeeLogStepSchema(status=CoffeeStepLogSchema.COMPLETED,
-                                                                            result=result_log)
-        except Exception as ex:
-            print(ex)
+        if current_step == 1:
+            home_photo_id = generated_message_data.home_photo_id
+
+            if home_photo_id:
+                preparing_data = coffee_state.logs.setdefault('preparing_data', {})
+                preparing_data.setdefault('photo_list', []).append(home_photo_id)
+        else:
+            try:
+                step_instruction = coffee_scenario.get(f'step_{current_step}').get('instruction')
+                result_log = f'''Инструкция шага: {step_instruction}\n
+                                Отправленное сообщение - {ADMIN_URL}/messages/message_{new_generated_message.id}'''
+                # можно формировать CoffeeLogStepSchema раньше и передавать сюда уже готовый объект ?
+                coffee_state.logs[f'step_{current_step}'] = CoffeeLogStepSchema(status=CoffeeStepLogSchema.COMPLETED,
+                                                                                result=result_log)
+            except Exception as ex:
+                print(ex)
 
         if current_step not in (1,4):
             coffee_state.is_scenario_step = not is_scenario_step

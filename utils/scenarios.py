@@ -4,9 +4,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.base import Account, CoffeeScenarioPhoto, Thread, Message
 
-from utils.ai import generate_caption_to_coffee_scenario_photo, generate_new_message_to_thread, generate_new_message_to_thread_coffee_scenario, like_jev_ai_request
+from utils.ai import generate_caption_to_coffee_scenario_photo, generate_new_message_to_thread, generate_new_message_to_thread_coffee_scenario, like_jev_ai_request, select_photo_for_thread
 from utils.enums import CoffeeStepTypeSchema
-from utils.schemas import CoffeeStateSchema
+from utils.schemas import CoffeeStateSchema, GeneratedAnswerSchema
 
 # from typesafe_sdk import AsyncTypeSafeClient, Choice, Noul
 
@@ -554,22 +554,38 @@ async def do_current_step_coffee_scenario(jev_data: dict,
     purpose = None
 
     if scenario_step_type == CoffeeStepTypeSchema.PREPARING:
+        home_photos = [photo for photo in coffee_photos if photo.purpose == 'home_photo']
 
         _logs = coffee_state.logs
 
-        preparing_data: dict = _logs.get('preparing_data')
-
-        if not preparing_data:
-            return (
-                None,
-                None,
-            )
+        preparing_data: dict = _logs.get('preparing_data', dict())
 
         last_send_time = preparing_data.get('last_send_time')
-        used_photo_id_list = preparing_data.get('photo_list')
+        used_photo_id_list = preparing_data.get('photo_list', list())
 
         # запрос в бд, проверка по времени last_send_time
+        home_photo_id = await select_photo_for_thread(
+            account_info=account.information,
+            thread=thread,
+            new_messages=last_messages,
+            photos=home_photos,
+            sent_photo_ids=used_photo_id_list,  # необязательно
+            # current_time="23:40",         # необязательно
+        )
 
+        if home_photo_id:
+            photo = [photo for photo in home_photos if photo.id == home_photo_id][0]
+            attachment = {
+                'media_type': 'photo',
+                'media_url': photo.media_url,
+                'purpose': photo.purpose,
+            }
+            # generate photo caption
+            message_text = await generate_caption_to_coffee_scenario_photo(account.information,
+                                                                            thread,
+                                                                            last_messages,
+                                                                            photo.purpose,
+                                                                            photo.description)
         # запрос в нейронку для уместно ли отправить фото, какое из вариантов?
 
         # в зависимости от ответа - отправка фото или обычное поведение
@@ -577,17 +593,16 @@ async def do_current_step_coffee_scenario(jev_data: dict,
         #
         # ...
         # обычное поведение
-        message_text = await generate_new_message_to_thread(account_info=thread.account.information,
-                                                            thread=thread,
-                                                            thread_context=thread.context,
-                                                            new_messages=last_messages)
-        attachment = None
-             
-        # тут может быть место под ветвление с "домашними" фото
-        # return (
-        #     generated_text,
-        #     attachment,
-        #     )
+        else:
+            message_text = await generate_new_message_to_thread(account_info=thread.account.information,
+                                                                thread=thread,
+                                                                thread_context=thread.context,
+                                                                new_messages=last_messages)
+            attachment = None
+
+        result = GeneratedAnswerSchema(text=message_text,
+                                       attachment=attachment,
+                                       home_photo_id=home_photo_id)
     
     elif scenario_step_type == CoffeeStepTypeSchema.TEXT_MESSAGE:
         message_text = await generate_new_message_to_thread_coffee_scenario(account.information,
@@ -595,6 +610,9 @@ async def do_current_step_coffee_scenario(jev_data: dict,
                                                                             scenario_step_insctruction,
                                                                             new_messages=last_messages)
         attachment = None
+
+        result = GeneratedAnswerSchema(text=message_text,
+                                       attachment=attachment)
 
     elif scenario_step_type == CoffeeStepTypeSchema.PHOTO_MESSAGE:
         # message_text = ''
@@ -617,17 +635,14 @@ async def do_current_step_coffee_scenario(jev_data: dict,
             'purpose': purpose,
         }
 
+        result = GeneratedAnswerSchema(text=message_text,
+                                       attachment=attachment)
+
     elif scenario_step_type == CoffeeStepTypeSchema.MODERATING:
         print(' -> waiting for moderate thread...')
-        return (
-            None,
-            None,
-        )
+        result = GeneratedAnswerSchema()
     
-    return (
-        message_text,
-        attachment,
-        )
+    return result
 
     
 
