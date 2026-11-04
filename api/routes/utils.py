@@ -24,7 +24,7 @@ from db.base import Account, Message, Thread, CoffeeScenarioPhoto
 
 from db.queries import get_message_by_id
 
-from utils.ai import ai_extract_user_info, ai_test_photo, ai_translate_message
+from utils.ai import ai_extract_user_info, ai_test_photo, ai_translate_message, get_balance
 from utils.dependencies import (admin_dependency,
                                 session_dependency,
                                 arq_dependency)
@@ -540,3 +540,14 @@ async def add_coffee_scenario_photo(admin: admin_dependency,
 #         # bg_task_already_exists = True
 #     else:
 #         print('run task')
+
+
+@utils_router.get("/get_balance")
+async def get_openrouter_balance(admin: admin_dependency,
+                      arq_redis: arq_dependency,
+                      session: session_dependency):
+    balance = await get_balance()
+
+    pretty_balance = f"Баланс: ${balance['balance']:.2f}"
+
+    return pretty_balance

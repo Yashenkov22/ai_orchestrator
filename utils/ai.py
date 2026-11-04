@@ -1,4 +1,5 @@
 import json
+import httpx
 
 from datetime import datetime, timezone
 from openai import OpenAI, AsyncOpenAI
@@ -825,3 +826,21 @@ async def like_jev_ai_request(system_prompt_kwargs: dict,
         result = ''
     
     return result.strip()
+
+
+async def get_balance() -> dict:
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            "https://openrouter.ai/api/v1/credits",
+            headers={
+                "Authorization": f"Bearer {AI_API_TOKEN}"
+            },
+        )
+    response.raise_for_status()
+    data = response.json()["data"]
+
+    return {
+        "total_credits": data["total_credits"],
+        "total_usage": data["total_usage"],
+        "balance": data["total_credits"] - data["total_usage"],
+    }
