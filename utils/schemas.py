@@ -241,6 +241,12 @@ class CreateCoffeeScenarioPhotoSchema(PatchPhotoAccountSchema):
     media_url: str
     purpose: Literal['before', 'after']
 
+class CreateCoffeeHomePhotoSchema(PatchPhotoAccountSchema):
+    # media_url: str
+    purpose: Literal['home_photo']
+    name: str | None = Field(default=None)
+    description: str | None = Field(default=None)
+
 
 class PatchViewNameAccountSchema(BaseModel):
     account_id: int
@@ -441,7 +447,9 @@ class CoffeeScenarioPhotoSchema(BaseModel):
 class DetailCofeeScenarioPhotoSchema(BaseModel):
     id: int
     media_url: str
-    purpose: Literal['before', 'after']
+    purpose: Literal['before', 'after', 'home_photo']
+    name: str | None = Field(default=None)
+    description: str | None = Field(default=None)
 
 
 

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Literal
 
 from fastapi import (APIRouter,
                      HTTPException,
@@ -14,7 +15,7 @@ from db.base import (Thread,
                      Account,
                      CoffeeScenarioPhoto)
 
-from utils.schemas import (CreateCoffeeScenarioPhotoSchema, DetailCofeeScenarioPhotoSchema, PatchAccountSchema,
+from utils.schemas import (CreateCoffeeHomePhotoSchema, CreateCoffeeScenarioPhotoSchema, DetailCofeeScenarioPhotoSchema, PatchAccountSchema,
                            NewAccountSchema, PatchHiddenMarkAccountSchema,
                            PatchInformationAccountSchema,
                            PatchPhotoAccountSchema, PatchViewNameAccountSchema,
@@ -131,6 +132,7 @@ async def get_accounts(admin: admin_dependency,
 @account_router.get("/get_coffee_scenario_photo_list",
                     response_model=list[DetailCofeeScenarioPhotoSchema])
 async def create_coffee_scenario_photo(account_id: int,
+                                       marker: Literal['before', 'home_photo'],
                                        admin: admin_dependency,
                                        session: session_dependency):
     admin_id, is_main_admin = admin
@@ -146,7 +148,7 @@ async def create_coffee_scenario_photo(account_id: int,
             selectinload(Account.coffee_photos)
         )
         .where(
-            Account.id == account_id
+            Account.id == account_id,
         )
     )
 
@@ -161,10 +163,13 @@ async def create_coffee_scenario_photo(account_id: int,
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail='Account not found')
 
+    photo_list = []
     for photo in account.coffee_photos:
-        photo.media_url = generate_valid_media_url(photo.media_url)
+        if photo.purpose == marker:
+            photo.media_url = generate_valid_media_url(photo.media_url)
+            photo_list.append(photo)
 
-    return account.coffee_photos
+    return photo_list
 
 
 # new
@@ -598,6 +603,64 @@ async def create_coffee_scenario_photo(data: CreateCoffeeScenarioPhotoSchema,
         'id': scenario_photo.id,
         'purpose': scenario_photo.purpose,
         'media_url': generate_valid_media_url(scenario_photo.media_url),
+    }
+
+
+@account_router.post("/create_coffee_home_photo")
+async def create_coffee_home_photo(data: CreateCoffeeHomePhotoSchema,
+                                       admin: admin_dependency,
+                                       session: session_dependency):
+    admin_id, is_main_admin = admin
+
+    if not is_main_admin:
+        if data.account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                                detail='Dont have permissions')
+
+    query = (
+        select(
+            Account
+        )\
+        .where(
+            Account.id == data.account_id
+        )
+    )
+
+    res = await execute_and_catch_db_error(session.execute(query),
+                                           session)
+    
+    account: Account = res.scalar_one_or_none()
+
+    if not account:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Account not found')
+    
+    # account.photo_url = data.media_url
+    insert_data = {
+        'account_id': data.account_id,
+        'media_url': data.media_url,
+        'purpose': data.purpose,
+        'name': data.name,
+        'description': data.description,
+    }
+
+    scenario_photo = CoffeeScenarioPhoto(**insert_data)
+
+    session.add(scenario_photo)
+
+    await execute_and_catch_db_error(session.flush(),
+                                     session,
+                                     with_rollback=True)
+
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)
+    return {
+        'id': scenario_photo.id,
+        'purpose': scenario_photo.purpose,
+        'media_url': generate_valid_media_url(scenario_photo.media_url),
+        'name': scenario_photo.name,
+        'description': scenario_photo.description,
     }
 
 

@@ -609,10 +609,9 @@ async def do_current_step_coffee_scenario(jev_data: dict,
                                                                             thread,
                                                                             scenario_step_insctruction,
                                                                             new_messages=last_messages)
-        attachment = None
+        # attachment = None
 
-        result = GeneratedAnswerSchema(text=message_text,
-                                       attachment=attachment)
+        result = GeneratedAnswerSchema(text=message_text)
 
     elif scenario_step_type == CoffeeStepTypeSchema.PHOTO_MESSAGE:
         # message_text = ''
