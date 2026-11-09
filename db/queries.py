@@ -7,7 +7,8 @@ from sqlalchemy import (select,
                         insert,
                         and_,
                         exists,
-                        func)
+                        func,
+                        or_)
 from sqlalchemy.engine.result import Result
 from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -928,12 +929,28 @@ async def get_message_slice(offset: int,
 async def get_N_last_messages(message_count: int,
                               thread_id: int,
                               session: AsyncSession):
+    # query = (
+    #     select(Message)\
+    #     .where(
+    #         Message.thread_id == thread_id,
+    #         Message.status == MessageStatusEnum.APPROVED,
+    #         Message.type == MessageTypeEnum.TEXT,
+    #     )
+    #     .order_by(Message.id.desc())
+    #     .limit(message_count)
+    # )
     query = (
-        select(Message)\
+        select(Message)
         .where(
             Message.thread_id == thread_id,
             Message.status == MessageStatusEnum.APPROVED,
-            Message.type == MessageTypeEnum.TEXT,
+            or_(
+                Message.type == MessageTypeEnum.TEXT,
+                and_(
+                    Message.type == MessageTypeEnum.PHOTO,
+                    Message.sender == 'assistant',
+                ),
+            ),
         )
         .order_by(Message.id.desc())
         .limit(message_count)

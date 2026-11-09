@@ -43,7 +43,7 @@ class ThreadColorEnum(str, Enum):
     GREEN = "green"
     YELLOW = "yellow"
     RED = "red"
-    DARK_RED = "dark_red"
+    DARK_RED = 'dark_red'
     GREY = "grey"
 
 

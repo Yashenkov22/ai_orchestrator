@@ -1,12 +1,13 @@
 from random import shuffle
+from datetime import datetime, timezone, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.base import Account, CoffeeScenarioPhoto, Thread, Message
 
-from utils.ai import generate_new_message_to_thread_coffee_scenario, like_jev_ai_request
+from utils.ai import generate_caption_to_coffee_scenario_photo, generate_new_message_to_thread, generate_new_message_to_thread_coffee_scenario, like_jev_ai_request, select_photo_for_thread
 from utils.enums import CoffeeStepTypeSchema
-from utils.schemas import CoffeeStateSchema
+from utils.schemas import CoffeeStateSchema, GeneratedAnswerSchema
 
 # from typesafe_sdk import AsyncTypeSafeClient, Choice, Noul
 
@@ -35,6 +36,7 @@ from config import GENERATE_PHOTO_CAPTION, TYPESAFE_API_KEY
 base_coffee_state = {
     'status': 'active',
     'logs': {},
+    'preparing_data': {},
     'current_step': 1,
     'is_scenario_step': True,
 }
@@ -91,7 +93,7 @@ coffee_scenario = {
     'step_1': {
         'type': CoffeeStepTypeSchema.PREPARING,
         'instruction': '''
-            Проверь, есть ли в чате 50+ текстовых сообщений. До этого момента обычное общение.
+            Проверь, есть ли в чате 100+ текстовых сообщений. До этого момента обычное общение.
         '''
     },
     'step_2': {
@@ -150,13 +152,9 @@ async def route_jev_coffee_scenario(thread: Thread,
                                     session: AsyncSession):
     state = 'Тебе даны последние сообщения из переписки с пользователем. Ты общаешься от лица assistant, пользователь — от лица user. Вот сообщения: {}'
     
-    # coffee_state: CoffeeStateSchema = coffee_scenario_data.get('coffee_state')
-
-    # last_messages = coffee_scenario_data.get('last_messages')
-
     current_step = coffee_state.current_step
 
-    print(f'route step {current_step} with jev...')
+    print(f'route step {current_step} for thread_id {thread.id}...')
 
     raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(last_messages[:50])
     
@@ -168,13 +166,18 @@ async def route_jev_coffee_scenario(thread: Thread,
                     print(f' -> меньше {message_limit} сообщений в шаге 1 !')
                     return {
                         'current_step': current_step,
-                        'action': False,
+                        'action': True,
+                        'last_messages': raw_messages_log,
+                        'switch_step': False,
+                        'switch_to_basic_behaivor': False,
                     }
             else:
                     return {
                         'current_step': current_step,
                         'action': True,
                         'last_messages': raw_messages_log,
+                        'switch_step': True,
+                        'switch_to_basic_behaivor': False,
                     }
         case 2:
             _state = state.format(raw_messages_log)
@@ -269,6 +272,8 @@ async def route_jev_coffee_scenario(thread: Thread,
                 return {
                     'current_step': current_step,
                     'action': False,
+                    'switch_step': False,
+                    'switch_to_basic_behaivor': False,
                 }
             
             # if choice_result == 'positive':
@@ -282,11 +287,16 @@ async def route_jev_coffee_scenario(thread: Thread,
                         'current_step': current_step,
                         'action': True,
                         'last_messages': raw_messages_log,
+                        'switch_step': True,
+                        'switch_to_basic_behaivor': False,
                     }
             else:
                     return {
                         'current_step': current_step,
                         'action': False,
+                        'last_messages': raw_messages_log,
+                        'switch_step': False,
+                        'switch_to_basic_behaivor': False,
                     }
 
             # answer_1 = jev_answer.get('question_1') # Choice
@@ -353,6 +363,8 @@ async def route_jev_coffee_scenario(thread: Thread,
                 'current_step': current_step,
                 'action': True,
                 'last_messages': raw_messages_log,
+                'switch_step': True,
+                'switch_to_basic_behaivor': True,
             }
             #     else:
             #         return {
@@ -397,6 +409,8 @@ async def route_jev_coffee_scenario(thread: Thread,
                 'current_step': current_step,
                 'action': True,
                 'last_messages': raw_messages_log,
+                'switch_step': True,
+                'switch_to_basic_behaivor': False,
             }
                 # else:
                 #     return {
@@ -486,17 +500,25 @@ async def route_jev_coffee_scenario(thread: Thread,
                 return {
                     'current_step': current_step,
                     'action': False,
+                    'last_messages': raw_messages_log,
+                    'switch_step': False,
+                    'switch_to_basic_behaivor': False,
                 }
             if choice_result != 'positive':
                 return {
                     'current_step': current_step,
                     'action': False,
+                    'last_messages': raw_messages_log,
+                    'switch_step': False,
+                    'switch_to_basic_behaivor': False,
                 }
 
             return {
                 'current_step': current_step,
                 'action': True,
                 'last_messages': raw_messages_log,
+                'switch_step': True,
+                'switch_to_basic_behaivor': False,
             }
             # answer_1 = jev_answer.get('question_1')
             # answer_2 = jev_answer.get('question_2')
@@ -532,6 +554,7 @@ async def route_jev_coffee_scenario(thread: Thread,
 async def do_current_step_coffee_scenario(jev_data: dict,
                                           thread: Thread,
                                           account: Account,
+                                          coffee_state: CoffeeStateSchema,
                                           coffee_photos: list[CoffeeScenarioPhoto] | None = None):
     current_step = jev_data.get('current_step')
     last_messages = jev_data.get('last_messages')
@@ -544,18 +567,76 @@ async def do_current_step_coffee_scenario(jev_data: dict,
     scenario_step_insctruction = scenario_step.get('instruction')
     purpose = None
 
-    if scenario_step_type == CoffeeStepTypeSchema.TEXT_MESSAGE:
+    if scenario_step_type == CoffeeStepTypeSchema.PREPARING:
+        home_photos = [photo for photo in coffee_photos if photo.purpose == 'home_photo']
+
+        # _logs = coffee_state.logs
+        preparing_data = coffee_state.preparing_data
+
+        # preparing_data: dict = _logs.get('preparing_data', dict())
+
+        last_send_time = preparing_data.last_send_time
+        used_photo_id_list = preparing_data.photo_list or list()
+
+        time_delta = datetime.now(tz=timezone.utc) - timedelta(hours=1)
+
+        if last_send_time and last_send_time >= time_delta:
+            print(f' -> actual time {datetime.now(tz=timezone.utc)} | last time send {last_send_time}')
+            home_photo_id = None
+        else:
+            # запрос в бд, проверка по времени last_send_time
+            home_photo_id = await select_photo_for_thread(
+                account_info=account.information,
+                thread=thread,
+                new_messages=last_messages,
+                photos=home_photos,
+                sent_photo_ids=used_photo_id_list,  # необязательно
+                # current_time="23:40",         # необязательно
+            )
+
+        if home_photo_id:
+            photo = [photo for photo in home_photos if photo.id == home_photo_id][0]
+            attachment = {
+                'media_type': 'photo',
+                'media_url': photo.media_url,
+                'purpose': photo.purpose,
+            }
+            # generate photo caption
+            message_text = await generate_caption_to_coffee_scenario_photo(account.information,
+                                                                            thread,
+                                                                            last_messages,
+                                                                            photo.purpose,
+                                                                            photo.description)
+        else:
+            message_text = await generate_new_message_to_thread(account_info=thread.account.information,
+                                                                thread=thread,
+                                                                thread_context=thread.context,
+                                                                new_messages=last_messages)
+            attachment = None
+
+        result = GeneratedAnswerSchema(text=message_text,
+                                       attachment=attachment,
+                                       home_photo_id=home_photo_id)
+    
+    elif scenario_step_type == CoffeeStepTypeSchema.TEXT_MESSAGE:
         message_text = await generate_new_message_to_thread_coffee_scenario(account.information,
                                                                             thread,
                                                                             scenario_step_insctruction,
                                                                             new_messages=last_messages)
-        attachment = None
+        # attachment = None
+
+        result = GeneratedAnswerSchema(text=message_text)
 
     elif scenario_step_type == CoffeeStepTypeSchema.PHOTO_MESSAGE:
-        message_text = ''
+        # message_text = ''
         match current_step:
             case 3:
                 purpose = 'before'
+
+        message_text = await generate_caption_to_coffee_scenario_photo(account_info=thread.account.information,
+                                                                        thread=thread,
+                                                                        new_messages=last_messages,
+                                                                        purpose=purpose)
 
         photo_urls = [photo.media_url for photo in coffee_photos if photo.purpose == purpose]
         shuffle(photo_urls)
@@ -567,22 +648,14 @@ async def do_current_step_coffee_scenario(jev_data: dict,
             'purpose': purpose,
         }
 
+        result = GeneratedAnswerSchema(text=message_text,
+                                       attachment=attachment)
+
     elif scenario_step_type == CoffeeStepTypeSchema.MODERATING:
         print(' -> waiting for moderate thread...')
-        return (
-            None,
-            None,
-        )
-    elif scenario_step_type == CoffeeStepTypeSchema.PREPARING:
-        return (
-            None,
-            None,
-            )
+        result = GeneratedAnswerSchema()
     
-    return (
-        message_text,
-        attachment,
-        )
+    return result
 
     
 

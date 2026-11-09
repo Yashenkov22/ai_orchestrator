@@ -579,7 +579,7 @@ async def process_thread_messages(messages: list,
         view_sender = 'user' if _sender == user_insta_id else 'assistant'
 
         msg_data = {
-            'id': msg_id,
+            'message_id': str(msg_id),
             'sender': view_sender,
             'type': ctype,
             'timestamp': _ts,
@@ -2084,6 +2084,7 @@ async def try_add_messages(message_data: dict,
                 'sender': sender,
                 'status': 'approved',
                 'thread_id': thread_id,
+                'message_id': message.get('message_id')
             }
 
             if _type := message.get('type'):
