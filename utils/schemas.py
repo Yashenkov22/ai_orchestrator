@@ -150,11 +150,17 @@ class CoffeeLogStepSchema(BaseModel):
     # photo_data: FirstScenarioStepSchema | None = Field(default=None)
 
 
+class PreparingDataSchema(BaseModel):
+    photo_list: list[int] = Field(default_factory=list)
+    last_send_time: datetime | None = None
+
+
 class CoffeeStateSchema(BaseModel):
     status: CoffeeStatusEnum
     current_step: int
     is_scenario_step: bool
-    logs: dict[str, CoffeeLogStepSchema | dict] # key - step_1/2/3/4 or preparing_data
+    preparing_data: PreparingDataSchema = Field(default_factory=PreparingDataSchema)
+    logs: dict[str, CoffeeLogStepSchema] # key - step_1/2/3/4 or preparing_data
 
 
 class DetailMessageSchema(BaseMessageSchema):

@@ -1105,6 +1105,8 @@ async def background_coffee_scenario(cxt,
                                                                _session)
         action_marker = jev_step_action_data.get('action')
         raw_messages_log = jev_step_action_data.get('last_messages')
+        switch_step = jev_step_action_data.get('switch_step')
+        switch_to_basic_behaivor = jev_step_action_data.get('switch_to_basic_behaivor')
 
         if action_marker:
             print('inside action...')
@@ -1218,12 +1220,26 @@ async def background_coffee_scenario(cxt,
         is_scenario_step = coffee_state.is_scenario_step
         print(f' -> тип шага - {is_scenario_step}')
 
-        if current_step == 1:
-            home_photo_id = generated_message_data.home_photo_id
+        home_photo_id = generated_message_data.home_photo_id
 
+        if current_step == 1:
             if home_photo_id:
-                preparing_data = coffee_state.logs.setdefault('preparing_data', {})
-                preparing_data.setdefault('photo_list', []).append(home_photo_id)
+                preparing_data = coffee_state.preparing_data
+                preparing_data.photo_list.append(home_photo_id)
+                preparing_data.last_send_time = datetime.now(tz=timezone.utc)
+                # preparing_data = coffee_state.logs.setdefault('preparing_data', {})
+                # preparing_data.setdefault('photo_list', []).append(home_photo_id)
+                # preparing_data['last_send_time'] = datetime.now(tz=timezone.utc)
+            if switch_step:
+                try:
+                    step_instruction = coffee_scenario.get(f'step_{current_step}').get('instruction')
+                    result_log = f'''Инструкция шага: {step_instruction}\n
+                                    Отправленное сообщение - {ADMIN_URL}/messages/message_{new_generated_message.id}'''
+                    # можно формировать CoffeeLogStepSchema раньше и передавать сюда уже готовый объект ?
+                    coffee_state.logs[f'step_{current_step}'] = CoffeeLogStepSchema(status=CoffeeStepLogSchema.COMPLETED,
+                                                                                    result=result_log)
+                except Exception as ex:
+                    print(ex)
         else:
             try:
                 step_instruction = coffee_scenario.get(f'step_{current_step}').get('instruction')
@@ -1235,10 +1251,10 @@ async def background_coffee_scenario(cxt,
             except Exception as ex:
                 print(ex)
 
-        if current_step not in (1,4):
+        if switch_to_basic_behaivor:
             coffee_state.is_scenario_step = not is_scenario_step
         
-        if current_step < 6:
+        if switch_step:
             coffee_state.current_step += 1
 
         async with sessionmaker() as _session:

@@ -144,11 +144,10 @@ async def ai_translate_message(text: str):
         )
         user_content = text
 
-        model = 'obsidian/Qwen3.8-27B'
+        # model = 'obsidian/Qwen3.8-27B'
 
-        response = await orcarouter_client.chat.completions.create(
-            # model="deepseek/deepseek-v4-flash-0731",
-            model=model,
+        response = await openrouter_client.chat.completions.create(
+            model=AIModelEnum.DEEPSEEK_LATEST,
             messages=[
                 {
                     "role": "system",
@@ -162,7 +161,7 @@ async def ai_translate_message(text: str):
             timeout=30.0,
         )
         result = response.choices[0].message.content
-        print(f'модель - {model}')
+        print(f'модель - {AIModelEnum.DEEPSEEK_LATEST}')
         print(f'исходный текст - {text}')
         print('ответ нейронки', result)
 
@@ -716,7 +715,7 @@ async def generate_caption_to_coffee_scenario_photo(account_info: str,
             case 'after':
                 sub_system_prompt = 'Ты должен сгенерировать сообщение перед отправкой фотографии. На фотографии будет довольная(благодарная) девушка(ты) со стаканчиком кофе.'
             case 'home_photo':
-                sub_system_prompt = f"Ты должен сгенерировать сообщение перед отправкой фотографии. Описание к фото - {photo_description}"
+                sub_system_prompt = f"Ты должен сгенерировать сообщение перед отправкой фотографии. Описание к фото - {photo_description}. При генерации учитывай больше ход переписки, чем переданное описание фото"
 
     system_content += (
         "Твоя единственная задача — сгенерировать ОДНО сообщение для отправки собеседнику в Instagram Direct, "
@@ -879,9 +878,16 @@ async def select_photo_for_thread(
     """
     excluded_ids = set(sent_photo_ids or ())
     available_photos = [photo for photo in photos if photo.id not in excluded_ids]
+
+    print('all photos', photos)
+
+    print('available photos', available_photos)
+
+    print('all messages', new_messages)
  
     # Без новых сообщений или доступных фото запрос к модели не нужен.
     if not available_photos or not (new_messages and new_messages.strip()):
+        print(' -> проваливается сюда!!!!')
         return None
  
     model = thread.ai_model or "anthropic/claude-sonnet-5"
@@ -924,6 +930,7 @@ async def select_photo_for_thread(
     )
  
     try:
+        print(' -> делаю запрос в нейронку для получения фото id...')
         response = await ai_router.chat.completions.create(
             model=model,
             messages=[

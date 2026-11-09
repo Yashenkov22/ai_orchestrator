@@ -1,4 +1,5 @@
 from random import shuffle
+from datetime import datetime, timezone, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,9 +35,8 @@ from config import GENERATE_PHOTO_CAPTION, TYPESAFE_API_KEY
 
 base_coffee_state = {
     'status': 'active',
-    'logs': {
-         'preparing_data': {},
-    },
+    'logs': {},
+    'preparing_data': {},
     'current_step': 1,
     'is_scenario_step': True,
 }
@@ -167,7 +167,9 @@ async def route_jev_coffee_scenario(thread: Thread,
                     return {
                         'current_step': current_step,
                         'action': True,
+                        'last_messages': raw_messages_log,
                         'switch_step': False,
+                        'switch_to_basic_behaivor': False,
                     }
             else:
                     return {
@@ -175,6 +177,7 @@ async def route_jev_coffee_scenario(thread: Thread,
                         'action': True,
                         'last_messages': raw_messages_log,
                         'switch_step': True,
+                        'switch_to_basic_behaivor': False,
                     }
         case 2:
             _state = state.format(raw_messages_log)
@@ -270,6 +273,7 @@ async def route_jev_coffee_scenario(thread: Thread,
                     'current_step': current_step,
                     'action': False,
                     'switch_step': False,
+                    'switch_to_basic_behaivor': False,
                 }
             
             # if choice_result == 'positive':
@@ -284,12 +288,15 @@ async def route_jev_coffee_scenario(thread: Thread,
                         'action': True,
                         'last_messages': raw_messages_log,
                         'switch_step': True,
+                        'switch_to_basic_behaivor': False,
                     }
             else:
                     return {
                         'current_step': current_step,
                         'action': False,
+                        'last_messages': raw_messages_log,
                         'switch_step': False,
+                        'switch_to_basic_behaivor': False,
                     }
 
             # answer_1 = jev_answer.get('question_1') # Choice
@@ -357,6 +364,7 @@ async def route_jev_coffee_scenario(thread: Thread,
                 'action': True,
                 'last_messages': raw_messages_log,
                 'switch_step': True,
+                'switch_to_basic_behaivor': True,
             }
             #     else:
             #         return {
@@ -402,6 +410,7 @@ async def route_jev_coffee_scenario(thread: Thread,
                 'action': True,
                 'last_messages': raw_messages_log,
                 'switch_step': True,
+                'switch_to_basic_behaivor': False,
             }
                 # else:
                 #     return {
@@ -491,13 +500,17 @@ async def route_jev_coffee_scenario(thread: Thread,
                 return {
                     'current_step': current_step,
                     'action': False,
+                    'last_messages': raw_messages_log,
                     'switch_step': False,
+                    'switch_to_basic_behaivor': False,
                 }
             if choice_result != 'positive':
                 return {
                     'current_step': current_step,
                     'action': False,
+                    'last_messages': raw_messages_log,
                     'switch_step': False,
+                    'switch_to_basic_behaivor': False,
                 }
 
             return {
@@ -505,6 +518,7 @@ async def route_jev_coffee_scenario(thread: Thread,
                 'action': True,
                 'last_messages': raw_messages_log,
                 'switch_step': True,
+                'switch_to_basic_behaivor': False,
             }
             # answer_1 = jev_answer.get('question_1')
             # answer_2 = jev_answer.get('question_2')
@@ -556,22 +570,29 @@ async def do_current_step_coffee_scenario(jev_data: dict,
     if scenario_step_type == CoffeeStepTypeSchema.PREPARING:
         home_photos = [photo for photo in coffee_photos if photo.purpose == 'home_photo']
 
-        _logs = coffee_state.logs
+        # _logs = coffee_state.logs
+        preparing_data = coffee_state.preparing_data
 
-        preparing_data: dict = _logs.get('preparing_data', dict())
+        # preparing_data: dict = _logs.get('preparing_data', dict())
 
-        last_send_time = preparing_data.get('last_send_time')
-        used_photo_id_list = preparing_data.get('photo_list', list())
+        last_send_time = preparing_data.last_send_time
+        used_photo_id_list = preparing_data.photo_list or list()
 
-        # запрос в бд, проверка по времени last_send_time
-        home_photo_id = await select_photo_for_thread(
-            account_info=account.information,
-            thread=thread,
-            new_messages=last_messages,
-            photos=home_photos,
-            sent_photo_ids=used_photo_id_list,  # необязательно
-            # current_time="23:40",         # необязательно
-        )
+        time_delta = datetime.now(tz=timezone.utc) - timedelta(hours=1)
+
+        if last_send_time and last_send_time >= time_delta:
+            print(f' -> actual time {datetime.now(tz=timezone.utc)} | last time send {last_send_time}')
+            home_photo_id = None
+        else:
+            # запрос в бд, проверка по времени last_send_time
+            home_photo_id = await select_photo_for_thread(
+                account_info=account.information,
+                thread=thread,
+                new_messages=last_messages,
+                photos=home_photos,
+                sent_photo_ids=used_photo_id_list,  # необязательно
+                # current_time="23:40",         # необязательно
+            )
 
         if home_photo_id:
             photo = [photo for photo in home_photos if photo.id == home_photo_id][0]
@@ -586,13 +607,6 @@ async def do_current_step_coffee_scenario(jev_data: dict,
                                                                             last_messages,
                                                                             photo.purpose,
                                                                             photo.description)
-        # запрос в нейронку для уместно ли отправить фото, какое из вариантов?
-
-        # в зависимости от ответа - отправка фото или обычное поведение
-
-        #
-        # ...
-        # обычное поведение
         else:
             message_text = await generate_new_message_to_thread(account_info=thread.account.information,
                                                                 thread=thread,
