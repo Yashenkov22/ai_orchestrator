@@ -16,7 +16,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from arq import ArqRedis
 
-from db.base import Account, Admin, Message, Thread, InstaUser, Attachment, CoffeeScenarioPhoto
+from db.base import Account, Admin, CommentNotification, Message, Thread, InstaUser, Attachment, CoffeeScenarioPhoto
 
 # from utils.ai import (ai_extract_user_info,
 #                       generate_thread_context,
@@ -998,3 +998,17 @@ async def get_last_non_text_message_by_thread_id(thread_id: int,
     last_message = last_message.scalar_one_or_none()
 
     return last_message
+
+
+async def get_comment_notification_by_id(_id: int,
+                                         _session: AsyncSession) -> CommentNotification | None:
+    query = (
+        select(CommentNotification)
+        .options(joinedload(CommentNotification.account))
+        .where(CommentNotification.id == _id)
+    )
+
+    comment = await execute_and_catch_db_error(_session.execute(query),
+                                               _session)
+
+    return comment.scalar_one_or_none()

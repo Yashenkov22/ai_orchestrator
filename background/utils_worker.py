@@ -2,7 +2,9 @@ from .tasks import (generate_thread_memory,
                     generate_translated_user_information,
                     translate_user_information_by_thread_id,
                     generate_thread_momory_by_id,
-                    organize_new_message_types)
+                    organize_new_message_types,
+                    try_check_comments,
+                    try_answer_by_comment)
 from background.base import (redis_settings,
                              _redis_pool,
                              get_redis_background_pool)
@@ -16,7 +18,7 @@ from config import REDIS_HOST, REDIS_PASSWORD, JOB_STORE_URL
 
 
 async def startup(ctx):
-    # global _redis_pool
+    global _redis_pool
     # jobstores = {
     #     'sqlalchemy': SQLAlchemyJobStore(url=JOB_STORE_URL),
     # }
@@ -24,14 +26,14 @@ async def startup(ctx):
     # Создание и настройка планировщика
     # scheduler = AsyncIOScheduler(jobstores=jobstores)
 
-    # if not _redis_pool:
-    #     _redis_pool = await get_redis_background_pool()
+    if not _redis_pool:
+        _redis_pool = await get_redis_background_pool()
 
     # scheduler.start()
     #
     # ctx['scheduler'] = scheduler
     ctx['sessionmaker'] = session
-    # ctx['redis_pool'] = _redis_pool
+    ctx['redis_pool'] = _redis_pool
     #
     print("Worker for send messages is starting up...")
 
@@ -45,6 +47,8 @@ class WorkerSettings:
         translate_user_information_by_thread_id,
         generate_thread_momory_by_id,
         organize_new_message_types,
+        try_check_comments,
+        try_answer_by_comment,
         # try_start_stop_vision_profile_by_account_id,
         # try_block_thread_by_account_id,
         # parse_thread,

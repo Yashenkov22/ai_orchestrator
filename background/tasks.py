@@ -18,7 +18,7 @@ from sqlalchemy.orm import contains_eager, joinedload
 
 from config import ADMIN_URL, GENERATE_PHOTO_CAPTION
 from db.base import Account, Attachment, Thread, Message
-from db.queries import (execute_and_catch_db_error, get_N_last_messages, get_account_scenario_data_by_id, get_all_message_count,
+from db.queries import (execute_and_catch_db_error, get_N_last_messages, get_account_scenario_data_by_id, get_all_message_count, get_comment_notification_by_id,
                         get_message_by_id,
                         get_account_by_id, get_message_slice,
                         get_messages_only_by_id, get_new_thread_messages,
@@ -33,7 +33,7 @@ from utils.base import (try_block_thread,
                         try_connect_to_main_instagram_page)
 from utils.scenarios import do_current_step_coffee_scenario, route_jev_coffee_scenario, coffee_scenario
 from utils.schemas import CoffeeLogStepSchema, CoffeeStateSchema, GeneratedAnswerSchema
-from utils.tasks import (get_coffee_state, get_raw_messages_log_and_new_last_message_id, need_run_coffee_scenario, parse_thread_playwright,
+from utils.tasks import (answer_to_comment_under_post_and_to_dm, get_coffee_state, get_raw_messages_log_and_new_last_message_id, need_run_coffee_scenario, parse_comment_notifications_playwright, parse_thread_playwright,
                          playwright_send_message,
                          test_playwright,
                          try_update_thread_memory)
@@ -1283,3 +1283,85 @@ async def background_coffee_scenario(cxt,
     )
 
     print(' -> auto send task running...')
+
+
+
+async def try_check_comments(cxt,
+                             account_id: int):
+    try:
+        print(f'TASK PARSE COMMENTS FOR ACCOUNT WITH ID {account_id} ✅')
+        
+        sessionmaker = cxt["sessionmaker"]
+        redis_pool = cxt['redis_pool']
+        
+        async with sessionmaker() as _session:
+            account = await get_account_by_id(account_id,
+                                              _session)
+        
+        if not account:
+            print(f'not account with {account_id}')
+            return
+        
+        actived_profile = await try_start_profile(account.folder_id,
+                                                  account.profile_id)
+        
+        # print(actived_profile)
+        
+        profile_port = actived_profile.get('port')
+
+        print('PORT', profile_port)
+
+        if not profile_port:
+            profile_port = await try_get_profile_port(account.folder_id,
+                                                      account.profile_id)
+
+        await sleep(3)
+        
+        async with sessionmaker() as _session:
+            await parse_comment_notifications_playwright(account=account,
+                                                         profile_port=profile_port,
+                                                         _session=_session,
+                                                         redis=redis_pool,
+                                                         use_comments_filter=True)
+    except Exception as ex:
+        print(ex)
+
+
+async def try_answer_by_comment(cxt,
+                                comment_id: int):
+    try:
+        print(f'TASK ANSWER BY COMMENT WITH ID {comment_id} ✅')
+        
+        sessionmaker = cxt["sessionmaker"]
+        redis_pool = cxt['redis_pool']
+        
+        async with sessionmaker() as _session:
+            comment = await get_comment_notification_by_id(comment_id,
+                                                           _session)
+        
+        if not comment:
+            print(f'not comment with {comment_id}')
+            return
+
+        account = comment.account
+
+        actived_profile = await try_start_profile(account.folder_id,
+                                                  account.profile_id)
+                
+        profile_port = actived_profile.get('port')
+
+        print('PORT', profile_port)
+
+        if not profile_port:
+            profile_port = await try_get_profile_port(account.folder_id,
+                                                      account.profile_id)
+
+        await sleep(3)
+        
+        async with sessionmaker() as _session:
+            comment = await _session.merge(comment)
+            await answer_to_comment_under_post_and_to_dm(comment=comment,
+                                                         profile_port=profile_port,
+                                                         _session=_session)
+    except Exception as ex:
+        print(ex)

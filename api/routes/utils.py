@@ -541,34 +541,30 @@ async def add_coffee_scenario_photo(admin: admin_dependency,
 #     else:
 #         print('run task')
 
-@utils_router.get("/test_get_data")
-async def test_get_data(admin: admin_dependency,
-                                    arq_redis: arq_dependency,
-                                    session: session_dependency):
-    # import requests
+@utils_router.get("/test_comment_task")
+async def test_comment_task(admin: admin_dependency,
+                            account_id: int,
+                            arq_redis: arq_dependency,
+                            session: session_dependency):
+    job = await arq_redis.enqueue_job(
+        'try_check_comments',
+        account_id,
+        _queue_name='arq:utils',
+    )
 
-    # response = requests.get(
-    # url="https://openrouter.ai/api/v1/key",
-    # headers={
-    #     "Authorization": f"Bearer <OPENROUTER_API_KEY>"
-    # }
-    # )
 
-    status = await get_key_status()
-    print(status)
 
-    # print(status)
+@utils_router.get("/test_comment_answer_task")
+async def test_comment_task(admin: admin_dependency,
+                            comment_id: int,
+                            arq_redis: arq_dependency,
+                            session: session_dependency):
+    job = await arq_redis.enqueue_job(
+        'try_answer_by_comment',
+        comment_id,
+        _queue_name='arq:utils',
+    )
 
-    # print(f"Лимит ключа: {status['limit']}")
-    # print(f"Расходы: {status['usage']}")
-    # print(f"Расходы BYOK: {status['byok_usage']}")
-
-    # for budget in status["budgets"]:
-    #     print(
-    #         f"{budget['scope']}: потрачено ${budget['spend_usd']} "
-    #         f"из ${budget['limit_usd']}, осталось ${budget['remaining_usd']}, "
-    #         f"сброс: {budget['resets_at'] or 'нет'}"
-    #     )
 
 @utils_router.get("/get_balance")
 async def get_openrouter_balance(admin: admin_dependency,

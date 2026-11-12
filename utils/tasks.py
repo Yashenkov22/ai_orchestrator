@@ -4,8 +4,14 @@ import json
 import random
 import asyncio
 import aiofiles
+import time
+import unicodedata
 
 import aiohttp
+
+from dataclasses import dataclass
+
+from urllib.parse import parse_qs, urlsplit
 
 from typing import Any
 
@@ -13,11 +19,13 @@ from urllib.parse import unquote
 
 from pathlib import Path
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from arq import ArqRedis, Retry
 
-from sqlalchemy import select
+from sqlalchemy import select, update, insert
+
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,13 +33,13 @@ from playwright.async_api import async_playwright
 
 from background.base import acquire_task_lock
 from db.queries import (check_insta_user, check_new_messages_in_thread,
-                        check_thread_in_db, get_N_last_messages, get_all_threads_by_account, get_last_non_text_message_by_thread_id, get_message_count_after_last_message_id, get_message_only_by_id, get_new_thread_messages, get_thread_by_id,
+                        check_thread_in_db, get_N_last_messages, get_all_threads_by_account, get_comment_notification_by_id, get_last_non_text_message_by_thread_id, get_message_count_after_last_message_id, get_message_only_by_id, get_new_thread_messages, get_thread_by_id,
                         try_add_insta_user,
                         # try_add_messages,
                         try_add_new_thread,
                         execute_and_catch_db_error, update_approve_thread, update_thread_is_unread_by_id)
 
-from db.base import Attachment, Message, Thread, Account
+from db.base import Attachment, Message, Thread, Account, CommentNotification
 
 from utils.ai import ai_extract_user_info, generate_new_message_to_thread, generate_thread_context
 from utils.enums import CoffeeStatusEnum, MessageStatusEnum, ThreadColorEnum, MessageTypeEnum
@@ -2346,3 +2354,787 @@ def get_coffee_state(thread: Thread) -> CoffeeStateSchema:
         except Exception as ex:
             print('error with try validate', ex)
             return
+
+
+# import re
+# import json
+# import asyncio
+
+NOTIF_LABELS = ("Notifications", "Уведомления")
+
+
+async def _notif_target(page):
+    """Ближайший кликабельный предок подписи/иконки «Уведомления»."""
+    for label in NOTIF_LABELS:
+        span = page.locator("span", has_text=re.compile(rf"^\s*{label}\s*$")).first
+        if await span.count() and await span.is_visible():
+            return span.locator(
+                'xpath=ancestor-or-self::*[self::a or @role="link" or @role="button"][1]'
+            )
+    # свёрнутый сайдбар — по aria-label иконки
+    for label in NOTIF_LABELS:
+        icon = page.locator(f'svg[aria-label="{label}"]').first
+        if await icon.count():
+            return icon.locator(
+                'xpath=ancestor::*[self::a or @role="link" or @role="button"][1]'
+            )
+    return None
+
+
+async def _wait_box_stable(locator, timeout_ms=1500, step_ms=100):
+    """Ждём, пока элемент перестанет двигаться/менять размер (анимация сайдбара)."""
+    prev = None
+    waited = 0
+    while waited < timeout_ms:
+        box = await locator.bounding_box()
+        if box and prev and all(abs(box[k] - prev[k]) < 1 for k in box):
+            return
+        prev = box
+        await asyncio.sleep(step_ms / 1000)
+        waited += step_ms
+
+
+async def click_sidebar_notifications(page, opened_event: asyncio.Event) -> bool:
+    try:
+        await page.wait_for_selector(
+            ", ".join(f'svg[aria-label="{l}"]' for l in NOTIF_LABELS),
+            state="visible",
+            timeout=20000,
+        )
+    except Exception:
+        print("Sidebar not rendered")
+        return False
+
+    for attempt in range(1, 3):
+        target = await _notif_target(page)
+        if target is None or not await target.count():
+            print("Notifications item not found")
+            return False
+
+        await target.hover()                    # раскрываем сайдбар
+        await _wait_box_stable(target)          # ждём конца анимации, а не фикс. паузу
+        target = await _notif_target(page)      # локатор после раскрытия
+        await target.click(force=(attempt == 2))
+
+        try:
+            await asyncio.wait_for(opened_event.wait(), timeout=4)
+            return True
+        except asyncio.TimeoutError:
+            print(f"[attempt {attempt}] panel did not open")
+            await page.keyboard.press("Escape")
+            await page.wait_for_timeout(500)
+
+    return False
+# async def click_sidebar_notifications(page, opened_event: asyncio.Event) -> bool:
+#     # ждём, пока сайдбар отрисуется и оживёт
+#     try:
+#         await page.wait_for_selector(
+#             ", ".join(f'svg[aria-label="{l}"]' for l in NOTIF_LABELS),
+#             timeout=20000,
+#         )
+#     except Exception:
+#         print("Sidebar not rendered")
+#         return False
+#     await page.wait_for_timeout(1500)
+
+#     for attempt in range(1, 4):
+#         target = await _notif_target(page)
+#         if target is None or not await target.count():
+#             print("Notifications item not found")
+#             return False
+
+#         # отладка: что именно кликаем
+#         html = await target.evaluate("el => el.outerHTML.slice(0, 200)")
+#         box = await target.bounding_box()
+#         print(f"[attempt {attempt}] target={html!r} box={box}")
+
+#         await target.scroll_into_view_if_needed()
+#         if attempt == 1:
+#             await target.click()
+#         elif attempt == 2:
+#             await target.hover()
+#             await page.wait_for_timeout(300)
+#             await target.click(force=True)
+#         else:
+#             await target.dispatch_event("click")
+
+#         try:
+#             await asyncio.wait_for(opened_event.wait(), timeout=6)
+#             return True          # пришёл xdt_activity_inbox — панель открылась
+#         except asyncio.TimeoutError:
+#             print(f"[attempt {attempt}] panel did not open")
+#             # await page.screenshot(path=f"notif_attempt_{attempt}.png")
+#             await page.keyboard.press("Escape")   # на случай, если панель была открыта и мы её закрыли
+#             await page.wait_for_timeout(1000)
+
+#     return False
+
+
+#####
+
+NOTIFICATIONS_RE = re.compile(r'^\s*(Notifications|Уведомления)\s*$', re.I)
+COMMENTS_FILTER_RE = re.compile(r'^\s*(Comments|Комментарии)\s*$', re.I)
+
+
+KEYWORDS = ["test", "тест"]  # <- свои слова
+ 
+ 
+def _normalize(s: str) -> str:
+    s = unicodedata.normalize("NFKC", s).casefold()
+    return s.replace("ё", "е")
+ 
+ 
+def build_matcher(keywords: list[str]):
+    words = sorted({_normalize(k) for k in keywords if k.strip()}, key=len, reverse=True)
+    if not words:
+        return lambda text: False
+    # слово целиком: эмодзи, пунктуация и # вокруг не мешают
+    pattern = re.compile(r"(?<!\w)(?:" + "|".join(map(re.escape, words)) + r")(?!\w)")
+    return lambda text: bool(text) and bool(pattern.search(_normalize(text)))
+ 
+ 
+matches_keyword = build_matcher(KEYWORDS)
+
+
+# async def click_sidebar_notifications(page) -> bool:
+#     """Ищет в сайдбаре пункт «Notifications»/«Уведомления» и кликает по нему."""
+#     # 1. Развёрнутый сайдбар: пункт с видимой подписью
+#     item = page.locator('a, [role="link"], [role="button"]').filter(
+#         has=page.locator('span', has_text=NOTIFICATIONS_RE)
+#     ).first
+#     if await item.count() and await item.is_visible():
+#         await item.click()
+#         return True
+
+#     # 2. Свёрнутый сайдбар (узкое окно): подписи скрыты, но у иконки есть aria-label
+#     icon = page.locator(
+#         'svg[aria-label="Notifications"], svg[aria-label="Уведомления"]'
+#     ).first
+#     if await icon.count():
+#         clickable = icon.locator(
+#             'xpath=ancestor::*[self::a or @role="link" or @role="button"][1]'
+#         )
+#         await (clickable if await clickable.count() else icon).click()
+#         return True
+
+#     return False
+
+
+@dataclass
+class IGComment:
+    comment_id: str
+    media_pk: str
+    shortcode: str
+    is_reel: bool
+    user_pk: str
+    username: str
+    follows_me: bool
+    text: str | None      # None для комментариев-GIF / аватаров
+    ts: float             # unix-время комментария
+    notif_pk: str
+
+COMMENT_STORY_TYPE = 12
+
+
+WATERMARK_MARGIN = timedelta(minutes=30)   # запас на «опоздавшие» уведомления
+# MAX_AGE = timedelta(hours=6)               # на более старые комменты не реагируем
+ 
+ 
+def _dt(ts: float | datetime) -> datetime:
+    if isinstance(ts, datetime):
+        return ts
+    return datetime.fromtimestamp(ts, tz=timezone.utc)
+ 
+ 
+async def save_new_comments(session: AsyncSession,
+                            account_id: int,
+                            comments: list[IGComment]) -> dict[str, int]:
+    """Вставляет пачку, возвращает {comment_id: id} только для реально новых записей."""
+    if not comments:
+        return {}
+ 
+    unique = {c.comment_id: c for c in comments}.values()
+    rows = [
+        {
+            "account_id": account_id,
+            "username": c.username,
+            "comment_id": c.comment_id,
+            "timestamp": _dt(c.ts),
+            "shortcode": c.shortcode,
+            'media_pk': c.media_pk,
+            'text': c.text,
+        }
+        for c in unique if matches_keyword(c.text)
+    ]
+ 
+    stmt = (
+        pg_insert(CommentNotification)
+        .values(rows)
+        # имя должно совпадать с UniqueConstraint в модели
+        .on_conflict_do_nothing(constraint="uq_comment_notifications_account_comment")
+        .returning(CommentNotification.id, CommentNotification.timestamp)
+    )
+    result = await session.execute(stmt)
+    await session.commit()
+    return {_id: timestamp for _id, timestamp in result.all()}
+
+
+async def process_comment_feed(session: AsyncSession,
+                               account: Account,
+                               comments: list[IGComment]) -> dict[str, int]:
+    """
+    Сохраняет комментарии и возвращает {comment_id: row_id} для тех,
+    на которые нужно реагировать (новые и свежие).
+ 
+    Первый запуск (last_comment_notification_at IS NULL) — bootstrap:
+    всё сохраняем, но ничего не возвращаем, чтобы не отвечать на старое.
+    """
+    # watermark = account.last_comment_notification_at
+    # first_run = watermark is None
+ 
+    # if not first_run:
+    #     border = watermark - WATERMARK_MARGIN
+    #     comments = [c for c in comments if _dt(c.ts) > border]
+ 
+    new = await save_new_comments(session, account.id, comments)
+ 
+    if new:
+        print(' save in lasttimestamp in account...')
+        newest = max(_dt(ts) for ts in new.values())
+        # if first_run or newest > watermark:
+        await session.execute(
+            update(Account)
+            .where(Account.id == account.id)
+            .values(last_comment_notification_at=newest)
+        )
+        await session.commit()
+        account.last_comment_notification_at = newest
+ 
+    # if first_run:
+    #     return {}
+ 
+    # now = time.time()
+    # fresh_ids = {c.comment_id for c in comments
+    #              if now - c.ts <= MAX_AGE.total_seconds()}
+    # return {cid: rid for cid, rid in new.items() if cid in fresh_ids}
+    return {_id: ts for _id, ts in new.items()}
+
+
+async def click_comments_filter(page) -> bool:
+    """Переключает панель уведомлений на фильтр «Комментарии», если он есть."""
+    btn = page.get_by_role('button', name=COMMENTS_FILTER_RE).first
+    if not await btn.count():
+        btn = page.locator('[role="tab"], [role="button"], span').filter(
+            has_text=COMMENTS_FILTER_RE
+        ).first
+    if await btn.count() and await btn.is_visible():
+        await btn.click()
+        return True
+    return False
+
+
+def _comment_text(args: dict) -> str | None:
+    """
+    Достаёт текст комментария из строки уведомления, не завися от языка:
+    'user commented: nice pic' / 'user heeft een opmerking geplaatst: ❤️'.
+    links[0].end — конец юзернейма, дальше ищем первое ': '.
+    """
+    raw = args.get("text") or ""
+    links = args.get("links") or []
+    start = links[0].get("end", 0) if links else 0
+    idx = raw.find(": ", start)
+    return raw[idx + 2:].strip() if idx != -1 else None
+
+
+def extract_comment_items(payload: dict) -> list[IGComment]:
+    # """Возвращает комментарии из ответа (вкладка «Все» или «Комментарии»)."""
+    # inbox = ((payload or {}).get("data") or {}).get("xdt_activity_inbox")
+    # if not inbox:
+    #     return []
+    """Принимает dict или список dict'ов (несколько JSON-чанков одного ответа)."""
+    if isinstance(payload, list):
+        out = []
+        for chunk in payload:
+            out.extend(extract_comment_items(chunk))
+        return out
+    if not isinstance(payload, dict):
+        return []
+
+    inbox = (payload.get("data") or {}).get("xdt_activity_inbox")
+    if not inbox:
+        return []
+
+    stories = (inbox.get("new_stories") or []) + (inbox.get("old_stories") or [])
+    out: list[IGComment] = []
+ 
+    for s in stories:
+        if s.get("story_type") != COMMENT_STORY_TYPE:
+            continue  # лайки, подписки, системные, Threads и т.п.
+ 
+        args = s.get("args") or {}
+        dest = args.get("destination") or ""
+        # "comments_v2?media_id=..&target_comment_id=.." / "clips_home?id=..&target_comment_id=.."
+        qs = parse_qs(urlsplit("x://" + dest).query)
+        comment_id = (qs.get("target_comment_id") or [None])[0]
+ 
+        users = args.get("users") or []
+        media = args.get("media") or {}
+        if not comment_id or not users:
+            continue
+ 
+        u = users[0]
+        out.append(IGComment(
+            comment_id=str(comment_id),
+            media_pk=(media.get("id") or "").split("_")[0],
+            shortcode=media.get("shortcode") or "",
+            is_reel=dest.startswith("clips_home"),
+            user_pk=str(u.get("pk") or u.get("id") or ""),
+            username=u.get("username") or "",
+            follows_me=bool((u.get("friendship_status") or {}).get("followed_by")),
+            text=_comment_text(args),
+            ts=float(args.get("timestamp") or 0),
+            notif_pk=s.get("pk") or "",
+        ))
+ 
+    return out
+
+
+async def parse_comment_notifications_playwright(account: Account,
+                                                 profile_port: int,
+                                                 _session: AsyncSession,
+                                                 redis: ArqRedis,
+                                                 use_comments_filter: bool = True):
+    activity_responses = []
+    activity_received = asyncio.Event()
+
+    async with async_playwright() as p:
+        try:
+            browser = await p.chromium.connect_over_cdp(f'http://{VISION_BROWSER_HOST}:{profile_port}')
+            print(f"CONNECTED ON {profile_port} PORT")
+        except Exception as ex:
+            print(f'ERROR WITH TRY CONNECT TO BROWSER WITH {profile_port} PORT', ex)
+            new_profile_port = await try_get_profile_port(account.folder_id,
+                                                          account.profile_id)
+            if not new_profile_port:
+                return
+            browser = await p.chromium.connect_over_cdp(f'http://{VISION_BROWSER_HOST}:{new_profile_port}')
+            print(f"CONNECTED ON {new_profile_port} PORT")
+
+        context = browser.contexts[0] if browser.contexts else await browser.new_context()
+
+        # if len(context.pages) >= 6:
+        #     raise Retry(defer=25)
+
+        notifications_page = await context.new_page()
+
+        async def on_response(response):
+            req = response.request
+            if req.resource_type not in ('xhr', 'fetch'):
+                return
+            url = response.url
+            if '/api/graphql' not in url and '/graphql/query' not in url:
+                return
+            try:
+                body = await response.text()
+            except Exception:
+                return
+            # friendly name не фиксируем — ловим по содержимому
+            if '"xdt_activity_inbox"' not in body:
+                return
+            try:
+                parsed = parse_ig_response(body)   # твоя функция; если она ждёт другой формат — json.loads(body)
+                activity_responses.append(parsed)
+                activity_received.set()
+                fn = extract_friendly_name(req.post_data) if req.post_data else None
+                print(f"[ACTIVITY] {fn}")
+            except Exception as e:
+                print(f"[ERROR] activity inbox: {e}")
+
+        try:
+            notifications_page.on("response", on_response)
+
+            # === 1. Главная ===
+            await notifications_page.goto('https://www.instagram.com/direct',
+                                          wait_until='domcontentloaded')
+            # await asyncio.sleep(3)
+            await dismiss_notifications_popup(notifications_page)
+
+            # === 2. Сайдбар -> Уведомления ===
+            if not await click_sidebar_notifications(notifications_page, activity_received):
+                print(f"[{account.username}] could not open notifications panel")
+                return
+            print("Activity inbox received!")
+
+            try:
+                await asyncio.wait_for(activity_received.wait(), timeout=15)
+                print("Activity inbox received!")
+            except asyncio.TimeoutError:
+                print("Activity inbox timeout")
+
+            # === 3. Фильтр «Комментарии» (глубже окно по комментам) ===
+            if use_comments_filter:
+                await notifications_page.wait_for_timeout(1500)
+                activity_received.clear()
+                if await click_comments_filter(notifications_page):
+                    try:
+                        await asyncio.wait_for(activity_received.wait(), timeout=15)
+                        print("Comments filter received!")
+                    except asyncio.TimeoutError:
+                        print("Comments filter timeout")
+                else:
+                    print("Comments filter not found — using 'All' tab")
+
+            # await notifications_page.wait_for_timeout(1000)
+            # await notifications_page.keyboard.press('Escape')   # закрыть панель
+
+            # === 4. Разбор и сохранение ===
+            comments = []
+            for payload in activity_responses:
+                comments.extend(extract_comment_items(payload))
+
+            print('1.comments',comments)
+
+            new = await process_comment_feed(_session, account, comments)
+
+            print('2.new',new)
+
+            for comment in new:
+                print(' -> на выполенение', comment)
+                # run bg tasks
+
+        finally:
+            try:
+                notifications_page.remove_listener("response", on_response)
+                await notifications_page.close()
+                await asyncio.sleep(1)
+            except Exception as ex:
+                print(' -> ERROR WITH TRY CLOSE PAGE IN FINALLY BLOCK', ex)
+
+
+_SC_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
+def media_pk_to_shortcode(pk: str | int) -> str:
+    pk = int(pk)
+    out = ""
+    while pk:
+        pk, r = divmod(pk, 64)
+        out = _SC_ALPHABET[r] + out
+    return out
+
+
+POST_BTN_RE = re.compile(r'^\s*(Post|Опубликовать|Plaatsen)\s*$', re.I)
+
+
+async def type_and_post_comment(page, text: str) -> bool:
+    box = page.locator('form textarea').first
+    await box.wait_for(state='visible', timeout=10000)
+    await box.click()
+    await box.press('End')                      # курсор после "@username "
+    await human_pause(0.3, 0.7)
+
+    char_delay = random.uniform(40, 100)
+    type_timeout = int(len(text) * char_delay) + 5_000
+    await box.press_sequentially(text, delay=char_delay, timeout=type_timeout)
+    await human_pause(0.5, 1.2)
+
+    # кнопка надёжнее Enter; если не нашли — Enter
+    btn = page.locator('form').get_by_role('button', name=POST_BTN_RE).first
+    if await btn.count() and await btn.is_enabled():
+        await btn.click()
+    else:
+        await box.press('Enter')
+
+    # подтверждение: поле очистилось
+    await page.wait_for_function(
+        """() => {
+            const t = document.querySelector('form textarea');
+            return t && t.value.trim() === '';
+        }""",
+        timeout=15000,
+    )
+    await human_pause(0.8, 1.5)
+    return True
+
+
+THREAD_URL_RE = re.compile(r'/direct/t/(\d+)')
+NEW_MESSAGE_LABELS = ('New message', 'Новое сообщение')
+CHAT_BTN_RE = re.compile(r'^\s*(Chat|Чат)\s*$', re.I)
+
+
+async def click_new_message(page) -> bool:
+    """Кнопка с <svg><title>New message</title></svg> в инбоксе."""
+    for label in NEW_MESSAGE_LABELS:
+        svg = page.locator(
+            f'svg:has(> title:text-is("{label}")), svg[aria-label="{label}"]'
+        ).first
+        try:
+            await svg.wait_for(state='visible', timeout=10000)
+        except Exception:
+            continue
+        # кликаем ближайший кликабельный предок, а не сам svg
+        target = svg.locator(
+            'xpath=ancestor::*[self::a or self::button or @role="button" or @role="link"][1]'
+        )
+        if not await target.count():
+            target = svg
+        await target.hover()
+        await human_pause(0.2, 0.5)
+        await target.click()
+        return True
+    return False
+
+
+# async def open_dialog_with_user(page, username: str) -> str | None:
+#     """Окно «Новое сообщение» → поиск → выбор юзера → «Chat». Возвращает thread_id."""
+#     dialog = page.get_by_role('dialog').last
+#     await dialog.wait_for(state='visible', timeout=10000)
+
+#     search = dialog.locator('input[name="queryBox"], input[type="text"], input[type="search"]').first
+#     await search.click()
+#     await human_pause(0.3, 0.6)
+#     await search.press_sequentially(username, delay=random.uniform(70, 140))
+
+#     # строка выдачи с точным совпадением ника
+#     row = dialog.locator('[role="button"], [role="listitem"], label').filter(
+#         has=page.get_by_text(username, exact=True)
+#     ).first
+#     try:
+#         await row.wait_for(state='visible', timeout=10000)
+#     except Exception:
+#         print(f" - {username} не найден в поиске (сменил ник / закрыл ДМ)")
+#         return None
+#     await human_pause(0.3, 0.8)
+#     await row.click()
+#     await human_pause(0.4, 0.9)
+
+#     chat_btn = dialog.get_by_role('button', name=CHAT_BTN_RE).first
+#     await chat_btn.wait_for(state='visible', timeout=10000)
+#     await chat_btn.click()
+
+#     await page.wait_for_url(THREAD_URL_RE, timeout=15000)
+#     m = THREAD_URL_RE.search(page.url)
+#     return m.group(1) if m else None
+
+async def _chat_btn_enabled(dialog) -> bool:
+    btn = dialog.get_by_role('button', name=CHAT_BTN_RE).first
+    if not await btn.count():
+        return False
+    disabled = await btn.get_attribute('aria-disabled')
+    return disabled != 'true' and await btn.is_enabled()
+
+
+async def open_dialog_with_user(page, username: str) -> str | None:
+    """Окно «Новое сообщение» → поиск → выбор юзера → «Chat». Возвращает thread_id."""
+    dialog = page.get_by_role('dialog').last
+    await dialog.wait_for(state='visible', timeout=10000)
+
+    search = dialog.locator('input[name="queryBox"], input[type="text"], input[type="search"]').first
+    await search.click()
+    await human_pause(0.3, 0.6)
+    await search.press_sequentially(username, delay=random.uniform(70, 140))
+
+    # текст ника в выдаче (точное совпадение)
+    name_el = dialog.get_by_text(username, exact=True).last
+    try:
+        await name_el.wait_for(state='visible', timeout=10000)
+    except Exception:
+        print(f" - {username} не найден в поиске (сменил ник / закрыл ДМ)")
+        return None
+    await human_pause(0.5, 1.0)          # даём выдаче дорисоваться
+
+    # ближайшая кликабельная строка вокруг ника
+    row = name_el.locator(
+        'xpath=ancestor::*[@role="button" or @role="option" or @role="checkbox" or self::label][1]'
+    )
+    if not await row.count():
+        row = name_el
+
+    # кликаем и проверяем, что юзер выбран (кнопка Chat активировалась)
+    selected = False
+    for attempt in range(1, 4):
+        await row.hover()
+        await human_pause(0.2, 0.4)
+        if attempt < 3:
+            await row.click()
+        else:
+            # последний вариант — клик по чекбоксу/радио внутри строки
+            checkbox = row.locator('input[type="checkbox"], input[type="radio"], [role="checkbox"]').first
+            await (checkbox if await checkbox.count() else row).click(force=True)
+
+        try:
+            await page.wait_for_function(
+                """(dlg) => {
+                    const btns = [...dlg.querySelectorAll('[role="button"], button')];
+                    const chat = btns.find(b => /^(Chat|Чат)$/i.test((b.innerText || '').trim()));
+                    return chat && chat.getAttribute('aria-disabled') !== 'true' && !chat.disabled;
+                }""",
+                arg=await dialog.element_handle(),
+                timeout=3000,
+            )
+            selected = True
+            break
+        except Exception:
+            print(f" [attempt {attempt}] юзер не выбран, повторяю")
+
+    if not selected:
+        print(f" - не удалось выбрать {username} в выдаче")
+        return None
+
+    await human_pause(0.4, 0.9)
+    chat_btn = dialog.get_by_role('button', name=CHAT_BTN_RE).first
+    await chat_btn.click()
+
+    await page.wait_for_url(THREAD_URL_RE, timeout=15000)
+    m = THREAD_URL_RE.search(page.url)
+    return m.group(1) if m else None
+
+
+async def send_dm_text(page, message_text: str) -> bool:
+    """Твой код отправки в Lexical-композер."""
+    box = page.locator('div[role="textbox"]').last
+    try:
+        await box.wait_for(state='visible', timeout=15000)
+    except Exception:
+        print(" - поле ввода не найдено (запросы закрыты?)")
+        return False
+
+    await box.click()
+    await human_pause(0.3, 0.7)
+
+    char_delay = random.uniform(30, 90)
+    type_timeout = int(len(message_text) * char_delay) + 5_000
+    await box.press_sequentially(message_text, delay=char_delay, timeout=type_timeout)
+    await human_pause(0.4, 1.0)
+
+    await page.keyboard.press('Enter')
+
+    await page.wait_for_function(
+        """() => {
+            const el = document.querySelectorAll('div[role="textbox"]');
+            const last = el[el.length - 1];
+            return last && last.innerText.trim() === '';
+        }""",
+        timeout=15000,
+    )
+    await human_pause(0.8, 1.5)
+    return True
+
+
+REPLY_RE = re.compile(r'^\s*(Reply|Ответить|Beantwoorden)\s*$', re.I)
+
+
+async def click_reply_under_comment(page, comment_id: str, username: str) -> bool:
+    """Находит блок нужного комментария и нажимает «Reply» под ним."""
+    # 1. ссылка-время конкретного комментария
+    anchor = page.locator(f'a[href*="/c/{comment_id}"]').first
+    try:
+        await anchor.wait_for(state='visible', timeout=15000)
+    except Exception:
+        # запасной путь: по ссылке на автора
+        anchor = page.locator(f'a[href="/{username}/"]').last
+        if not await anchor.count():
+            print(" - комментарий не найден (удалён/скрыт?)")
+            return False
+
+    # 2. поднимаемся к ближайшему предку, внутри которого есть «Reply»
+    reply_btn = None
+    for level in range(1, 10):
+        container = anchor.locator(f'xpath=ancestor::*[{level}]')
+        btn = container.get_by_role('button', name=REPLY_RE)
+        if not await btn.count():
+            btn = container.locator('span, div').filter(has_text=REPLY_RE)
+        if await btn.count():
+            reply_btn = btn.first
+            break
+
+    if reply_btn is None:
+        print(" - кнопка Reply не найдена")
+        return False
+
+    await reply_btn.scroll_into_view_if_needed()
+    await reply_btn.hover()
+    await human_pause(0.3, 0.7)
+    await reply_btn.click()
+
+    # 3. проверяем, что в поле подставилось @username
+    try:
+        await page.wait_for_function(
+            """(u) => {
+                const t = document.querySelector('form textarea');
+                return t && t.value.toLowerCase().includes('@' + u.toLowerCase());
+            }""",
+            arg=username,
+            timeout=5000,
+        )
+    except Exception:
+        print(" - после Reply поле не заполнилось упоминанием")
+        return False
+    return True
+
+
+async def answer_to_comment_under_post_and_to_dm(comment: CommentNotification,
+                                                 profile_port: int,
+                                                 _session: AsyncSession):
+    async with async_playwright() as p:
+        try:
+            browser = await p.chromium.connect_over_cdp(f'http://{VISION_BROWSER_HOST}:{profile_port}')
+            print(f"CONNECTED ON {profile_port} PORT")
+        except Exception as ex:
+            print(f'ERROR WITH TRY CONNECT TO BROWSER WITH {profile_port} PORT', ex)
+            new_profile_port = await try_get_profile_port(comment.account.folder_id,
+                                                          comment.account.profile_id)
+            if not new_profile_port:
+                return
+            browser = await p.chromium.connect_over_cdp(f'http://{VISION_BROWSER_HOST}:{new_profile_port}')
+            print(f"CONNECTED ON {new_profile_port} PORT")
+
+        context = browser.contexts[0] if browser.contexts else await browser.new_context()
+
+        try:
+            post_page = await context.new_page()
+
+            if not comment.comment_answer:
+                shortcode = comment.shortcode or media_pk_to_shortcode(comment.media_pk)
+
+                await post_page.goto(f'https://www.instagram.com/p/{shortcode}/c/{comment.comment_id}/',
+                                    wait_until='domcontentloaded')
+
+                answer_text = 'test_reply'
+                if await click_reply_under_comment(post_page, comment.comment_id, comment.username):
+                    text = answer_text                       # @username уже стоит в поле
+                else:
+                    text = f'@{comment.username} {answer_text}'   # фолбэк: обычный коммент с упоминанием
+                # text = f'@{comment.username} {answer_text}'
+
+                if await type_and_post_comment(post_page, text):
+                    print(" + ответ на комментарий опубликован")
+                    comment.comment_answer = answer_text
+
+                    await execute_and_catch_db_error(_session.commit(),
+                                                    _session,
+                                                    with_rollback=True)
+            if not comment.dm_answer:
+                # ....
+                await post_page.goto('https://www.instagram.com/direct/inbox/',
+                                wait_until='domcontentloaded')
+                await dismiss_notifications_popup(post_page)
+
+                if not await click_new_message(post_page):
+                    print(" - кнопка New message не найдена")
+                    return
+
+                thread_id = await open_dialog_with_user(post_page, comment.username)
+                if not thread_id:
+                    return
+                print(f" + тред открыт: {thread_id}")
+
+                dm_text = 'test_dm'
+                if await send_dm_text(post_page, dm_text):
+                    print(" + сообщение в директ отправлено")
+                    comment.dm_answer = dm_text
+                    await execute_and_catch_db_error(_session.commit(),
+                                                        _session,
+                                                        with_rollback=True)
+        finally:
+            await asyncio.sleep(2)
+            await post_page.close()

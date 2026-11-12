@@ -117,6 +117,9 @@ class Account(Base):
                                      default=False,
                                      nullable=False,
                                      server_default='false')
+    last_comment_notification_at = Column(TIMESTAMP(timezone=True),  # время самого свежего обработанного коммента
+                                          nullable=True,
+                                          default=None)
     # ai settings
     ai_model_id = Column(Integer,
                          ForeignKey('ai_models.id'),
@@ -144,6 +147,12 @@ class Account(Base):
         "CoffeeScenarioPhoto",
         back_populates="account",
         cascade="all, delete-orphan"
+    )
+
+    comment_notifications = relationship(
+        "CommentNotification",
+        back_populates="account",
+        cascade="all, delete-orphan",
     )
 
 
@@ -382,6 +391,56 @@ class Attachment(Base):
         back_populates="attachments"
     )
 
+
+class CommentNotification(Base):
+    __tablename__ = 'comment_notifications'
+    __table_args__ = (
+        UniqueConstraint(
+            'account_id',
+            'comment_id',
+            name='uq_comment_notifications_account_comment',
+        ),
+    )
+
+    id = Column(BigInteger,
+                primary_key=True,
+                index=True)
+    username = Column(String,
+                      nullable=False)
+    comment_id = Column(String,
+                        nullable=False)
+    media_pk = Column(String,
+                        nullable=False)
+    timestamp = Column(TIMESTAMP(timezone=True),
+                       nullable=True,
+                       default=None)
+    shortcode = Column(String,
+                      nullable=True)
+    text = Column(String,
+                  nullable=False)
+    comment_answer = Column(Text,
+                            nullable=True,
+                            default=None,
+                            server_default=None)
+    dm_answer = Column(Text,
+                       nullable=True,
+                       default=None,
+                       server_default=None)
+
+    account_id = Column(
+        BigInteger,
+        ForeignKey(
+            "accounts.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+        index=True
+    )
+    account = relationship(
+        "Account",
+        back_populates="comment_notifications",
+        foreign_keys=[account_id]
+    )
 ################ new idea
 
 # class Scenario(Base):
