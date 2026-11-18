@@ -234,7 +234,8 @@ async def ai_translate_user_information(text: str):
 async def generate_new_message_to_thread(account_info: str,
                                          thread: Thread,
                                          thread_context: str | None,
-                                         new_messages: str | None):
+                                         new_messages: str | None,
+                                         account_utc: str | None = None):
     model = thread.ai_model or 'anthropic/claude-sonnet-5'
     ai_temperature = thread.ai_temperature or 0.5
 
@@ -300,13 +301,13 @@ async def generate_new_message_to_thread(account_info: str,
         # "соответствующим образом (обращения, формы вежливости, тон флирта, если он уместен по описанию "
         # "личности), исходя из того, что пишет тебе мужчина, даже если из текста сообщения это не очевидно.\n\n"
 
-        "ВАЖНО ПРО ВРЕМЯ: у тебя есть собственный часовой пояс и локация, соответствующие месту "
-        "рождения/проживания твоей личности, указанному в описании выше. Упоминай время суток, время "
-        "дня, планы на вечер/утро, режим дня и подобное ТОЛЬКО если это естественно вытекает из контекста "
-        "переписки (например, собеседник спросил, который у тебя час, или ты упоминаешь, что делаешь "
-        "сейчас). Если время не упомянуто и не следует из диалога — не придумывай и не вставляй его "
-        "искусственно. Если всё же упоминаешь — ориентируйся на реальное текущее время в твоём часовом "
-        "поясе (по локации личности), а не на московское или иное время по умолчанию."
+        # "ВАЖНО ПРО ВРЕМЯ: у тебя есть собственный часовой пояс и локация, соответствующие месту "
+        # "рождения/проживания твоей личности, указанному в описании выше. Упоминай время суток, время "
+        # "дня, планы на вечер/утро, режим дня и подобное ТОЛЬКО если это естественно вытекает из контекста "
+        # "переписки (например, собеседник спросил, который у тебя час, или ты упоминаешь, что делаешь "
+        # "сейчас). Если время не упомянуто и не следует из диалога — не придумывай и не вставляй его "
+        # "искусственно. Если всё же упоминаешь — ориентируйся на реальное текущее время в твоём часовом "
+        # "поясе (по локации личности), а не на московское или иное время по умолчанию."
         # '“IMPORTANT ABOUT THE PERSON YOU ARE TALKING TO: everyone you are chatting with is a man. '
         # 'Address and respond to him accordingly (forms of address, politeness, flirtatious tone, if appropriate based on the personality description), assuming that the person messaging you is a man, even if this is not obvious from the message itself.\n\n”'
 
@@ -315,6 +316,10 @@ async def generate_new_message_to_thread(account_info: str,
         # 'If time is not mentioned and does not follow from the conversation, do not make it up or insert it artificially. '
         # 'If you do mention it, use the actual current time in your time zone (based on your persona’s location), not Moscow time or any other default time zone.”'
     )
+
+    if account_utc:
+        system_content += f'ВАЖНО ПРО ВРЕМЯ: часовой пояс assistant - {account_utc}'
+
     user_content = (
         f"Контекст переписки:\n{thread_context}\n\n"
         f"Новые сообщения:\n{new_messages}\n\n"
@@ -385,7 +390,8 @@ async def generate_new_message_to_thread(account_info: str,
 async def generate_how_are_you_message_to_thread(account_info: str,
                                                  thread: Thread,
                                                  thread_context: str | None,
-                                                 new_messages: str | None):
+                                                 new_messages: str | None,
+                                                 account_utc: str | None = None):
     model = thread.ai_model or 'anthropic/claude-sonnet-5'
     ai_temperature = thread.ai_temperature or 0.5
 
@@ -411,6 +417,9 @@ async def generate_how_are_you_message_to_thread(account_info: str,
         "user - это собеседник, assistant - это девушка, которая общается с user`ом\n"
         "Ты генерируешь сообщение от лица assistant\n"
     )
+
+    if account_utc:
+        system_content += f'ВАЖНО ПРО ВРЕМЯ: часовой пояс assistant - {account_utc}'
 
     user_content = (
         f"Контекст переписки:\n{thread_context}\n\n"
@@ -618,7 +627,8 @@ async def ai_test_photo(photo_url: str):
 async def generate_new_message_to_thread_coffee_scenario(account_info: str,
                                          thread: Thread,
                                          step_instruction: str,
-                                         new_messages: str ):
+                                         new_messages: str,
+                                         account_utc: str | None = None):
     model = thread.ai_model or 'anthropic/claude-sonnet-5'
     ai_temperature = thread.ai_temperature or 0.5
 
@@ -644,14 +654,18 @@ async def generate_new_message_to_thread_coffee_scenario(account_info: str,
         "user - это собеседник, assistant - это девушка, которая общается с user`ом\n"
         "Ты генерируешь сообщение от лица assistant\n"
 
-        "ВАЖНО ПРО ВРЕМЯ: у тебя есть собственный часовой пояс и локация, соответствующие месту "
-        "рождения/проживания твоей личности, указанному в описании выше. Упоминай время суток, время "
-        "дня, планы на вечер/утро, режим дня и подобное ТОЛЬКО если это естественно вытекает из контекста "
-        "переписки (например, собеседник спросил, который у тебя час, или ты упоминаешь, что делаешь "
-        "сейчас). Если время не упомянуто и не следует из диалога — не придумывай и не вставляй его "
-        "искусственно. Если всё же упоминаешь — ориентируйся на реальное текущее время в твоём часовом "
-        "поясе (по локации личности), а не на московское или иное время по умолчанию."
+        # "ВАЖНО ПРО ВРЕМЯ: у тебя есть собственный часовой пояс и локация, соответствующие месту "
+        # "рождения/проживания твоей личности, указанному в описании выше. Упоминай время суток, время "
+        # "дня, планы на вечер/утро, режим дня и подобное ТОЛЬКО если это естественно вытекает из контекста "
+        # "переписки (например, собеседник спросил, который у тебя час, или ты упоминаешь, что делаешь "
+        # "сейчас). Если время не упомянуто и не следует из диалога — не придумывай и не вставляй его "
+        # "искусственно. Если всё же упоминаешь — ориентируйся на реальное текущее время в твоём часовом "
+        # "поясе (по локации личности), а не на московское или иное время по умолчанию."
     )
+
+    if account_utc:
+        system_content += f'Часовой пояс assistant - {account_utc}'
+        
     user_content = (
         # f"Контекст переписки:\n{thread_context}\n\n"
         f"Новые сообщения:\n{new_messages}\n\n"
@@ -692,7 +706,8 @@ async def generate_caption_to_coffee_scenario_photo(account_info: str,
                                                     thread: Thread,
                                                     new_messages: str,
                                                     purpose: str | None = None,
-                                                    photo_description: str | None = None):
+                                                    photo_description: str | None = None,
+                                                    account_utc: str | None = None):
     model = thread.ai_model
     # ai_temperature = thread.ai_temperature or 0.5
 
@@ -727,6 +742,9 @@ async def generate_caption_to_coffee_scenario_photo(account_info: str,
         "user - это собеседник, assistant - это девушка, которая общается с user`ом\n"
         "Ты генерируешь сообщение от лица assistant\n"
     )
+
+    if account_utc:
+        system_content += f'Часовой пояс assistant - {account_utc}'
 
     if sub_system_prompt:
         system_content += f"{sub_system_prompt}. Конкретную формулировку подписи придумай на основе предыдущих сообщений в чате."
@@ -867,7 +885,7 @@ async def select_photo_for_thread(
     new_messages: str | None,
     photos: Sequence[CoffeeScenarioPhoto],
     sent_photo_ids: Iterable[int] | None = None,
-    current_time: str | None = None,
+    account_utc: str | None = None,
 ) -> int | None:
     """
     Возвращает id фото, если им уместно продолжить переписку, иначе None.
@@ -883,7 +901,7 @@ async def select_photo_for_thread(
 
     print('available photos', available_photos)
 
-    print('all messages', new_messages)
+    # print('all messages', new_messages)
  
     # Без новых сообщений или доступных фото запрос к модели не нужен.
     if not available_photos or not (new_messages and new_messages.strip()):
@@ -905,13 +923,13 @@ async def select_photo_for_thread(
         "Фото уместно только если выполнены ВСЕ условия:\n"
         "1. Самое свежее сообщение отправил user.\n"
         "2. В нём есть вопрос о текущем занятии или состоянии assistant: "
-        "«что делаешь», «чем занимаешься», «как ты», «как дела» или близкий по смыслу, "
+        "«что делаешь», «чем занимаешься», «как ты», «как дела», «как жизнь», «что нового», «что делала вчера», «что делала на выходных» или близкий по смыслу, "
         "на любом языке.\n"
         "3. На этот вопрос ещё нет ответа от assistant.\n"
         "4. Фото не противоречит переписке и времени суток. Например, если assistant "
         "написала, что она не дома, домашнее фото не подходит.\n\n"
         "Верни photo_id = null, если:\n"
-        "- вопрос о прошлом или будущем («что делала вчера», «какие планы на завтра»);\n"
+        # "- вопрос о прошлом или будущем («что делала вчера», «какие планы на завтра»);\n"
         "- основная тема сообщения другая, а вопрос задан лишь формально;\n"
         "- user расстроен, конфликтует или обсуждает серьёзную тему;\n"
         "- ни одно фото из списка не подходит.\n\n"
@@ -923,7 +941,7 @@ async def select_photo_for_thread(
  
     user_content = (
         f"Информация об аккаунте:\n{account_info}\n\n"
-        f"Текущее время: {current_time or 'неизвестно'}\n\n"
+        f"Часовой пояс: {account_utc or 'неизвестно'}\n\n"
         f"Доступные фото:\n{_format_photos(available_photos)}\n\n"
         # f"Контекст переписки:\n{thread_context or 'нет'}\n\n"
         f"Новые сообщения:\n{new_messages}"

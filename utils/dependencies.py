@@ -9,7 +9,10 @@ from jose import jwt, JWTError
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth.utils import get_current_user, get_current_user_optional, get_current_admin
+from auth.utils import (CurrentAdmin,
+                        get_current_user,
+                        get_current_user_optional,
+                        get_current_admin)
 
 from db.base import get_session
 
@@ -18,7 +21,9 @@ from config import JWT_ALGORITHM, JWT_SECRET_KEY
 
 user_dependency = Annotated[int, Depends(get_current_user)]
 
-admin_dependency = Annotated[int, Depends(get_current_admin)]
+# Возвращает CurrentAdmin. Распаковка `admin_id, is_main_admin = admin`
+# продолжает работать — см. CurrentAdmin.__iter__.
+admin_dependency = Annotated[CurrentAdmin, Depends(get_current_admin)]
 
 current_user_dependency = Annotated[int, Depends(get_current_user_optional)]
 

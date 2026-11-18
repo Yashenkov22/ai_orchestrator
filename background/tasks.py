@@ -30,7 +30,8 @@ from utils.base import (try_block_thread,
                         try_get_profile_port,
                         try_start_profile,
                         try_stop_profile,
-                        try_connect_to_main_instagram_page)
+                        try_connect_to_main_instagram_page,
+                        utc_timezones)
 from utils.scenarios import do_current_step_coffee_scenario, route_jev_coffee_scenario, coffee_scenario
 from utils.schemas import CoffeeLogStepSchema, CoffeeStateSchema, GeneratedAnswerSchema
 from utils.tasks import (answer_to_comment_under_post_and_to_dm, get_coffee_state, get_raw_messages_log_and_new_last_message_id, need_run_coffee_scenario, parse_comment_notifications_playwright, parse_thread_playwright,
@@ -427,7 +428,8 @@ async def send_message_to_thread(cxt,
  
                     await publish_event(redis,
                                         type='Message updated',
-                                        payload=payload)
+                                        payload=payload,
+                                        account_id=account.id)
                     
                     await sleep(2)
 
@@ -475,7 +477,8 @@ async def send_message_to_thread(cxt,
 
         await publish_event(redis,
                             type='Message send count updated',
-                            payload=payload)
+                            payload=payload,
+                            account_id=account.id)
         raise
 
     except Exception as ex:
@@ -570,7 +573,8 @@ async def try_block_thread_by_account_id(cxt,
     
     await publish_event(redis_pool,
             type='Thread process block',
-            payload=payload)
+            payload=payload,
+            account_id=thread.account_id)
         
 
     actived_profile = await try_start_profile(account.folder_id,
@@ -622,7 +626,8 @@ async def try_block_thread_by_account_id(cxt,
                 
                 await publish_event(redis_pool,
                         type='Thread has blocked',
-                        payload=payload)
+                        payload=payload,
+                        account_id=thread.account_id)
         else:
             print('not change')
 
@@ -890,6 +895,8 @@ async def background_ai_generation(cxt,
         # print(f'is memory updated - {memory_updated}')
         print('basic behaivor...')
 
+        account_timezone = utc_timezones.get(thread.account.utc, None)
+
         messages_for_raw_log = await get_N_last_messages(message_count=50,
                                                         thread_id=thread.id,
                                                         session=_session)
@@ -898,7 +905,8 @@ async def background_ai_generation(cxt,
         generated_text = await generate_new_message_to_thread(account_info=thread.account.information,
                                                             thread=thread,
                                                             thread_context=thread.context,
-                                                            new_messages=raw_messages_log)
+                                                            new_messages=raw_messages_log,
+                                                            account_utc=account_timezone)
 
         message_type = MessageTypeEnum.TEXT
         
@@ -931,7 +939,8 @@ async def background_ai_generation(cxt,
 
             await publish_event(redis_pool,
                     type='thread coffee state changed',
-                    payload=payload)
+                    payload=payload,
+                    account_id=thread.account_id)
 
         await execute_and_catch_db_error(_session.commit(),
                                         _session,
@@ -955,7 +964,8 @@ async def background_ai_generation(cxt,
 
         await publish_event(redis_pool,
                 type='message created',
-                payload=payload)
+                payload=payload,
+                account_id=thread.account_id)
 
     if switch_to_scenario_step and new_generated_message:
         job = await redis_pool.enqueue_job(
@@ -985,6 +995,8 @@ async def background_how_are_you_generation(cxt,
                                         _session)
 
         print('how are you behaivor ...')
+
+        account_timezone = utc_timezones.get(thread.account.utc, None)
 
         messages_for_raw_log = await get_N_last_messages(message_count=50,
                                                         thread_id=thread.id,
@@ -1039,7 +1051,8 @@ async def background_how_are_you_generation(cxt,
 
         await publish_event(redis_pool,
                 type='message created',
-                payload=payload)
+                payload=payload,
+                account_id=thread.account_id)
 
     if new_generated_message:
         job = await redis_pool.enqueue_job(
@@ -1069,6 +1082,8 @@ async def background_coffee_scenario(cxt,
 
         coffee_state = get_coffee_state(thread)
 
+        account_timezone = utc_timezones.get(thread.account.utc, None)
+
         if not coffee_state:
             print(' -> NOT COFFEE STATE!!!')
             return
@@ -1086,7 +1101,8 @@ async def background_coffee_scenario(cxt,
 
                 await publish_event(redis_pool,
                         type='thread coffee state changed',
-                        payload=payload)
+                        payload=payload,
+                        account_id=thread.account_id)
 
                 await execute_and_catch_db_error(_session.commit(),
                                                 _session,
@@ -1116,7 +1132,8 @@ async def background_coffee_scenario(cxt,
                                                                                                   thread,
                                                                                                   thread.account,
                                                                                                   coffee_state,
-                                                                                                  coffee_photos)
+                                                                                                  coffee_photos,
+                                                                                                  account_utc=account_timezone)
             # generated_text, attachment = generated_message_data
             # generated_text = generated_message_data.text
             # attachment = generated_message_data.attachment
@@ -1206,7 +1223,8 @@ async def background_coffee_scenario(cxt,
 
         await publish_event(redis_pool,
                 type='message created',
-                payload=payload)
+                payload=payload,
+                account_id=thread.account_id)
 
     # if memory_updated:
     #     job = await redis_pool.enqueue_job(
@@ -1273,7 +1291,8 @@ async def background_coffee_scenario(cxt,
 
         await publish_event(redis_pool,
                 type='thread coffee state changed',
-                payload=payload)
+                payload=payload,
+                account_id=thread.account_id)
 
     job = await redis_pool.enqueue_job(
         'send_message_to_thread',

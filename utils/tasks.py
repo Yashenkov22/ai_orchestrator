@@ -979,7 +979,8 @@ async def process_threads(
  
         await publish_event(redis_pool,
                             type='Thread for list updated',
-                            payload=payload_thread)
+                            payload=payload_thread,
+                            account_id=account.id)
 
 
 def _extract_slide_thread(obj: dict) -> dict:
@@ -1823,7 +1824,8 @@ async def playwright_send_message(message: Message,
 
             await publish_event(redis,
                                 type='Message send count updated',
-                                payload=payload)
+                                payload=payload,
+                                account_id=message.thread.account_id)
             
             raise Retry(defer=15)
         
@@ -2065,7 +2067,8 @@ async def playwright_send_message(message: Message,
 
             await publish_event(redis,
                                 type='Message updated',
-                                payload=payload)
+                                payload=payload,
+                                account_id=message.thread.account_id)
 
 
 async def try_add_messages(message_data: dict,
@@ -2221,7 +2224,8 @@ async def try_add_messages(message_data: dict,
             
             await publish_event(redis_pool,
                     type='Thread detail updated',
-                    payload=payload)
+                    payload=payload,
+                    account_id=thread.account_id)
 
             return True
 

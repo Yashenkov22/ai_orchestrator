@@ -555,7 +555,8 @@ async def do_current_step_coffee_scenario(jev_data: dict,
                                           thread: Thread,
                                           account: Account,
                                           coffee_state: CoffeeStateSchema,
-                                          coffee_photos: list[CoffeeScenarioPhoto] | None = None):
+                                          coffee_photos: list[CoffeeScenarioPhoto] | None = None,
+                                          account_utc: str | None = None):
     current_step = jev_data.get('current_step')
     last_messages = jev_data.get('last_messages')
 
@@ -570,15 +571,12 @@ async def do_current_step_coffee_scenario(jev_data: dict,
     if scenario_step_type == CoffeeStepTypeSchema.PREPARING:
         home_photos = [photo for photo in coffee_photos if photo.purpose == 'home_photo']
 
-        # _logs = coffee_state.logs
         preparing_data = coffee_state.preparing_data
-
-        # preparing_data: dict = _logs.get('preparing_data', dict())
 
         last_send_time = preparing_data.last_send_time
         used_photo_id_list = preparing_data.photo_list or list()
 
-        time_delta = datetime.now(tz=timezone.utc) - timedelta(hours=1)
+        time_delta = datetime.now(tz=timezone.utc) - timedelta(hours=2)
 
         if last_send_time and last_send_time >= time_delta:
             print(f' -> actual time {datetime.now(tz=timezone.utc)} | last time send {last_send_time}')
@@ -590,8 +588,8 @@ async def do_current_step_coffee_scenario(jev_data: dict,
                 thread=thread,
                 new_messages=last_messages,
                 photos=home_photos,
-                sent_photo_ids=used_photo_id_list,  # необязательно
-                # current_time="23:40",         # необязательно
+                sent_photo_ids=used_photo_id_list,
+                account_utc=account_utc,  # необязательно
             )
 
         if home_photo_id:
@@ -606,12 +604,14 @@ async def do_current_step_coffee_scenario(jev_data: dict,
                                                                             thread,
                                                                             last_messages,
                                                                             photo.purpose,
-                                                                            photo.description)
+                                                                            photo.description,
+                                                                            account_utc=account_utc)
         else:
             message_text = await generate_new_message_to_thread(account_info=thread.account.information,
                                                                 thread=thread,
                                                                 thread_context=thread.context,
-                                                                new_messages=last_messages)
+                                                                new_messages=last_messages,
+                                                                account_utc=account_utc)
             attachment = None
 
         result = GeneratedAnswerSchema(text=message_text,
@@ -622,7 +622,8 @@ async def do_current_step_coffee_scenario(jev_data: dict,
         message_text = await generate_new_message_to_thread_coffee_scenario(account.information,
                                                                             thread,
                                                                             scenario_step_insctruction,
-                                                                            new_messages=last_messages)
+                                                                            new_messages=last_messages,
+                                                                            account_utc=account_utc)
         # attachment = None
 
         result = GeneratedAnswerSchema(text=message_text)
@@ -636,7 +637,8 @@ async def do_current_step_coffee_scenario(jev_data: dict,
         message_text = await generate_caption_to_coffee_scenario_photo(account_info=thread.account.information,
                                                                         thread=thread,
                                                                         new_messages=last_messages,
-                                                                        purpose=purpose)
+                                                                        purpose=purpose,
+                                                                        account_utc=account_utc)
 
         photo_urls = [photo.media_url for photo in coffee_photos if photo.purpose == purpose]
         shuffle(photo_urls)

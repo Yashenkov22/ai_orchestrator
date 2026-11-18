@@ -18,14 +18,15 @@ from db.base import (Thread,
 from utils.schemas import (CreateCoffeeHomePhotoSchema, CreateCoffeeScenarioPhotoSchema, DetailCofeeScenarioPhotoSchema, PatchAccountSchema,
                            NewAccountSchema, PatchHiddenMarkAccountSchema,
                            PatchInformationAccountSchema,
-                           PatchPhotoAccountSchema, PatchViewNameAccountSchema,
+                           PatchPhotoAccountSchema, PatchUtcZoneAccountSchema, PatchViewNameAccountSchema,
                            UpdateProfileDataSchema,
                            CreateAccountSchema)
 from utils.dependencies import (admin_dependency,
                                 session_dependency)
 
 from utils.encrypt import encrypt_password
-from utils.base import (generate_valid_media_url)
+from utils.base import (generate_valid_media_url,
+                        utc_timezones)
 
 from config import ID_LIST_FOR_PERMISSION
 
@@ -214,12 +215,20 @@ async def get_account_by_id(account_id: int,
     account, thread_count, has_unread = result.one_or_none()
 
     if account:
+        account: Account
+
+        if account.utc:
+            utc = {account.utc: utc_timezones.get(account.utc)}
+        else:
+            utc = None
+
         account_data =  {
             "id": account.id,
             "username": account.username,
             'view_name': account.view_name,
             "fullname": account.full_name,
             'created_at': account.created_at,
+            'utc': utc,
             'updated_at': account.updated_at,
             'photo_url': generate_valid_media_url(account.photo_url),
             'is_active': account.is_active,
@@ -469,6 +478,48 @@ async def set_view_name(data: PatchViewNameAccountSchema,
                                      with_rollback=True)
     return {
         'status': 'success',
+    }
+
+
+@account_router.patch("/set_utc_timezone")
+async def set_view_name(data: PatchUtcZoneAccountSchema,
+                        admin: admin_dependency,
+                        session: session_dependency):
+    admin_id, is_main_admin = admin
+
+    if not is_main_admin:
+        if data.account_id not in ID_LIST_FOR_PERMISSION:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                                detail='Dont have permissions')
+
+    query = (
+        select(
+            Account
+        )\
+        .where(
+            Account.id == data.account_id
+        )
+    )
+
+    res = await execute_and_catch_db_error(session.execute(query),
+                                           session)
+    
+    account: Account = res.scalar_one_or_none()
+
+    if not account:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Account not found')
+
+    # utc = utc_timezones.get(data.utc)
+    
+    account.utc = data.utc
+
+    await execute_and_catch_db_error(session.commit(),
+                                     session,
+                                     with_rollback=True)
+    return {
+        'account_id': data.account_id,
+        'utc': account.utc,
     }
 
 

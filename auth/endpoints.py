@@ -41,6 +41,8 @@ from .utils import (authenticate_user,
                     EXPIRES_ACCESS_TOKEN,
                     get_current_user)
 
+from .scopes import features_for_scopes
+
 from .schemas import (RegisterUserSchema,
                       LoginUserSchema,
                       RefreshToken,
@@ -271,6 +273,23 @@ async def new_refresh_tokens(token: RefreshToken,
                                              session)
     return await generate_tokens(user,
                                  session)
+
+
+@auth_router.get('/me')
+async def get_current_admin_info(admin: admin_dependency):
+    """Кто я и что мне показывать.
+
+    Единственный источник правды для меню панели: фронт не угадывает
+    роль и не разбирает скоупы сам, а читает features отсюда.
+    """
+    return {
+        'id': admin.id,
+        'username': admin.username,
+        'is_superadmin': admin.is_superadmin,
+        'scopes': sorted(admin.scopes),
+        'features': features_for_scopes(admin.scopes,
+                                        admin.is_superadmin),
+    }
 
 
 

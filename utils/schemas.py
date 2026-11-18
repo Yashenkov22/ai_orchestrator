@@ -214,6 +214,7 @@ class NewAccountSchema(BaseModel):
     username: str
     view_name: str | None
     fullname: str | None = Field(default=None)
+    utc: dict | None = Field(default=None)
     # insta_id: str
     created_at: datetime
     updated_at: datetime
@@ -257,6 +258,11 @@ class CreateCoffeeHomePhotoSchema(PatchPhotoAccountSchema):
 class PatchViewNameAccountSchema(BaseModel):
     account_id: int
     view_name: str
+
+
+class PatchUtcZoneAccountSchema(BaseModel):
+    account_id: int
+    utc: str
 
 
 class PatchHiddenMarkAccountSchema(BaseModel):

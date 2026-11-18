@@ -36,7 +36,8 @@ from utils.base import (generate_valid_media_url,
                         get_vision_folder_list,
                         try_connect_to_main_instagram_page,
                         try_start_profile,
-                        try_stop_profile)
+                        try_stop_profile,
+                        utc_timezones)
 
 from config import SECRET_API, UPLOAD_DIR
 # from utils.scenarios import run_coffee_scenario
@@ -176,7 +177,9 @@ async def test_hander(admin: admin_dependency,
 
             await publish_event(arq_pool,
                                 type='Message updated',
-                                payload=payload)
+                                payload=payload,
+                                account_id=account_id,
+                                origin_admin_id=admin.id)
         
         return {"status": "queued", "job_id": job.job_id}
     
@@ -541,7 +544,7 @@ async def add_coffee_scenario_photo(admin: admin_dependency,
 #     else:
 #         print('run task')
 
-@utils_router.get("/test_comment_task")
+# @utils_router.get("/test_comment_task")
 async def test_comment_task(admin: admin_dependency,
                             account_id: int,
                             arq_redis: arq_dependency,
@@ -554,7 +557,7 @@ async def test_comment_task(admin: admin_dependency,
 
 
 
-@utils_router.get("/test_comment_answer_task")
+# @utils_router.get("/test_comment_answer_task")
 async def test_comment_task(admin: admin_dependency,
                             comment_id: int,
                             arq_redis: arq_dependency,
@@ -574,3 +577,10 @@ async def get_openrouter_balance(admin: admin_dependency,
     pretty_balance = f"Баланс: ${balance['balance']:.2f}"
     # print(f"Баланс: ${balance['balance']:.2f}")
     return pretty_balance
+
+
+@utils_router.get("/get_utc_list")
+async def get_openrouter_balance(admin: admin_dependency,
+                                 session: session_dependency):
+    return [(key, f'{key} - {value}') for key, value in utc_timezones.items()]
+    # return list(utc_timezones.keys())

@@ -28,6 +28,68 @@ INSTA_URL_PREFIX = 'https://www.instagram.com/'
 PREFIX_SYSTEM_PROMPT = 'I am uploading a complete personality profile to you. You are now that person. Think like them and respond like them. Under no circumstances should you reveal that you are an AI.'
 
 
+utc_timezones = {
+    "Africa/Cairo": "UTC+02:00",
+    "Africa/Johannesburg": "UTC+02:00",
+    "Africa/Lagos": "UTC+01:00",
+    "Africa/Nairobi": "UTC+03:00",
+    "America/Anchorage": "UTC-09:00",
+    "America/Argentina/Buenos_Aires": "UTC-03:00",
+    "America/Bogota": "UTC-05:00",
+    "America/Caracas": "UTC-04:00",
+    "America/Chicago": "UTC-06:00",
+    "America/Denver": "UTC-07:00",
+    "America/Halifax": "UTC-04:00",
+    "America/Los_Angeles": "UTC-08:00",
+    "America/Mexico_City": "UTC-06:00",
+    "America/New_York": "UTC-05:00",
+    "America/Noronha": "UTC-02:00",
+    "America/Phoenix": "UTC-07:00",
+    "America/Santiago": "UTC-03:00",
+    "America/Sao_Paulo": "UTC-03:00",
+    "America/St_Johns": "UTC-03:30",
+    "Asia/Bangkok": "UTC+07:00",
+    "Asia/Dhaka": "UTC+06:00",
+    "Asia/Dubai": "UTC+04:00",
+    "Asia/Kabul": "UTC+04:30",
+    "Asia/Karachi": "UTC+05:00",
+    "Asia/Kathmandu": "UTC+05:45",
+    "Asia/Kolkata": "UTC+05:30",
+    "Asia/Shanghai": "UTC+08:00",
+    "Asia/Singapore": "UTC+08:00",
+    "Asia/Tashkent": "UTC+05:00",
+    "Asia/Tehran": "UTC+03:30",
+    "Asia/Tokyo": "UTC+09:00",
+    "Asia/Yangon": "UTC+06:30",
+    "Atlantic/Azores": "UTC-01:00",
+    "Atlantic/Cape_Verde": "UTC-01:00",
+    "Atlantic/Reykjavik": "UTC+00:00",
+    "Atlantic/South_Georgia": "UTC-02:00",
+    "Australia/Adelaide": "UTC+10:30",
+    "Australia/Brisbane": "UTC+10:00",
+    "Australia/Darwin": "UTC+09:30",
+    "Australia/Eucla": "UTC+08:45",
+    "Australia/Lord_Howe": "UTC+11:00",
+    "Australia/Sydney": "UTC+11:00",
+    "Etc/GMT+12": "UTC-12:00",
+    "Europe/Berlin": "UTC+01:00",
+    "Europe/Istanbul": "UTC+03:00",
+    "Europe/Kyiv": "UTC+02:00",
+    "Europe/London": "UTC+00:00",
+    "Europe/Moscow": "UTC+03:00",
+    "Europe/Paris": "UTC+01:00",
+    "Pacific/Auckland": "UTC+13:00",
+    "Pacific/Chatham": "UTC+13:45",
+    "Pacific/Fiji": "UTC+12:00",
+    "Pacific/Honolulu": "UTC-10:00",
+    "Pacific/Kiritimati": "UTC+14:00",
+    "Pacific/Marquesas": "UTC-09:30",
+    "Pacific/Norfolk": "UTC+12:00",
+    "Pacific/Noumea": "UTC+11:00",
+    "Pacific/Pago_Pago": "UTC-11:00",
+    "Pacific/Tongatapu": "UTC+13:00",
+}
+
 
 # def count_tokens(text: str, encoding_name: str = "o200k_base") -> int:
 #     encoding = tiktoken.get_encoding(encoding_name)
@@ -61,29 +123,29 @@ PREFIX_SYSTEM_PROMPT = 'I am uploading a complete personality profile to you. Yo
 #     Language.HINDI: "hi",
 # }
 
-{
-    1: 'Узнай у собеседника, сможет ли он прислать тебе фото',
-    2: 'Если да - узнать куда ему будет удобно отправить. Если нет - напиши ответ, исходя из переписки. Конец сценария',
-    3: 'Если шаг 2 выполенен - отправь фото с благодарностью. Конец сценария',
-}
+# {
+#     1: 'Узнай у собеседника, сможет ли он прислать тебе фото',
+#     2: 'Если да - узнать куда ему будет удобно отправить. Если нет - напиши ответ, исходя из переписки. Конец сценария',
+#     3: 'Если шаг 2 выполенен - отправь фото с благодарностью. Конец сценария',
+# }
 
-{
-    1: {
-        'action': 'Узнай у собеседника, сможет ли он прислать тебе фото',
-        'status': '',
-        'result': '',
-    },
-    2: {
-        'action': 'Если да - узнать куда ему будет удобно отправить. Если нет - напиши ответ, исходя из переписки. Конец сценария',
-        'status': '',
-        'result': '',
-    },
-    3: {
-        'action': 'Если шаг 2 выполенен - отправь фото с благодарностью. Конец сценария',
-        'status': '',
-        'result': '',
-    },
-}
+# {
+#     1: {
+#         'action': 'Узнай у собеседника, сможет ли он прислать тебе фото',
+#         'status': '',
+#         'result': '',
+#     },
+#     2: {
+#         'action': 'Если да - узнать куда ему будет удобно отправить. Если нет - напиши ответ, исходя из переписки. Конец сценария',
+#         'status': '',
+#         'result': '',
+#     },
+#     3: {
+#         'action': 'Если шаг 2 выполенен - отправь фото с благодарностью. Конец сценария',
+#         'status': '',
+#         'result': '',
+#     },
+# }
 
 
 LANGUAGE_LIST = [

@@ -17,7 +17,7 @@ from sqlalchemy import (Column,
                         Index,
                         Enum,
                         UniqueConstraint)
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.ext.asyncio import (create_async_engine,
                                     AsyncSession,
@@ -91,6 +91,9 @@ class Account(Base):
                       nullable=True,
                       default=None)
     password = Column(String)
+    utc = Column(String,
+                 nullable=True,
+                 default=None)
     # session = Column(JSONB,
     #                  nullable=True,
     #                  default=None)
@@ -295,6 +298,16 @@ class Admin(Base):
     password = Column(String)
     refresh_token = Column(String,
                            nullable=True)
+    # права админа. Источник истины — БД, а не claims в токене:
+    # так отзыв права срабатывает сразу, а не после истечения access-токена.
+    is_superadmin = Column(Boolean,
+                           nullable=False,
+                           default=False,
+                           server_default='false')
+    scopes = Column(ARRAY(String),
+                    nullable=False,
+                    default=list,
+                    server_default='{}')
 
 
 

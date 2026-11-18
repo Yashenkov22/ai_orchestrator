@@ -22,7 +22,7 @@ from utils.dependencies import (admin_dependency,
 from utils.enums import MessageStatusEnum
 from utils.base import generate_valid_media_url
 
-from websocket.base import manager
+from websocket.redis_listener import publish_event
 
 from config import ID_LIST_FOR_PERMISSION
 
@@ -60,6 +60,9 @@ async def new_get_messages(admin: admin_dependency,
 
     if not is_main_admin:
         query = query.where(
+            Message.thread.has(Thread.account_id.in_(ID_LIST_FOR_PERMISSION)),
+        )
+        count_query = count_query.where(
             Message.thread.has(Thread.account_id.in_(ID_LIST_FOR_PERMISSION)),
         )
 
@@ -334,13 +337,11 @@ async def create_new_message(data: CreateMessageSchema,
 
     }
     payload['message'] = message_payload
-    ws_msg_data = {
-        'type': 'message created',
-        'user_id': admin_id,
-        'payload': payload,
-    }
-
-    await manager.send_to_user(admin_id, ws_msg_data)
+    await publish_event(arq_pool,
+                        type='message created',
+                        payload=payload,
+                        account_id=account_id,
+                        origin_admin_id=admin_id)
     
     job = await arq_pool.enqueue_job(
             'send_message_to_thread',
@@ -409,13 +410,11 @@ async def delete_message_from_thread(message_id: int,
     }
     payload['message'] = message_payload
 
-    ws_msg_data = {
-        'type': 'message deleted',
-        'user_id': admin_id,
-        'payload': payload,
-    }
-
-    await manager.send_to_user(admin_id, ws_msg_data)
+    await publish_event(arq_pool,
+                        type='message deleted',
+                        payload=payload,
+                        account_id=_message.thread.account_id,
+                        origin_admin_id=admin_id)
 
     return {
         'status': 'success'

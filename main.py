@@ -22,7 +22,7 @@ from utils.scheduler import scheduler
 
 from background.base import get_redis_background_pool
 
-from websocket.base import manager
+from websocket.base import Connection, manager
 from websocket.redis_listener import redis_listener
 
 
@@ -89,14 +89,26 @@ async def websocket_endpoint(websocket: WebSocket):
         return
 
     try:
-        user_id = await get_current_user_for_websocket(token)
-        print('user id ->', user_id)
+        admin = await get_current_user_for_websocket(token)
     except Exception:
         await websocket.close(code=1008)
         return
 
-    await manager.connect(user_id, websocket)
-    print('New ws connection ~')
+    if admin is None:
+        # битый или просроченный токен, либо админа больше нет
+        await websocket.close(code=1008)
+        return
+
+    # права снимаются один раз на соединение; при их изменении приходит
+    # служебное admin.rights_changed и менеджер обновляет их на месте
+    connection = Connection(ws=websocket,
+                            admin_id=admin.id,
+                            is_superadmin=admin.is_superadmin,
+                            scopes=admin.scopes,
+                            account_ids=admin.account_ids)
+
+    await manager.connect(connection)
+
     try:
         while True:
             message = await websocket.receive_text()
@@ -104,4 +116,7 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.send_text(f"Received: {message}")
 
     except WebSocketDisconnect:
-        manager.disconnect(user_id, websocket)
+        pass
+
+    finally:
+        manager.disconnect(connection)
