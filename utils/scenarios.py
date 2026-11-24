@@ -156,7 +156,8 @@ async def route_jev_coffee_scenario(thread: Thread,
 
     print(f'route step {current_step} for thread_id {thread.id}...')
 
-    raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(last_messages[:50])
+    raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(last_messages[:50],
+                                                                                tz=thread.account.utc)
     
     match current_step:
         case 1:
@@ -559,6 +560,8 @@ async def do_current_step_coffee_scenario(jev_data: dict,
                                           account_utc: str | None = None):
     current_step = jev_data.get('current_step')
     last_messages = jev_data.get('last_messages')
+
+    print(last_messages)
 
     coffee_scenario_key = f'step_{current_step}'
 

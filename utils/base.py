@@ -2,11 +2,12 @@ import re
 import pytz
 import aiohttp
 import asyncio
-
 import base64
-from urllib.parse import urlparse, parse_qs, unquote
 
-# import tiktoken
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from urllib.parse import urlparse, parse_qs, unquote
 
 from lingua import  Language
 
@@ -537,23 +538,68 @@ def is_video_thumbnail_response(response) -> bool:
     return 'igd_messenger_video_thumbnail' in decoded
 
 
+def _to_local(dt: datetime, tz: ZoneInfo) -> datetime:
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)  # naive считаем UTC
+    return dt.astimezone(tz)
 
-async def get_raw_messages_log_and_new_last_message_id(messages: list[Message]):
-    unread_messages_text = ''
-    user_message_text_only = ''
+
+async def get_raw_messages_log_and_new_last_message_id(
+    messages: list[Message],
+    tz: ZoneInfo,
+):
+    unread_lines: list[str] = []
+    user_lines: list[str] = []
 
     new_last_message_id = None
 
     for message in messages:
-        _text = f'{message.text} | {message.created_at} | {message.sender}\n'
-        unread_messages_text += _text
+        line = f"{message.text} | {_to_local(message.created_at, ZoneInfo(tz)):%Y-%m-%d %H:%M} | {message.sender}\n"
+        unread_lines.append(line)
         new_last_message_id = message.id
 
         if message.sender == 'user':
-            user_message_text_only += _text
-    
+            user_lines.append(line)
+
     return (
-        unread_messages_text,
-        user_message_text_only,
+        ''.join(unread_lines),
+        ''.join(user_lines),
         new_last_message_id,
     )
+
+
+# async def get_raw_messages_log_and_new_last_message_id(messages: list[Message]):
+#     unread_messages_text = ''
+#     user_message_text_only = ''
+
+#     new_last_message_id = None
+
+#     for message in messages:
+#         _text = f'{message.text} | {message.created_at} | {message.sender}\n'
+#         unread_messages_text += _text
+#         new_last_message_id = message.id
+
+#         if message.sender == 'user':
+#             user_message_text_only += _text
+    
+#     return (
+#         unread_messages_text,
+#         user_message_text_only,
+#         new_last_message_id,
+#     )
+
+
+def get_local_time_info(tz_name: str | None) -> tuple[str, str] | None:
+    """Возвращает (локальное время с днём недели, строка пояса) или None."""
+    if not tz_name:
+        return None
+    try:
+        now = datetime.now(ZoneInfo(tz_name))
+    except ZoneInfoNotFoundError:
+        return None
+
+    weekdays = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
+    local_str = f"{now:%Y-%m-%d %H:%M}, {weekdays[now.weekday()]}"
+    offset = now.strftime("%z")  # например +0700
+    tz_str = f"{tz_name} (UTC{offset[:3]}:{offset[3:]})"
+    return local_str, tz_str

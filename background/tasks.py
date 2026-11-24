@@ -895,18 +895,19 @@ async def background_ai_generation(cxt,
         # print(f'is memory updated - {memory_updated}')
         print('basic behaivor...')
 
-        account_timezone = utc_timezones.get(thread.account.utc, None)
+        # account_timezone = utc_timezones.get(thread.account.utc, None)
 
         messages_for_raw_log = await get_N_last_messages(message_count=50,
                                                         thread_id=thread.id,
                                                         session=_session)
-        raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(messages_for_raw_log)
+        raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(messages_for_raw_log,
+                                                                                    tz=thread.account.utc)
 
         generated_text = await generate_new_message_to_thread(account_info=thread.account.information,
                                                             thread=thread,
                                                             thread_context=thread.context,
                                                             new_messages=raw_messages_log,
-                                                            account_utc=account_timezone)
+                                                            account_utc=thread.account.utc)
 
         message_type = MessageTypeEnum.TEXT
         
@@ -996,19 +997,21 @@ async def background_how_are_you_generation(cxt,
 
         print('how are you behaivor ...')
 
-        account_timezone = utc_timezones.get(thread.account.utc, None)
+        # account_timezone = utc_timezones.get(thread.account.utc, None)
 
         messages_for_raw_log = await get_N_last_messages(message_count=50,
                                                         thread_id=thread.id,
                                                         session=_session)
-        raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(messages_for_raw_log)
+        raw_messages_log, _, _ = await get_raw_messages_log_and_new_last_message_id(messages_for_raw_log,
+                                                                                    tz=thread.account.utc)
 
         # print(raw_messages_log)
 
         generated_text = await generate_how_are_you_message_to_thread(account_info=thread.account.information,
                                                                       thread=thread,
                                                                       thread_context=thread.context,
-                                                                      new_messages=raw_messages_log)
+                                                                      new_messages=raw_messages_log,
+                                                                      account_utc=thread.account.utc)
 
         message_type = MessageTypeEnum.TEXT
         
@@ -1082,7 +1085,7 @@ async def background_coffee_scenario(cxt,
 
         coffee_state = get_coffee_state(thread)
 
-        account_timezone = utc_timezones.get(thread.account.utc, None)
+        # account_timezone = utc_timezones.get(thread.account.utc, None)
 
         if not coffee_state:
             print(' -> NOT COFFEE STATE!!!')
@@ -1133,7 +1136,7 @@ async def background_coffee_scenario(cxt,
                                                                                                   thread.account,
                                                                                                   coffee_state,
                                                                                                   coffee_photos,
-                                                                                                  account_utc=account_timezone)
+                                                                                                  account_utc=thread.account.utc)
             # generated_text, attachment = generated_message_data
             # generated_text = generated_message_data.text
             # attachment = generated_message_data.attachment
@@ -1163,7 +1166,8 @@ async def background_coffee_scenario(cxt,
             generated_text = await generate_new_message_to_thread(account_info=thread.account.information,
                                                                   thread=thread,
                                                                   thread_context=thread.context,
-                                                                  new_messages=raw_messages_log)
+                                                                  new_messages=raw_messages_log,
+                                                                  account_utc=thread.account.utc)
             generated_message_data = GeneratedAnswerSchema(text=generated_text)
 
         message_type = MessageTypeEnum.TEXT
